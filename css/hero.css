@@ -1,0 +1,185 @@
+/* ============================================================
+   BILAD AUTO — hero.css
+   X-Ray Interactive Hero Section
+   ============================================================ */
+
+/* ── Hero Container ────────────────────────────────────────── */
+.hero-section {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  min-height: 600px;
+  overflow: hidden;
+  background: #0a0e1a;
+}
+
+/* ── Shared Layer Base ─────────────────────────────────────── */
+.hero-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Night Layer (base) ────────────────────────────────────── */
+.layer-night {
+  z-index: 1;
+  background: #0a0e1a;
+}
+.layer-night svg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ── X-Ray Layer (revealed by clip) ───────────────────────── */
+.layer-xray {
+  z-index: 2;
+  clip-path: circle(130px at var(--mx, 50%) var(--my, 50%));
+  transition: clip-path 0.05s ease-out;
+}
+.layer-xray svg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ── Floating Car Layer ────────────────────────────────────── */
+.layer-car {
+  z-index: 3;
+  pointer-events: none;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(-1deg); }
+  33%       { transform: translateY(-12px) rotate(0.5deg); }
+  66%       { transform: translateY(-6px) rotate(1deg); }
+}
+
+.floating-car {
+  position: absolute;
+  top: 12%;
+  right: 8%;
+  width: clamp(160px, 22vw, 280px);
+  animation: float 5s ease-in-out infinite;
+  filter: drop-shadow(0 20px 40px rgba(255, 200, 61, 0.25));
+}
+
+/* ── Gradient Overlay ──────────────────────────────────────── */
+.hero-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 4;
+  background: linear-gradient(
+    to bottom,
+    rgba(10, 14, 26, 0.2) 0%,
+    rgba(10, 14, 26, 0.0) 30%,
+    rgba(10, 14, 26, 0.0) 50%,
+    rgba(10, 14, 26, 0.7) 75%,
+    rgba(10, 14, 26, 0.95) 100%
+  );
+  pointer-events: none;
+}
+
+/* ── Hero Content ──────────────────────────────────────────── */
+.hero-content {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  padding: 3rem 4rem;
+  text-align: center;
+}
+
+.hero-eyebrow {
+  display: inline-block;
+  background: rgba(255, 200, 61, 0.15);
+  border: 1px solid rgba(255, 200, 61, 0.4);
+  color: #ffc83d;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.35rem 1rem;
+  border-radius: 20px;
+  margin-bottom: 1.2rem;
+}
+
+.hero-headline {
+  font-size: clamp(2rem, 5.5vw, 4.5rem);
+  font-weight: 900;
+  line-height: 1.15;
+  margin-bottom: 1rem;
+  text-shadow: 0 2px 40px rgba(0,0,0,0.8);
+}
+
+.hero-subtext {
+  font-size: clamp(0.95rem, 2vw, 1.25rem);
+  color: #c8bfa8;
+  margin-bottom: 2rem;
+  max-width: 620px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.75;
+}
+
+.hero-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: #ffc83d;
+  color: #0a0e1a;
+  font-weight: 800;
+  font-size: 1.1rem;
+  padding: 1rem 2.5rem;
+  border-radius: 50px;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  margin-bottom: 3rem;
+}
+.hero-cta:hover {
+  background: #ffd666;
+  transform: translateY(-3px);
+  box-shadow: 0 12px 40px rgba(255, 200, 61, 0.45);
+}
+
+/* ── Hint Arrow ────────────────────────────────────────────── */
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(6px); }
+}
+.hero-hint {
+  position: absolute;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  font-size: 0.72rem;
+  color: rgba(232, 224, 208, 0.35);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  pointer-events: none;
+  animation: bounce 1.8s ease-in-out infinite;
+}
+
+/* ── Mobile Adjustments ────────────────────────────────────── */
+@media (max-width: 768px) {
+  .hero-content { padding: 2rem 1.5rem; }
+  .floating-car { top: 5%; right: 2%; width: 140px; }
+  .layer-xray { clip-path: circle(90px at var(--mx, 50%) var(--my, 50%)); }
+}
+
+@media (max-width: 480px) {
+  .hero-section { min-height: 100dvh; }
+  .hero-headline { font-size: clamp(1.6rem, 8vw, 2.2rem); }
+  .hero-subtext { font-size: 0.9rem; }
+  .hero-cta { font-size: 0.95rem; padding: 0.85rem 2rem; margin-bottom: 2rem; }
+  .floating-car { width: 110px; top: 3%; }
+}
