@@ -27,10 +27,13 @@
   z-index: 1;
   background: #0a0e1a;
 }
-.layer-night svg {
+
+.hero-bg-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center center;
+  display: block;
 }
 
 /* ── X-Ray Layer (revealed by clip) ───────────────────────── */
