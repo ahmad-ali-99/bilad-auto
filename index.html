@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>بلاد أوتو | الطاقة الشمسية — بغداد</title>
+  <meta name="description" content="بلاد أوتو — شركة رائدة في الطاقة الشمسية في بغداد، العراق. حلول سكنية وتجارية وصناعية.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/hero.css">
+</head>
+<body>
+
+<!-- ══ NAVIGATION ══════════════════════════════════════════ -->
+<nav class="main-nav">
+  <div class="nav-container">
+    <a href="index.html" class="nav-logo">
+      <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
+        <circle cx="17" cy="17" r="7" fill="#ffc83d"/>
+        <line x1="17" y1="2" x2="17" y2="0" stroke="#ffc83d" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="17" y1="34" x2="17" y2="32" stroke="#ffc83d" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="2" y1="17" x2="0" y2="17" stroke="#ffc83d" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="34" y1="17" x2="32" y2="17" stroke="#ffc83d" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="6.22" y1="6.22" x2="4.81" y2="4.81" stroke="#ffc83d" stroke-width="2" stroke-linecap="round"/>
+        <line x1="29.19" y1="29.19" x2="27.78" y2="27.78" stroke="#ffc83d" stroke-width="2" stroke-linecap="round"/>
+        <line x1="27.78" y1="6.22" x2="29.19" y2="4.81" stroke="#ffc83d" stroke-width="2" stroke-linecap="round"/>
+        <line x1="4.81" y1="29.19" x2="6.22" y2="27.78" stroke="#ffc83d" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <span class="logo-ar">بلاد أوتو</span>
+      <span class="logo-sep">|</span>
+      <span class="logo-en">Bilad Auto</span>
+    </a>
+    <div class="nav-menu" id="nav-menu">
+      <a href="index.html"    class="nav-link"><span class="ar">الرئيسية</span><span class="en">Home</span></a>
+      <a href="projects.html" class="nav-link"><span class="ar">المشاريع</span><span class="en">Projects</span></a>
+      <a href="services.html" class="nav-link"><span class="ar">الخدمات</span><span class="en">Services</span></a>
+      <a href="about.html"    class="nav-link"><span class="ar">من نحن</span><span class="en">About</span></a>
+      <a href="contact.html"  class="nav-link"><span class="ar">التواصل</span><span class="en">Contact</span></a>
+    </div>
+    <button id="lang-toggle" class="lang-btn">EN</button>
+    <button id="hamburger" class="hamburger" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+
+<!-- ══ HERO ════════════════════════════════════════════════ -->
+<section class="hero-section">
+
+  <!-- Layer 1: Baghdad rooftops at night -->
+  <div class="hero-layer layer-night">
+    <svg viewBox="0 0 1200 700" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" style="width:100%;height:100%">
+      <defs>
+        <filter id="n-glow-gold">
+          <feGaussianBlur stdDeviation="4" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="n-glow-dim">
+          <feGaussianBlur stdDeviation="2" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="n-star-glow">
+          <feGaussianBlur stdDeviation="1.5"/>
+        </filter>
+      </defs>
+
+      <!-- Sky -->
+      <rect width="1200" height="700" fill="#020509"/>
+
+      <!-- Stars -->
+      <circle cx="60"  cy="30"  r="1.2" fill="#fff" opacity="0.85"/>
+      <circle cx="180" cy="55"  r="0.8" fill="#fff" opacity="0.6"/>
+      <circle cx="290" cy="18"  r="1"   fill="#fff" opacity="0.75"/>
+      <circle cx="420" cy="45"  r="1.5" fill="#fff" opacity="0.9"/>
+      <circle cx="550" cy="20"  r="0.9" fill="#fff" opacity="0.65"/>
+      <circle cx="680" cy="38"  r="1.2" fill="#fff" opacity="0.8"/>
+      <circle cx="800" cy="14"  r="1"   fill="#fff" opacity="0.7"/>
+      <circle cx="940" cy="50"  r="0.8" fill="#fff" opacity="0.6"/>
+      <circle cx="1060" cy="22" r="1.3" fill="#fff" opacity="0.85"/>
+      <circle cx="1150" cy="42" r="1"   fill="#fff" opacity="0.7"/>
+      <circle cx="130" cy="80"  r="0.8" fill="#fff" opacity="0.5"/>
+      <circle cx="370" cy="70"  r="1"   fill="#fff" opacity="0.65"/>
+      <circle cx="510" cy="90"  r="0.7" fill="#fff" opacity="0.55"/>
+      <circle cx="750" cy="65"  r="1.1" fill="#fff" opacity="0.75"/>
+      <circle cx="900" cy="85"  r="0.9" fill="#fff" opacity="0.6"/>
+      <circle cx="1100" cy="75" r="0.8" fill="#fff" opacity="0.5"/>
+
+      <!-- Moon -->
+      <circle cx="1100" cy="70" r="30" fill="#ffd700" opacity="0.07"/>
+      <circle cx="1100" cy="70" r="20" fill="#fffde0" opacity="0.15"/>
+      <circle cx="1090" cy="62" r="17" fill="#020509"/>
+
+      <!-- Ground / roads -->
+      <rect x="0" y="580" width="1200" height="120" fill="#080d18"/>
+      <!-- Horizontal roads -->
+      <rect x="0"   y="200" width="1200" height="12" fill="#0d1420" opacity="0.9"/>
+      <rect x="0"   y="400" width="1200" height="12" fill="#0d1420" opacity="0.9"/>
+      <!-- Vertical roads -->
+      <rect x="130" y="100" width="12"  height="500" fill="#0d1420" opacity="0.9"/>
+      <rect x="395" y="100" width="12"  height="500" fill="#0d1420" opacity="0.9"/>
+      <rect x="660" y="100" width="12"  height="500" fill="#0d1420" opacity="0.9"/>
+      <rect x="925" y="100" width="12"  height="500" fill="#0d1420" opacity="0.9"/>
+
+      <!-- Road markings (dashed center lines) -->
+      <line x1="0" y1="206" x2="1200" y2="206" stroke="#1a2744" stroke-width="1" stroke-dasharray="20,15"/>
+      <line x1="0" y1="406" x2="1200" y2="406" stroke="#1a2744" stroke-width="1" stroke-dasharray="20,15"/>
+
+      <!-- ═══ SOLAR HOUSES (bright windows) ═══ -->
+
+      <!-- House A1: col1, row1 (solar) -->
+      <rect x="20"  y="110" width="105" height="80" fill="#0e1a2e"/>
+      <rect x="20"  y="100" width="105" height="15" fill="#0a1020"/>
+      <!-- solar panels on roof -->
+      <rect x="25"  y="102" width="90"  height="11" fill="#1a3060" stroke="#ffc83d" stroke-width="0.6" opacity="0.8"/>
+      <line x1="55"  y1="102" x2="55"  y2="113" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <line x1="85"  y1="102" x2="85"  y2="113" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <!-- glowing windows -->
+      <rect x="30"  y="125" width="25" height="20" rx="2" fill="#ffc83d" opacity="0.6" filter="url(#n-glow-gold)"/>
+      <rect x="72"  y="125" width="25" height="20" rx="2" fill="#ffc83d" opacity="0.6" filter="url(#n-glow-gold)"/>
+      <rect x="30"  y="158" width="45" height="28" rx="2" fill="#ffc83d" opacity="0.25"/>
+
+      <!-- House A2: col2, row1 (solar) -->
+      <rect x="145" y="110" width="240" height="80" fill="#0e1a2e"/>
+      <rect x="145" y="100" width="240" height="15" fill="#0a1020"/>
+      <rect x="150" y="102" width="220" height="11" fill="#1a3060" stroke="#ffc83d" stroke-width="0.7" opacity="0.85"/>
+      <line x1="205" y1="102" x2="205" y2="113" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <line x1="260" y1="102" x2="260" y2="113" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <line x1="315" y1="102" x2="315" y2="113" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <rect x="160" y="125" width="35" height="25" rx="2" fill="#ffc83d" opacity="0.55" filter="url(#n-glow-gold)"/>
+      <rect x="220" y="125" width="35" height="25" rx="2" fill="#ffc83d" opacity="0.55" filter="url(#n-glow-gold)"/>
+      <rect x="300" y="125" width="35" height="25" rx="2" fill="#ffc83d" opacity="0.55" filter="url(#n-glow-gold)"/>
+      <rect x="175" y="155" width="60" height="30" rx="2" fill="#ffc83d" opacity="0.2"/>
+
+      <!-- House B1: col1, row2 (solar) -->
+      <rect x="20"  y="220" width="105" height="75" fill="#0e1a2e"/>
+      <rect x="20"  y="212" width="105" height="12" fill="#0a1020"/>
+      <rect x="25"  y="214" width="90"  height="8"  fill="#1a3060" stroke="#ffc83d" stroke-width="0.6" opacity="0.8"/>
+      <line x1="55"  y1="214" x2="55"  y2="222" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <line x1="85"  y1="214" x2="85"  y2="222" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <rect x="30"  y="235" width="28" height="20" rx="2" fill="#ffc83d" opacity="0.55" filter="url(#n-glow-gold)"/>
+      <rect x="72"  y="235" width="28" height="20" rx="2" fill="#ffc83d" opacity="0.55" filter="url(#n-glow-gold)"/>
+      <rect x="35"  y="265" width="50" height="25" rx="2" fill="#ffc83d" opacity="0.2"/>
+
+      <!-- House B2: col2, row2 (solar) -->
+      <rect x="145" y="220" width="240" height="75" fill="#0e1a2e"/>
+      <rect x="145" y="212" width="240" height="12" fill="#0a1020"/>
+      <rect x="150" y="214" width="220" height="8"  fill="#1a3060" stroke="#ffc83d" stroke-width="0.7" opacity="0.85"/>
+      <line x1="205" y1="214" x2="205" y2="222" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <line x1="260" y1="214" x2="260" y2="222" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <line x1="315" y1="214" x2="315" y2="222" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <rect x="165" y="232" width="38" height="26" rx="2" fill="#ffc83d" opacity="0.5" filter="url(#n-glow-gold)"/>
+      <rect x="225" y="232" width="38" height="26" rx="2" fill="#ffc83d" opacity="0.5" filter="url(#n-glow-gold)"/>
+      <rect x="295" y="232" width="38" height="26" rx="2" fill="#ffc83d" opacity="0.5" filter="url(#n-glow-gold)"/>
+
+      <!-- House C1: col3, row1 (solar) -->
+      <rect x="410" y="110" width="240" height="80" fill="#0e1a2e"/>
+      <rect x="410" y="100" width="240" height="15" fill="#0a1020"/>
+      <rect x="415" y="102" width="220" height="11" fill="#1a3060" stroke="#ffc83d" stroke-width="0.7" opacity="0.85"/>
+      <line x1="470" y1="102" x2="470" y2="113" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <line x1="525" y1="102" x2="525" y2="113" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <line x1="580" y1="102" x2="580" y2="113" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <rect x="425" y="122" width="38" height="28" rx="2" fill="#ffc83d" opacity="0.55" filter="url(#n-glow-gold)"/>
+      <rect x="490" y="122" width="38" height="28" rx="2" fill="#ffc83d" opacity="0.55" filter="url(#n-glow-gold)"/>
+      <rect x="565" y="122" width="38" height="28" rx="2" fill="#ffc83d" opacity="0.55" filter="url(#n-glow-gold)"/>
+
+      <!-- ═══ DARK HOUSES (no solar — dim windows) ═══ -->
+
+      <!-- House D1: col4, row1 (dark) -->
+      <rect x="675" y="110" width="240" height="80" fill="#080e18"/>
+      <rect x="675" y="100" width="240" height="15" fill="#060a12"/>
+      <!-- no solar panels -->
+      <rect x="690" y="122" width="38" height="28" rx="2" fill="#1a1a2e" opacity="0.6"/>
+      <rect x="755" y="122" width="38" height="28" rx="2" fill="#1a1a2e" opacity="0.6"/>
+      <rect x="830" y="122" width="38" height="28" rx="2" fill="#1a1a2e" opacity="0.6"/>
+      <!-- candle flicker -->
+      <ellipse cx="710" cy="140" rx="3" ry="4" fill="#ff6b35" opacity="0.5" filter="url(#n-glow-dim)"/>
+
+      <!-- House D2: col4, row2 (dark) -->
+      <rect x="675" y="220" width="240" height="75" fill="#080e18"/>
+      <rect x="675" y="212" width="240" height="12" fill="#060a12"/>
+      <rect x="690" y="232" width="38" height="26" rx="2" fill="#0d1220" opacity="0.5"/>
+      <rect x="755" y="232" width="38" height="26" rx="2" fill="#0d1220" opacity="0.5"/>
+      <rect x="830" y="232" width="38" height="26" rx="2" fill="#0d1220" opacity="0.5"/>
+      <!-- phone glow -->
+      <rect x="758" y="238" width="16" height="10" rx="2" fill="#4466ff" opacity="0.35" filter="url(#n-glow-dim)"/>
+
+      <!-- House E1: col5, row1 (dark) -->
+      <rect x="940" y="110" width="240" height="80" fill="#080e18"/>
+      <rect x="940" y="100" width="240" height="15" fill="#060a12"/>
+      <rect x="955" y="122" width="38" height="28" rx="2" fill="#1a1020" opacity="0.5"/>
+      <rect x="1020" y="122" width="38" height="28" rx="2" fill="#1a1020" opacity="0.5"/>
+      <rect x="1095" y="122" width="38" height="28" rx="2" fill="#1a1020" opacity="0.5"/>
+
+      <!-- House E2: col5, row2 (dark) -->
+      <rect x="940" y="220" width="240" height="75" fill="#080e18"/>
+      <rect x="940" y="212" width="240" height="12" fill="#060a12"/>
+      <rect x="955" y="232" width="38" height="26" rx="2" fill="#0d1020" opacity="0.5"/>
+      <rect x="1020" y="232" width="38" height="26" rx="2" fill="#0d1020" opacity="0.5"/>
+      <rect x="1095" y="232" width="38" height="26" rx="2" fill="#0d1020" opacity="0.5"/>
+
+      <!-- House F1: col1, row3 (solar) -->
+      <rect x="20"  y="420" width="105" height="75" fill="#0e1a2e"/>
+      <rect x="20"  y="412" width="105" height="12" fill="#0a1020"/>
+      <rect x="25"  y="414" width="90"  height="8"  fill="#1a3060" stroke="#ffc83d" stroke-width="0.6" opacity="0.8"/>
+      <line x1="55"  y1="414" x2="55"  y2="422" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <line x1="85"  y1="414" x2="85"  y2="422" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <rect x="30"  y="432" width="28" height="20" rx="2" fill="#ffc83d" opacity="0.55" filter="url(#n-glow-gold)"/>
+      <rect x="72"  y="432" width="28" height="20" rx="2" fill="#ffc83d" opacity="0.55" filter="url(#n-glow-gold)"/>
+
+      <!-- House F2: col2, row3 (dark) -->
+      <rect x="145" y="420" width="240" height="75" fill="#080e18"/>
+      <rect x="145" y="412" width="240" height="12" fill="#060a12"/>
+      <rect x="165" y="432" width="38" height="26" rx="2" fill="#0d1220" opacity="0.5"/>
+      <rect x="225" y="432" width="38" height="26" rx="2" fill="#0d1220" opacity="0.5"/>
+      <rect x="295" y="432" width="38" height="26" rx="2" fill="#0d1220" opacity="0.5"/>
+      <!-- flashlight -->
+      <ellipse cx="250" cy="450" rx="20" ry="8" fill="#fffde0" opacity="0.08" filter="url(#n-glow-dim)"/>
+
+      <!-- House G1: col3, row3 (solar) -->
+      <rect x="410" y="420" width="240" height="75" fill="#0e1a2e"/>
+      <rect x="410" y="412" width="240" height="12" fill="#0a1020"/>
+      <rect x="415" y="414" width="220" height="8"  fill="#1a3060" stroke="#ffc83d" stroke-width="0.7" opacity="0.85"/>
+      <line x1="470" y1="414" x2="470" y2="422" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <line x1="525" y1="414" x2="525" y2="422" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <line x1="580" y1="414" x2="580" y2="422" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <rect x="425" y="432" width="38" height="26" rx="2" fill="#ffc83d" opacity="0.5" filter="url(#n-glow-gold)"/>
+      <rect x="490" y="432" width="38" height="26" rx="2" fill="#ffc83d" opacity="0.5" filter="url(#n-glow-gold)"/>
+      <rect x="565" y="432" width="38" height="26" rx="2" fill="#ffc83d" opacity="0.5" filter="url(#n-glow-gold)"/>
+
+      <!-- House G2: col4, row3 (dark) -->
+      <rect x="675" y="420" width="240" height="75" fill="#080e18"/>
+      <rect x="675" y="412" width="240" height="12" fill="#060a12"/>
+      <rect x="690" y="432" width="38" height="26" rx="2" fill="#1a1020" opacity="0.4"/>
+      <rect x="755" y="432" width="38" height="26" rx="2" fill="#1a1020" opacity="0.4"/>
+      <rect x="830" y="432" width="38" height="26" rx="2" fill="#1a1020" opacity="0.4"/>
+
+      <!-- House H: col5, row3 (solar) -->
+      <rect x="940" y="420" width="240" height="75" fill="#0e1a2e"/>
+      <rect x="940" y="412" width="240" height="12" fill="#0a1020"/>
+      <rect x="945" y="414" width="220" height="8"  fill="#1a3060" stroke="#ffc83d" stroke-width="0.7" opacity="0.85"/>
+      <line x1="1000" y1="414" x2="1000" y2="422" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <line x1="1055" y1="414" x2="1055" y2="422" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <line x1="1110" y1="414" x2="1110" y2="422" stroke="#ffc83d" stroke-width="0.5" opacity="0.6"/>
+      <rect x="955"  y="432" width="38" height="26" rx="2" fill="#ffc83d" opacity="0.5" filter="url(#n-glow-gold)"/>
+      <rect x="1020" y="432" width="38" height="26" rx="2" fill="#ffc83d" opacity="0.5" filter="url(#n-glow-gold)"/>
+      <rect x="1095" y="432" width="38" height="26" rx="2" fill="#ffc83d" opacity="0.5" filter="url(#n-glow-gold)"/>
+    </svg>
+  </div>
+
+  <!-- Layer 2: X-Ray interior dollhouse view -->
+  <div class="hero-layer layer-xray">
+    <svg viewBox="0 0 1200 700" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" style="width:100%;height:100%">
+      <defs>
+        <filter id="x-glow">
+          <feGaussianBlur stdDeviation="5" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="x-soft">
+          <feGaussianBlur stdDeviation="2"/>
+        </filter>
+        <radialGradient id="x-tv-glow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#4488ff" stop-opacity="0.8"/>
+          <stop offset="100%" stop-color="#4488ff" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="x-lamp-glow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#ffc83d" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="#ffc83d" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="x-candle" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#ff8800" stop-opacity="0.8"/>
+          <stop offset="100%" stop-color="#ff8800" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="x-screen" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#22aaff" stop-opacity="0.7"/>
+          <stop offset="100%" stop-color="#22aaff" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+
+      <!-- Warm interior background -->
+      <rect width="1200" height="700" fill="#0d1530"/>
+
+      <!-- ═══ HOUSE A2 — Family watching TV ═══ (col2, row1) -->
+      <rect x="145" y="110" width="240" height="80" fill="#10203a"/>
+      <!-- TV -->
+      <rect x="220" y="122" width="80"  height="50" rx="3" fill="#0a1428" stroke="#2244aa" stroke-width="1"/>
+      <rect x="224" y="126" width="72"  height="42" rx="2" fill="#1a3a8a"/>
+      <ellipse cx="260" cy="147" rx="36" ry="21" fill="url(#x-tv-glow)" opacity="0.6"/>
+      <!-- TV stand -->
+      <rect x="253" y="172" width="14" height="8" fill="#1a2744"/>
+      <rect x="245" y="178" width="30" height="4" rx="2" fill="#1a2744"/>
+      <!-- Family silhouettes -->
+      <ellipse cx="185" cy="178" rx="12" ry="10" fill="#0a1020"/>
+      <rect x="176" y="155" width="18" height="28" rx="5" fill="#0a1020"/>
+      <ellipse cx="215" cy="180" rx="10" ry="9" fill="#0a1020"/>
+      <rect x="207" y="159" width="16" height="26" rx="4" fill="#0a1020"/>
+      <ellipse cx="330" cy="176" rx="12" ry="10" fill="#0a1020"/>
+      <rect x="321" y="153" width="18" height="28" rx="5" fill="#0a1020"/>
+      <!-- Room glow from TV -->
+      <ellipse cx="260" cy="155" rx="80" ry="40" fill="#1a3a8a" opacity="0.15"/>
+
+      <!-- ═══ HOUSE B1 — Kid playing PlayStation ═══ (col1, row2) -->
+      <rect x="20"  y="220" width="105" height="75" fill="#10203a"/>
+      <!-- TV/monitor -->
+      <rect x="35"  y="232" width="50" height="32" rx="2" fill="#0a1428" stroke="#2244aa" stroke-width="1"/>
+      <rect x="38"  y="235" width="44" height="26" rx="1" fill="#1a55cc"/>
+      <!-- game controller shape -->
+      <ellipse cx="75" cy="278" rx="14" ry="8" fill="#1a2540"/>
+      <circle cx="68" cy="278" r="4" fill="#1a2540"/>
+      <circle cx="82" cy="278" r="4" fill="#1a2540"/>
+      <circle cx="73" cy="275" r="2" fill="#ff4444" opacity="0.8"/>
+      <circle cx="78" cy="275" r="2" fill="#44ff44" opacity="0.8"/>
+      <!-- kid silhouette -->
+      <ellipse cx="60" cy="266" rx="9" ry="8" fill="#0a1020"/>
+      <rect x="52" y="255" width="16" height="18" rx="4" fill="#0a1020"/>
+      <!-- screen glow -->
+      <ellipse cx="60" cy="248" rx="35" ry="20" fill="#2244cc" opacity="0.2"/>
+
+      <!-- ═══ HOUSE B2 — Girl studying at desk ═══ (col2, row2) -->
+      <rect x="145" y="220" width="240" height="75" fill="#10203a"/>
+      <!-- Desk -->
+      <rect x="175" y="270" width="150" height="8"  rx="2" fill="#1a2540"/>
+      <rect x="180" y="278" width="8"   height="15" fill="#1a2540"/>
+      <rect x="312" y="278" width="8"   height="15" fill="#1a2540"/>
+      <!-- Books on desk -->
+      <rect x="190" y="255" width="25" height="18" rx="2" fill="#a03030"/>
+      <rect x="218" y="258" width="20" height="15" rx="2" fill="#304080"/>
+      <!-- Lamp -->
+      <rect x="295" y="240" width="4"  height="32" fill="#2a3a5a"/>
+      <polygon points="280,240 310,240 295,225" fill="#ffc83d" opacity="0.9"/>
+      <!-- lamp glow -->
+      <ellipse cx="250" cy="265" rx="60" ry="30" fill="url(#x-lamp-glow)" opacity="0.25"/>
+      <!-- Girl silhouette at desk -->
+      <ellipse cx="240" cy="255" rx="13" ry="12" fill="#0a1020"/>
+      <rect x="228" y="244" width="22" height="32" rx="6" fill="#0a1020"/>
+      <!-- Notebook -->
+      <rect x="220" y="268" width="35" height="5" rx="1" fill="#e8e0d0" opacity="0.2"/>
+
+      <!-- ═══ HOUSE C1 — Family movie night ═══ (col3, row1) -->
+      <rect x="410" y="110" width="240" height="80" fill="#080f1e"/>
+      <!-- Large projector screen -->
+      <rect x="445" y="115" width="120" height="65" rx="3" fill="#060c1a" stroke="#1a3080" stroke-width="1"/>
+      <rect x="449" y="119" width="112" height="57" rx="2" fill="#0d2060"/>
+      <!-- movie glow -->
+      <ellipse cx="505" cy="148" rx="56" ry="29" fill="url(#x-screen)" opacity="0.5"/>
+      <!-- Sofa/couch shape -->
+      <rect x="448" y="168" width="100" height="20" rx="5" fill="#1a2540"/>
+      <rect x="444" y="162" width="16" height="28" rx="4" fill="#1a2540"/>
+      <rect x="548" y="162" width="16" height="28" rx="4" fill="#1a2540"/>
+      <!-- Family heads -->
+      <circle cx="468" cy="162" r="8" fill="#0a1020"/>
+      <circle cx="490" cy="160" r="9" fill="#0a1020"/>
+      <circle cx="516" cy="161" r="8" fill="#0a1020"/>
+      <circle cx="538" cy="162" r="7" fill="#0a1020"/>
+      <!-- Popcorn -->
+      <ellipse cx="618" cy="178" rx="14" ry="18" fill="#1a2030" stroke="#2a3a50" stroke-width="1"/>
+      <circle cx="613" cy="170" r="3" fill="#fffde0" opacity="0.6"/>
+      <circle cx="620" cy="167" r="3" fill="#fffde0" opacity="0.6"/>
+      <circle cx="625" cy="172" r="3" fill="#fffde0" opacity="0.6"/>
+
+      <!-- ═══ HOUSE D1 — Candles / no solar ═══ (col4, row1) -->
+      <rect x="675" y="110" width="240" height="80" fill="#08080e"/>
+      <!-- Candles -->
+      <rect x="730" y="162" width="8" height="22" fill="#c8a060" opacity="0.7"/>
+      <ellipse cx="734" cy="160" rx="4" ry="6" fill="#ff8800" opacity="0.9" filter="url(#x-soft)"/>
+      <ellipse cx="734" cy="158" rx="2" ry="3" fill="#fff" opacity="0.6"/>
+      <rect x="800" y="165" width="8" height="19" fill="#c8a060" opacity="0.7"/>
+      <ellipse cx="804" cy="163" rx="4" ry="6" fill="#ff8800" opacity="0.9" filter="url(#x-soft)"/>
+      <ellipse cx="804" cy="161" rx="2" ry="3" fill="#fff" opacity="0.6"/>
+      <!-- candle glow circles -->
+      <ellipse cx="734" cy="170" rx="30" ry="20" fill="url(#x-candle)" opacity="0.3"/>
+      <ellipse cx="804" cy="172" rx="30" ry="18" fill="url(#x-candle)" opacity="0.25"/>
+      <!-- Sad family shapes -->
+      <ellipse cx="710" cy="175" rx="9" ry="8" fill="#0a0a14"/>
+      <rect x="702" y="160" width="16" height="20" rx="4" fill="#0a0a14"/>
+      <ellipse cx="760" cy="178" rx="8" ry="7" fill="#0a0a14"/>
+      <rect x="753" y="165" width="14" height="18" rx="4" fill="#0a0a14"/>
+      <ellipse cx="835" cy="175" rx="9" ry="8" fill="#0a0a14"/>
+      <rect x="827" y="160" width="16" height="20" rx="4" fill="#0a0a14"/>
+
+      <!-- ═══ HOUSE D2 — Student / phone light ═══ (col4, row2) -->
+      <rect x="675" y="220" width="240" height="75" fill="#06060c"/>
+      <!-- Desk and student -->
+      <rect x="710" y="268" width="120" height="6"  rx="2" fill="#1a1a28"/>
+      <!-- Phone glow on desk -->
+      <rect x="755" y="248" width="22" height="38" rx="4" fill="#0a0a18" stroke="#2233aa" stroke-width="1"/>
+      <rect x="758" y="252" width="16" height="30" rx="2" fill="#1a44cc"/>
+      <ellipse cx="766" cy="267" rx="16" ry="20" fill="#2244ff" opacity="0.3" filter="url(#x-soft)"/>
+      <!-- student silhouette -->
+      <ellipse cx="740" cy="258" rx="11" ry="10" fill="#06060c"/>
+      <rect x="730" y="248" width="20" height="26" rx="5" fill="#06060c"/>
+
+      <!-- ═══ HOUSE F2 — Dinner by flashlight ═══ (col2, row3) -->
+      <rect x="145" y="420" width="240" height="75" fill="#06080e"/>
+      <!-- Table -->
+      <rect x="200" y="462" width="130" height="8" rx="2" fill="#1a1a28"/>
+      <rect x="205" y="470" width="10" height="20" fill="#1a1a28"/>
+      <rect x="315" y="470" width="10" height="20" fill="#1a1a28"/>
+      <!-- Flashlight beam -->
+      <polygon points="240,440 280,440 295,465 225,465" fill="#fffde0" opacity="0.06"/>
+      <ellipse cx="260" cy="445" rx="8" ry="4" fill="#fffde0" opacity="0.7" filter="url(#x-soft)"/>
+      <!-- food plates -->
+      <ellipse cx="240" cy="462" rx="18" ry="6" fill="#1a2030"/>
+      <ellipse cx="290" cy="462" rx="18" ry="6" fill="#1a2030"/>
+      <!-- family silhouettes -->
+      <ellipse cx="210" cy="456" rx="10" ry="9" fill="#06080e"/>
+      <rect x="201" y="444" width="18" height="22" rx="4" fill="#06080e"/>
+      <ellipse cx="320" cy="455" rx="10" ry="9" fill="#06080e"/>
+      <rect x="311" y="443" width="18" height="22" rx="4" fill="#06080e"/>
+
+      <!-- ═══ HOUSE G2 — Empty dark room ═══ (col4, row3) -->
+      <rect x="675" y="420" width="240" height="75" fill="#04040a"/>
+      <!-- just some furniture outlines faintly -->
+      <rect x="710" y="450" width="80" height="40" rx="4" fill="#08081a" opacity="0.5"/>
+      <rect x="820" y="430" width="50" height="60" rx="4" fill="#08081a" opacity="0.4"/>
+    </svg>
+  </div>
+
+  <!-- Layer 3: Floating Solar Car -->
+  <div class="hero-layer layer-car">
+    <svg class="floating-car" viewBox="0 0 280 110" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="car-glow">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <linearGradient id="car-body" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#1a3a6a"/>
+          <stop offset="100%" stop-color="#0d1e3a"/>
+        </linearGradient>
+        <linearGradient id="car-panel" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#1e3a5f"/>
+          <stop offset="100%" stop-color="#0a2040"/>
+        </linearGradient>
+      </defs>
+      <!-- Car body -->
+      <rect x="20" y="55" width="240" height="40" rx="6" fill="url(#car-body)" stroke="#ffc83d" stroke-width="1.5"/>
+      <!-- Car roof/cabin -->
+      <path d="M 70,55 Q 80,22 110,18 L 200,18 Q 225,22 235,55 Z" fill="url(#car-body)" stroke="#ffc83d" stroke-width="1.2"/>
+      <!-- Solar panels on roof -->
+      <rect x="82" y="22" width="116" height="28" rx="3" fill="url(#car-panel)" stroke="#ffc83d" stroke-width="1" filter="url(#car-glow)"/>
+      <line x1="112" y1="22" x2="112" y2="50" stroke="#ffc83d" stroke-width="0.7" opacity="0.7"/>
+      <line x1="140" y1="22" x2="140" y2="50" stroke="#ffc83d" stroke-width="0.7" opacity="0.7"/>
+      <line x1="168" y1="22" x2="168" y2="50" stroke="#ffc83d" stroke-width="0.7" opacity="0.7"/>
+      <line x1="82"  y1="36" x2="198" y2="36" stroke="#ffc83d" stroke-width="0.7" opacity="0.7"/>
+      <!-- Windows -->
+      <path d="M 78,54 Q 85,30 110,24 L 138,24 L 138,54 Z" fill="#0d2a4a" opacity="0.8" stroke="#1a4080" stroke-width="0.8"/>
+      <path d="M 142,24 L 198,24 Q 224,30 230,54 L 142,54 Z" fill="#0d2a4a" opacity="0.8" stroke="#1a4080" stroke-width="0.8"/>
+      <!-- Wheels -->
+      <circle cx="75"  cy="92" r="16" fill="#080e18" stroke="#ffc83d" stroke-width="2"/>
+      <circle cx="75"  cy="92" r="8"  fill="#0f1a2e" stroke="#ffc83d" stroke-width="1.2"/>
+      <circle cx="75"  cy="92" r="3"  fill="#ffc83d"/>
+      <circle cx="205" cy="92" r="16" fill="#080e18" stroke="#ffc83d" stroke-width="2"/>
+      <circle cx="205" cy="92" r="8"  fill="#0f1a2e" stroke="#ffc83d" stroke-width="1.2"/>
+      <circle cx="205" cy="92" r="3"  fill="#ffc83d"/>
+      <!-- Headlight -->
+      <rect x="248" y="64" width="12" height="8" rx="2" fill="#ffc83d" opacity="0.9" filter="url(#car-glow)"/>
+      <ellipse cx="265" cy="68" rx="18" ry="8" fill="#fffde0" opacity="0.12"/>
+      <!-- Tail light -->
+      <rect x="18" y="66" width="10" height="7" rx="2" fill="#ff3333" opacity="0.7"/>
+      <!-- Energy badge -->
+      <polygon points="138,62 132,75 136,75 131,88 145,70 140,70" fill="#ffc83d" opacity="0.85"/>
+      <!-- Sun reflection on roof -->
+      <ellipse cx="130" cy="33" rx="20" ry="6" fill="#ffd700" opacity="0.15"/>
+    </svg>
+  </div>
+
+  <!-- Gradient Overlay -->
+  <div class="hero-overlay"></div>
+
+  <!-- Hero Content -->
+  <div class="hero-content">
+    <div class="hero-eyebrow">
+      <span class="ar">بغداد · الطاقة الشمسية</span>
+      <span class="en">Baghdad · Solar Energy</span>
+    </div>
+    <h1 class="hero-headline shimmer">
+      <span class="ar">حياتك لا تنتظر الكهرباء</span>
+      <span class="en">Your Life Doesn't Wait for Power</span>
+    </h1>
+    <p class="hero-subtext">
+      <span class="ar">بلاد أوتو — الطاقة الشمسية التي تضيء بيتك كل ليلة، بغض النظر عن الشبكة</span>
+      <span class="en">Bilad Auto — Solar energy that lights your home every night, regardless of the grid</span>
+    </p>
+    <a href="contact.html" class="hero-cta">
+      <span class="ar">احصل على عرض سعر مجاني</span>
+      <span class="en">Get a Free Quote</span>
+    </a>
+  </div>
+
+  <!-- Hint -->
+  <div class="hero-hint">
+    <span class="ar">حرّك الماوس لترى الفرق</span>
+    <span class="en">Move cursor to reveal</span>
+    <svg class="hero-hint-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M8 2 L8 14 M4 10 L8 14 L12 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </div>
+</section>
+
+<!-- ══ STATS BAR ════════════════════════════════════════════ -->
+<div class="stats-bar">
+  <div class="stats-inner">
+    <div class="stat-item fade-in">
+      <span class="stat-number counter" data-target="500" data-suffix="+">٠</span>
+      <span class="stat-label"><span class="ar">مشروع منجز</span><span class="en">Completed Projects</span></span>
+    </div>
+    <div class="stat-item fade-in">
+      <span class="stat-number counter" data-target="8" data-suffix="+">٠</span>
+      <span class="stat-label"><span class="ar">سنوات خبرة</span><span class="en">Years Experience</span></span>
+    </div>
+    <div class="stat-item fade-in">
+      <span class="stat-number counter" data-target="98" data-suffix="%">٠</span>
+      <span class="stat-label"><span class="ar">رضا العملاء</span><span class="en">Client Satisfaction</span></span>
+    </div>
+    <div class="stat-item fade-in">
+      <span class="stat-number counter" data-target="3" data-suffix="">٠</span>
+      <span class="stat-label"><span class="ar">محافظات عراقية</span><span class="en">Iraqi Governorates</span></span>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SERVICES PREVIEW ═════════════════════════════════════ -->
+<section class="section">
+  <div class="gold-label">
+    <span class="ar">خدماتنا</span><span class="en">Our Services</span>
+  </div>
+  <h2 class="section-title slide-up">
+    <span class="ar">حلول شمسية لكل احتياج</span>
+    <span class="en">Solar Solutions for Every Need</span>
+  </h2>
+  <div class="gold-line"></div>
+  <p class="section-sub">
+    <span class="ar">من المنزل إلى المصنع، نقدم أنظمة طاقة شمسية متكاملة مصممة خصيصاً لمناخ بغداد ومتطلبات العراق</span>
+    <span class="en">From home to factory, we deliver complete solar systems designed specifically for Baghdad's climate and Iraq's requirements</span>
+  </p>
+  <div class="grid-3">
+    <!-- Card 1 -->
+    <div class="card slide-up">
+      <div class="card-icon">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <path d="M4 24 L4 14 L14 6 L24 14 L24 24 Z" stroke="#ffc83d" stroke-width="1.8" fill="none" stroke-linejoin="round"/>
+          <rect x="10" y="16" width="8" height="8" fill="none" stroke="#ffc83d" stroke-width="1.4"/>
+          <rect x="7" y="8" width="8" height="5" rx="1" fill="#ffc83d" opacity="0.6"/>
+          <line x1="9" y1="8" x2="9" y2="13" stroke="#ffc83d" stroke-width="0.7"/>
+          <line x1="11" y1="8" x2="11" y2="13" stroke="#ffc83d" stroke-width="0.7"/>
+          <line x1="7" y1="10.5" x2="15" y2="10.5" stroke="#ffc83d" stroke-width="0.7"/>
+        </svg>
+      </div>
+      <div class="card-title"><span class="ar">منظومات سكنية</span><span class="en">Residential Systems</span></div>
+      <p class="card-text">
+        <span class="ar">أنظمة 3 إلى 30 كيلوواط للمنازل والشقق. توفير فاتورة الكهرباء وحماية بيتك من الانقطاع</span>
+        <span class="en">3 to 30kW systems for homes and apartments. Save on electricity and protect your home from outages</span>
+      </p>
+      <a href="services.html" style="display:inline-flex;align-items:center;gap:0.4rem;color:#ffc83d;font-size:0.88rem;font-weight:700;margin-top:1rem;">
+        <span class="ar">اعرف أكثر ←</span><span class="en">Learn More →</span>
+      </a>
+    </div>
+    <!-- Card 2 -->
+    <div class="card slide-up" style="transition-delay:0.1s">
+      <div class="card-icon">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <rect x="3" y="10" width="22" height="16" stroke="#ffc83d" stroke-width="1.8" fill="none"/>
+          <rect x="8" y="2" width="12" height="10" stroke="#ffc83d" stroke-width="1.6" fill="none"/>
+          <rect x="5" y="13" width="6" height="10" fill="none" stroke="#ffc83d" stroke-width="1.2"/>
+          <rect x="17" y="13" width="6" height="10" fill="none" stroke="#ffc83d" stroke-width="1.2"/>
+          <rect x="10" y="4" width="8" height="5" rx="1" fill="#ffc83d" opacity="0.5"/>
+          <line x1="12" y1="4" x2="12" y2="9" stroke="#ffc83d" stroke-width="0.7"/>
+          <line x1="14" y1="4" x2="14" y2="9" stroke="#ffc83d" stroke-width="0.7"/>
+          <line x1="10" y1="6.5" x2="18" y2="6.5" stroke="#ffc83d" stroke-width="0.7"/>
+        </svg>
+      </div>
+      <div class="card-title"><span class="ar">منظومات تجارية</span><span class="en">Commercial Systems</span></div>
+      <p class="card-text">
+        <span class="ar">أنظمة 30 إلى 500 كيلوواط للمحلات والمباني التجارية والمستشفيات. مراقبة لحظية وضمانات طويلة</span>
+        <span class="en">30 to 500kW systems for shops, commercial buildings, and hospitals. Real-time monitoring and long warranties</span>
+      </p>
+      <a href="services.html" style="display:inline-flex;align-items:center;gap:0.4rem;color:#ffc83d;font-size:0.88rem;font-weight:700;margin-top:1rem;">
+        <span class="ar">اعرف أكثر ←</span><span class="en">Learn More →</span>
+      </a>
+    </div>
+    <!-- Card 3 -->
+    <div class="card slide-up" style="transition-delay:0.2s">
+      <div class="card-icon">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <circle cx="14" cy="14" r="9" stroke="#ffc83d" stroke-width="1.8" fill="none"/>
+          <path d="M 14 8 L 14 14 L 18 18" stroke="#ffc83d" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M 6 6 L 9 9" stroke="#ffc83d" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 22 6 L 19 9" stroke="#ffc83d" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 5 14 L 2 14" stroke="#ffc83d" stroke-width="1.5" stroke-linecap="round"/>
+          <path d="M 26 14 L 23 14" stroke="#ffc83d" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="card-title"><span class="ar">الصيانة والدعم</span><span class="en">Maintenance & Support</span></div>
+      <p class="card-text">
+        <span class="ar">فريق متخصص يعمل على مدار الساعة. تنظيف الألواح، فحص العواكس، وضمان أداء مثالي طوال العام</span>
+        <span class="en">Specialized team working 24/7. Panel cleaning, inverter inspection, and ensuring optimal performance year-round</span>
+      </p>
+      <a href="services.html" style="display:inline-flex;align-items:center;gap:0.4rem;color:#ffc83d;font-size:0.88rem;font-weight:700;margin-top:1rem;">
+        <span class="ar">اعرف أكثر ←</span><span class="en">Learn More →</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ══ FEATURED PROJECT ══════════════════════════════════════ -->
+<section style="padding:0 2rem 5rem;max-width:1280px;margin:0 auto;">
+  <div class="gold-label">
+    <span class="ar">مشروع مميز</span><span class="en">Featured Project</span>
+  </div>
+  <div class="featured-card slide-up">
+    <div>
+      <div style="display:flex;gap:0.6rem;margin-bottom:1rem;flex-wrap:wrap;">
+        <span class="badge">صناعي</span>
+        <span class="badge-orange badge">بغداد 2023</span>
+      </div>
+      <h3 style="font-size:1.6rem;font-weight:900;margin-bottom:0.75rem;">
+        <span class="ar">مركز بحوث النفط</span>
+        <span class="en">Oil Research Center</span>
+      </h3>
+      <p style="color:var(--text-muted);line-height:1.85;font-size:0.95rem;margin-bottom:1.5rem;">
+        <span class="ar">أكبر منظومة طاقة شمسية صناعية في بغداد. 1200 لوح شمسي فوق مبنى مركز بحوث النفط، تنتج 500 كيلوواط وتوفر أكثر من 40 مليون دينار شهرياً على فاتورة الكهرباء</span>
+        <span class="en">The largest industrial solar system in Baghdad. 1200 solar panels atop the Oil Research Center, producing 500kW and saving over 40 million dinars monthly on electricity bills</span>
+      </p>
+      <div class="featured-card-stats">
+        <div class="featured-stat">
+          <span class="featured-stat-num">500</span>
+          <span class="featured-stat-lbl"><span class="ar">كيلوواط قدرة</span><span class="en">kW Capacity</span></span>
+        </div>
+        <div class="featured-stat">
+          <span class="featured-stat-num">1,200</span>
+          <span class="featured-stat-lbl"><span class="ar">لوح شمسي</span><span class="en">Solar Panels</span></span>
+        </div>
+        <div class="featured-stat">
+          <span class="featured-stat-num">40M</span>
+          <span class="featured-stat-lbl"><span class="ar">دينار وفر شهري</span><span class="en">IQD Monthly Savings</span></span>
+        </div>
+      </div>
+    </div>
+    <div>
+      <svg viewBox="0 0 400 250" xmlns="http://www.w3.org/2000/svg" style="width:100%;border-radius:12px;">
+        <rect width="400" height="250" fill="#080e1a"/>
+        <rect x="20"  y="40"  width="360" height="160" rx="4" fill="#0d1628"/>
+        <!-- Roof solar panel array -->
+        <rect x="30"  y="50"  width="340" height="130" rx="2" fill="#0a1830"/>
+        <!-- Panel grid -->
+        <g stroke="#ffc83d" stroke-width="0.6" opacity="0.5">
+          <line x1="84"  y1="50" x2="84"  y2="180"/>
+          <line x1="138" y1="50" x2="138" y2="180"/>
+          <line x1="192" y1="50" x2="192" y2="180"/>
+          <line x1="246" y1="50" x2="246" y2="180"/>
+          <line x1="300" y1="50" x2="300" y2="180"/>
+          <line x1="354" y1="50" x2="354" y2="180"/>
+          <line x1="30"  y1="93"  x2="370" y2="93"/>
+          <line x1="30"  y1="136" x2="370" y2="136"/>
+          <line x1="30"  y1="179" x2="370" y2="179"/>
+        </g>
+        <rect x="30" y="50" width="340" height="130" fill="none" stroke="#ffc83d" stroke-width="1.5" opacity="0.7"/>
+        <!-- Energy bolt -->
+        <polygon points="205,95 193,120 202,120 190,145 218,112 208,112" fill="#ffc83d" opacity="0.9"/>
+        <!-- Labels -->
+        <text x="200" y="215" text-anchor="middle" font-family="Cairo,Arial" font-size="13" fill="#ffc83d" font-weight="700">
+          <tspan class="ar">مركز بحوث النفط — 500 كيلوواط</tspan>
+        </text>
+        <text x="200" y="233" text-anchor="middle" font-family="Arial" font-size="10" fill="#8a8070">Oil Research Center — Baghdad 2023</text>
+      </svg>
+    </div>
+  </div>
+  <div style="text-align:center;">
+    <a href="projects.html" class="btn-outline">
+      <span class="ar">عرض جميع المشاريع</span>
+      <span class="en">View All Projects</span>
+    </a>
+  </div>
+</section>
+
+<!-- ══ TESTIMONIAL ══════════════════════════════════════════ -->
+<div class="testimonial-section">
+  <div class="gold-label">
+    <span class="ar">ماذا يقول عملاؤنا</span><span class="en">What Our Clients Say</span>
+  </div>
+  <p class="testimonial-quote fade-in">
+    <span class="ar">قبل بلاد أوتو، كانت الكهرباء تنقطع كل ساعتين. الآن منزلنا يعمل بكامله بالطاقة الشمسية طوال الليل. لم نستطع تصور هذا التغيير</span>
+    <span class="en">Before Bilad Auto, electricity would cut every two hours. Now our entire home runs on solar power through the night. We couldn't have imagined this change</span>
+  </p>
+  <p class="testimonial-author">
+    <span class="ar">م. حيدر الكاظمي — المنصور، بغداد</span>
+    <span class="en">Eng. Haider Al-Kadhimi — Al-Mansour, Baghdad</span>
+  </p>
+  <p class="testimonial-role">
+    <span class="ar">منظومة سكنية 10 كيلوواط</span>
+    <span class="en">10kW Residential System</span>
+  </p>
+</div>
+
+<!-- ══ CTA ═══════════════════════════════════════════════════ -->
+<div class="cta-section">
+  <h2>
+    <span class="ar">جاهز تبدأ توفير الكهرباء؟</span>
+    <span class="en">Ready to Start Saving on Power?</span>
+  </h2>
+  <p>
+    <span class="ar">تواصل معنا اليوم للحصول على استشارة مجانية وعرض سعر مخصص لاحتياجاتك</span>
+    <span class="en">Contact us today for a free consultation and a customized quote for your needs</span>
+  </p>
+  <div class="cta-buttons">
+    <a href="contact.html" class="btn-gold">
+      <span class="ar">احصل على عرض سعر</span><span class="en">Get a Quote</span>
+    </a>
+    <a href="tel:+9647712345678" class="btn-wa">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor"><path d="M10 0C4.477 0 0 4.477 0 10c0 1.763.461 3.418 1.27 4.86L0 20l5.293-1.246A9.961 9.961 0 0010 20c5.523 0 10-4.477 10-10S15.523 0 10 0zm4.914 13.9c-.207.583-1.21 1.113-1.65 1.147-.44.034-.454.33-2.862-.662-2.406-.99-3.847-3.463-3.963-3.623-.116-.16-.944-1.306-.944-2.493s.612-1.763.83-2.002c.217-.24.472-.3.63-.3h.454c.146 0 .344-.055.537.425.196.49.665 1.677.724 1.8.06.12.098.264.02.42-.08.155-.12.252-.24.39-.117.14-.246.31-.352.416-.116.118-.237.245-.102.48.135.235.6 1.03 1.287 1.667.883.818 1.628 1.07 1.857 1.19.23.12.363.1.497-.062.135-.162.578-.704.732-.945.154-.24.308-.2.517-.12.21.08 1.332.655 1.56.774.23.12.382.18.44.28.056.1.056.58-.152 1.18z"/></svg>
+      <span class="ar">اتصل بنا</span><span class="en">Call Us</span>
+    </a>
+  </div>
+</div>
+
+<!-- ══ FOOTER ════════════════════════════════════════════════ -->
+<footer class="main-footer">
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <div class="nav-logo" style="margin-bottom:0.5rem;">
+        <svg width="30" height="30" viewBox="0 0 34 34" fill="none">
+          <circle cx="17" cy="17" r="7" fill="#ffc83d"/>
+          <line x1="17" y1="2" x2="17" y2="0" stroke="#ffc83d" stroke-width="2.5" stroke-linecap="round"/>
+          <line x1="17" y1="34" x2="17" y2="32" stroke="#ffc83d" stroke-width="2.5" stroke-linecap="round"/>
+          <line x1="2" y1="17" x2="0" y2="17" stroke="#ffc83d" stroke-width="2.5" stroke-linecap="round"/>
+          <line x1="34" y1="17" x2="32" y2="17" stroke="#ffc83d" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+        <span class="logo-ar">بلاد أوتو</span>
+        <span class="logo-sep">|</span>
+        <span class="logo-en">Bilad Auto</span>
+      </div>
+      <p>
+        <span class="ar">شركة رائدة في حلول الطاقة الشمسية في العراق منذ 2016. نؤمن بأن كل بيت عراقي يستحق كهرباء مستقلة وموثوقة</span>
+        <span class="en">A leading solar energy solutions company in Iraq since 2016. We believe every Iraqi home deserves independent, reliable electricity</span>
+      </p>
+    </div>
+    <div>
+      <h4 class="footer-heading"><span class="ar">روابط سريعة</span><span class="en">Quick Links</span></h4>
+      <ul class="footer-links">
+        <li><a href="index.html"><span class="ar">الرئيسية</span><span class="en">Home</span></a></li>
+        <li><a href="projects.html"><span class="ar">المشاريع</span><span class="en">Projects</span></a></li>
+        <li><a href="services.html"><span class="ar">الخدمات</span><span class="en">Services</span></a></li>
+        <li><a href="about.html"><span class="ar">من نحن</span><span class="en">About</span></a></li>
+        <li><a href="contact.html"><span class="ar">التواصل</span><span class="en">Contact</span></a></li>
+      </ul>
+    </div>
+    <div>
+      <h4 class="footer-heading"><span class="ar">خدماتنا</span><span class="en">Services</span></h4>
+      <ul class="footer-links">
+        <li><a href="services.html"><span class="ar">منظومات سكنية</span><span class="en">Residential Systems</span></a></li>
+        <li><a href="services.html"><span class="ar">منظومات تجارية</span><span class="en">Commercial Systems</span></a></li>
+        <li><a href="services.html"><span class="ar">منظومات صناعية</span><span class="en">Industrial Systems</span></a></li>
+        <li><a href="services.html"><span class="ar">الصيانة والدعم</span><span class="en">Maintenance & Support</span></a></li>
+      </ul>
+    </div>
+    <div>
+      <h4 class="footer-heading"><span class="ar">تواصل معنا</span><span class="en">Contact Us</span></h4>
+      <ul class="footer-links">
+        <li><a href="tel:+9647712345678" style="direction:ltr;display:inline-block;">+964 771 234 5678</a></li>
+        <li><a href="mailto:info@biladauto.iq">info@biladauto.iq</a></li>
+        <li><span style="color:var(--text-muted);font-size:0.86rem;"><span class="ar">بغداد، المنصور، شارع 14 رمضان</span><span class="en">Baghdad, Al-Mansour</span></span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>
+      <span class="ar">© 2024 بلاد أوتو. جميع الحقوق محفوظة</span>
+      <span class="en">© 2024 Bilad Auto. All rights reserved</span>
+    </p>
+    <div class="footer-social">
+      <a href="#" class="social-btn" aria-label="Facebook">f</a>
+      <a href="#" class="social-btn" aria-label="Instagram">in</a>
+      <a href="#" class="social-btn" aria-label="WhatsApp">wa</a>
+    </div>
+  </div>
+</footer>
+
+<!-- ══ WHATSAPP FLOAT ════════════════════════════════════════ -->
+<a href="https://wa.me/9647712345678" class="whatsapp-float" target="_blank" rel="noopener" aria-label="WhatsApp">
+  <svg width="30" height="30" viewBox="0 0 30 30" fill="white">
+    <path d="M15 0C6.716 0 0 6.716 0 15c0 2.644.69 5.128 1.904 7.29L0 30l7.938-1.869A14.956 14.956 0 0015 30c8.284 0 15-6.716 15-15S23.284 0 15 0zm7.371 20.85c-.31.874-1.814 1.67-2.474 1.72-.66.052-.681.496-4.293-.993-3.608-1.485-5.77-5.195-5.944-5.435-.174-.24-1.416-1.96-1.416-3.74s.918-2.644 1.245-3.002c.326-.36.708-.45.945-.45h.681c.218 0 .516-.082.806.636.294.736.997 2.517 1.086 2.7.09.18.148.395.03.63-.12.233-.18.378-.36.585-.175.21-.368.465-.527.624-.175.177-.355.368-.153.72.203.352.9 1.545 1.931 2.5 1.324 1.227 2.441 1.605 2.785 1.785.345.18.545.15.746-.093.202-.244.868-1.057 1.099-1.418.231-.36.461-.3.775-.18.316.12 2 .994 2.34 1.16.345.18.574.27.66.42.084.15.084.87-.228 1.77z"/>
+  </svg>
+</a>
+
+<script src="js/main.js"></script>
+<script src="js/hero.js"></script>
+</body>
+</html>
