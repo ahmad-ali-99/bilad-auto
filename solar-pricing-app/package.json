@@ -40,6 +40,10 @@
     "appId": "com.biladauto.solarpricing",
     "productName": "تسعير الطاقة الشمسية - بلاد اوتو",
     "publish": null,
+    "compression": "maximum",
+    "directories": {
+      "output": "release"
+    },
     "files": [
       "dist/**/*",
       "electron/**/*",
