@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 
 const SETTINGS_FIELDS = [
   { key: 'system_voltage', label: 'فولتية النظام (لتحويل الأمبير لواط)' },
-  { key: 'peak_sun_hours', label: 'ساعات الشمس الفعالة' },
   { key: 'panel_ref_amps', label: 'أمبير اللوح المرجعي (عدد الألواح = الأمبير النهاري ÷ هذا الرقم)' },
   { key: 'panel_ref_watt', label: 'واطية اللوح المرجعي (الأمبير أعلاه يخص هذه الواطية)' },
   { key: 'charge_panels_per_battery', label: 'ألواح الشحن الإضافية لكل بطارية' },

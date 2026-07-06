@@ -6,6 +6,10 @@
 //   ألواح الشحن   = ceil( عدد البطاريات × chargePanelsPerBattery )
 //   عدد الألواح   = ألواح التغذية + ألواح الشحن (المساحة لا تغيّر العدد — نقصها خطأ حاجب)
 
+// ساعات الشمس الفعالة بالعراق — قيمة واقعية ثابتة (جو مشمس حتى شتاءً، ~7 صباحاً إلى 5 عصراً)
+// مدمجة بالكود عمداً وليست خياراً بالإعدادات حتى لا تُغيَّر بالخطأ وتخرّب فحص الشحن
+const IRAQ_PEAK_SUN_HOURS = 7;
+
 // أمبير اللوح الواحد بحسب واطيته، متدرج خطياً من اللوح المرجعي (650 واط = 2.18 أمبير افتراضياً)
 function panelAmpsFor(panelWatt, { panelRefAmps, panelRefWatt }) {
   return panelRefAmps * (panelWatt / panelRefWatt);
@@ -29,11 +33,11 @@ function requiredRoofArea(panelCount, { panelAreaM2 }) {
   return panelCount * panelAreaM2;
 }
 
-// تحذير غير حاجب: وقت شحن كل البطاريات مقابل ساعات الشمس المتاحة
-function chargeTimeWarning(batteryCount, { batteryChargeHours, peakSunHours }) {
+// تحذير غير حاجب: وقت شحن كل البطاريات مقابل ساعات شمس العراق الثابتة
+function chargeTimeWarning(batteryCount, { batteryChargeHours }) {
   const totalChargeHours = batteryCount * batteryChargeHours;
-  if (totalChargeHours > peakSunHours) {
-    return { totalChargeHours, peakSunHours };
+  if (totalChargeHours > IRAQ_PEAK_SUN_HOURS) {
+    return { totalChargeHours, peakSunHours: IRAQ_PEAK_SUN_HOURS };
   }
   return null;
 }
@@ -117,6 +121,7 @@ function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings) {
 }
 
 module.exports = {
+  IRAQ_PEAK_SUN_HOURS,
   panelAmpsFor,
   batteriesRequired,
   panelsRequired,

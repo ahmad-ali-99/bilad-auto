@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS company_profile (
 CREATE TABLE IF NOT EXISTS settings (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   system_voltage REAL NOT NULL DEFAULT 220,
-  peak_sun_hours REAL NOT NULL DEFAULT 5.5,
+  peak_sun_hours REAL NOT NULL DEFAULT 7,
   system_efficiency REAL NOT NULL DEFAULT 0.80,
   inverter_safety_factor REAL NOT NULL DEFAULT 1.25,
   dod REAL NOT NULL DEFAULT 0.90,

@@ -10,7 +10,7 @@ function getSettings(db) {
   const row = db.prepare('SELECT * FROM settings WHERE id = 1').get();
   return {
     systemVoltage: row.system_voltage,
-    peakSunHours: row.peak_sun_hours,
+    peakSunHours: calc.IRAQ_PEAK_SUN_HOURS, // ثابتة بالكود — قيمة قاعدة البيانات مهملة عمداً
     systemEfficiency: row.system_efficiency,
     inverterSafetyFactor: row.inverter_safety_factor,
     dod: row.dod,

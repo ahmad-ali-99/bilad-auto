@@ -83,9 +83,14 @@ describe('فحص المساحة الحاجب', () => {
   });
 });
 
-describe('تحذير وقت الشحن', () => {
-  it('12 ساعة تجهيز → 3 بطاريات → 6 ساعات شحن > 5.5 → تحذير غير حاجب', () => {
+describe('تحذير وقت الشحن (حد شمس العراق الثابت = 7 ساعات)', () => {
+  it('12 ساعة تجهيز → 3 بطاريات → 6 ساعات شحن ≤ 7 → لا تحذير', () => {
     const { draft } = previewFor({ roofAreaM2: 100, ampDay: 15, ampNight: 15, nightSupplyHours: 12 });
+    expect(draft.warnings.chargeTime).toBeUndefined();
+  });
+
+  it('16 ساعة تجهيز → 4 بطاريات → 8 ساعات شحن > 7 → تحذير غير حاجب', () => {
+    const { draft } = previewFor({ roofAreaM2: 100, ampDay: 15, ampNight: 15, nightSupplyHours: 16 });
     expect(draft.warnings.chargeTime).toBeTruthy();
     expect(draft.errors.chargeTime).toBeUndefined();
   });

@@ -16,7 +16,6 @@ import {
 
 const DEFAULT_SETTINGS = {
   systemVoltage: 220,
-  peakSunHours: 5.5,
   inverterSafetyFactor: 1.25,
   dod: 0.9,
   panelAreaM2: 2.7,
@@ -56,7 +55,7 @@ describe('القاعدة المرجعية: منظومة 15 أمبير نهار/�
     expect(Math.ceil(w / 6000)).toBe(1);
   });
 
-  it('بطاريتان × 2 ساعة شحن = 4 ساعات ≤ 5.5 ساعات شمس → لا تحذير', () => {
+  it('بطاريتان × 2 ساعة شحن = 4 ساعات ≤ 7 ساعات شمس العراق الثابتة → لا تحذير', () => {
     expect(chargeTimeWarning(2, DEFAULT_SETTINGS)).toBeNull();
   });
 });
@@ -70,10 +69,15 @@ describe('ساعات التجهيز المتغيرة بالعرض', () => {
     expect(batteriesRequired(15, 12, DEFAULT_SETTINGS, 16)).toBe(3);
   });
 
-  it('3 بطاريات × 2 ساعة = 6 ساعات > 5.5 ساعات شمس → تحذير شحن', () => {
-    const warn = chargeTimeWarning(3, DEFAULT_SETTINGS);
+  it('3 بطاريات × 2 ساعة = 6 ساعات ≤ 7 → لا تحذير', () => {
+    expect(chargeTimeWarning(3, DEFAULT_SETTINGS)).toBeNull();
+  });
+
+  it('4 بطاريات × 2 ساعة = 8 ساعات > 7 ساعات شمس → تحذير شحن', () => {
+    const warn = chargeTimeWarning(4, DEFAULT_SETTINGS);
     expect(warn).not.toBeNull();
-    expect(warn.totalChargeHours).toBe(6);
+    expect(warn.totalChargeHours).toBe(8);
+    expect(warn.peakSunHours).toBe(7);
   });
 });
 
