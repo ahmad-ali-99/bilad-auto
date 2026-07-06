@@ -4,6 +4,8 @@ const fs = require('fs');
 const { openDb } = require('./db');
 const quoteService = require('./lib/quoteService');
 const { buildInvoiceHtml, logoDataUri } = require('./lib/invoiceTemplate');
+const excelImport = require('./lib/excelImport');
+const XLSX = require('xlsx');
 
 const isDev = process.env.NODE_ENV === 'development';
 let db;
@@ -78,6 +80,44 @@ function registerIpcHandlers() {
   ipcMain.handle('materials:remove', (_e, id) => {
     db.prepare('DELETE FROM materials WHERE id = ?').run(id);
     return { ok: true };
+  });
+
+  // ---------- استيراد Excel ----------
+  // يفتح ملف إكسل ويحلله ويرجع صفوف معاينة (بدون أي حفظ)
+  ipcMain.handle('materials:parseExcel', async () => {
+    const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+      title: 'اختر ملف Excel للمخزون',
+      filters: [{ name: 'Excel', extensions: ['xlsx', 'xls', 'csv'] }],
+      properties: ['openFile'],
+    });
+    if (canceled || filePaths.length === 0) return { canceled: true };
+    const buffer = fs.readFileSync(filePaths[0]);
+    const parsed = excelImport.parseInventoryWorkbook(buffer);
+    return {
+      canceled: false,
+      fileName: path.basename(filePaths[0]),
+      rows: excelImport.annotateMatches(db, parsed.rows),
+      labor: parsed.labor,
+      warnings: parsed.warnings,
+    };
+  });
+
+  // يحفظ الصفوف المعتمدة من شاشة المعاينة (بعد تعديل المستخدم)
+  ipcMain.handle('materials:importRows', (_e, payload) => {
+    return excelImport.importIntoDb(db, payload);
+  });
+
+  // ينزّل قالب Excel جاهز
+  ipcMain.handle('materials:downloadTemplate', async () => {
+    const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+      title: 'حفظ قالب المخزون',
+      defaultPath: 'قالب_المخزون.xlsx',
+      filters: [{ name: 'Excel', extensions: ['xlsx'] }],
+    });
+    if (canceled || !filePath) return { canceled: true };
+    const wb = excelImport.buildTemplateWorkbook();
+    XLSX.writeFile(wb, filePath);
+    return { canceled: false, filePath };
   });
 
   // ---------- أجور العمل ----------

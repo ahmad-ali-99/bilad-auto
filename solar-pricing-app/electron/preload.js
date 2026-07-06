@@ -6,6 +6,9 @@ contextBridge.exposeInMainWorld('api', {
     create: (data) => ipcRenderer.invoke('materials:create', data),
     update: (id, data) => ipcRenderer.invoke('materials:update', id, data),
     remove: (id) => ipcRenderer.invoke('materials:remove', id),
+    parseExcel: () => ipcRenderer.invoke('materials:parseExcel'),
+    importRows: (payload) => ipcRenderer.invoke('materials:importRows', payload),
+    downloadTemplate: () => ipcRenderer.invoke('materials:downloadTemplate'),
   },
   laborTiers: {
     list: () => ipcRenderer.invoke('labor:list'),

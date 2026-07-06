@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import MaterialFormModal from '../components/MaterialFormModal.jsx';
 import LaborTable from '../components/LaborTable.jsx';
+import ImportPreviewModal from '../components/ImportPreviewModal.jsx';
 
 const TABS = [
   { key: 'panel', label: 'الألواح' },
@@ -22,6 +23,8 @@ export default function Inventory() {
   const [search, setSearch] = useState('');
   const [editingMaterial, setEditingMaterial] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [importParsed, setImportParsed] = useState(null);
+  const [importMessage, setImportMessage] = useState('');
 
   const reload = useCallback(() => {
     if (tab === 'labor') return;
@@ -64,9 +67,32 @@ export default function Inventory() {
     reload();
   }
 
+  async function handleImportExcel() {
+    setImportMessage('');
+    const parsed = await window.api.materials.parseExcel();
+    if (parsed.canceled) return;
+    setImportParsed(parsed);
+  }
+
+  async function handleDownloadTemplate() {
+    const result = await window.api.materials.downloadTemplate();
+    if (!result.canceled) setImportMessage('تم حفظ القالب — املأه بموادك ثم ارفعه بزر الاستيراد ✔');
+  }
+
   return (
     <div>
-      <h2 className="page-title">المخزون</h2>
+      <div className="toolbar">
+        <h2 className="page-title" style={{ margin: 0 }}>المخزون</h2>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" onClick={handleDownloadTemplate}>
+            تحميل قالب Excel
+          </button>
+          <button className="btn btn-primary" onClick={handleImportExcel}>
+            ⬆ استيراد من Excel
+          </button>
+        </div>
+      </div>
+      {importMessage && <div className="alert alert-info">{importMessage}</div>}
       <div className="tabs">
         {TABS.map((t) => (
           <button key={t.key} className={tab === t.key ? 'active' : ''} onClick={() => setTab(t.key)}>
@@ -143,6 +169,18 @@ export default function Inventory() {
           initial={editingMaterial}
           onClose={() => setShowForm(false)}
           onSave={handleSaveForm}
+        />
+      )}
+
+      {importParsed && (
+        <ImportPreviewModal
+          parsed={importParsed}
+          onClose={() => setImportParsed(null)}
+          onDone={() => {
+            setImportParsed(null);
+            setImportMessage('تم الاستيراد بنجاح ✔');
+            reload();
+          }}
         />
       )}
     </div>
