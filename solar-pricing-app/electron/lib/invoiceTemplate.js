@@ -239,4 +239,4 @@ body {
 </html>`;
 }
 
-module.exports = { buildInvoiceHtml, formatNumber, formatDate };
+module.exports = { buildInvoiceHtml, formatNumber, formatDate, logoDataUri };

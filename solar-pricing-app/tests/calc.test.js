@@ -19,8 +19,6 @@ const DEFAULT_SETTINGS = {
   inverterSafetyFactor: 1.25,
   dod: 0.9,
   panelAreaM2: 2.7,
-  panelRefAmps: 2.18,
-  panelRefWatt: 650,
   chargePanelsPerBattery: 1.5,
   batteryChargeHours: 2,
 };
@@ -81,13 +79,13 @@ describe('ساعات التجهيز المتغيرة بالعرض', () => {
   });
 });
 
-describe('تدرج أمبير اللوح مع الواطية', () => {
+describe('تدرج أمبير اللوح مع الواطية (النسبة ثابتة بالكود: 2.18 لكل 650 واط)', () => {
   it('لوح 650 واط = 2.18 أمبير بالضبط', () => {
-    expect(panelAmpsFor(650, DEFAULT_SETTINGS)).toBeCloseTo(2.18, 5);
+    expect(panelAmpsFor(650)).toBeCloseTo(2.18, 5);
   });
 
   it('لوح 550 واط يعطي أمبير أقل نسبياً وعدد ألواح تغذية أكثر', () => {
-    expect(panelAmpsFor(550, DEFAULT_SETTINGS)).toBeCloseTo(2.18 * 550 / 650, 5);
+    expect(panelAmpsFor(550)).toBeCloseTo(2.18 * 550 / 650, 5);
     const { feedPanels } = panelsRequired(15, 0, DEFAULT_SETTINGS, 550);
     expect(feedPanels).toBe(9); // 15 ÷ 1.844 = 8.13 → 9
   });

@@ -3,6 +3,7 @@ import Inventory from './pages/Inventory.jsx';
 import QuoteBuilder from './pages/QuoteBuilder.jsx';
 import Quotes from './pages/Quotes.jsx';
 import Settings from './pages/Settings.jsx';
+import SplashScreen from './components/SplashScreen.jsx';
 
 const PAGES = [
   { key: 'quote', label: 'إنشاء عرض سعر' },
@@ -13,6 +14,11 @@ const PAGES = [
 
 export default function App() {
   const [page, setPage] = useState('quote');
+  const [showSplash, setShowSplash] = useState(true);
+
+  if (showSplash) {
+    return <SplashScreen onEnter={() => setShowSplash(false)} />;
+  }
 
   return (
     <div className="app-shell">

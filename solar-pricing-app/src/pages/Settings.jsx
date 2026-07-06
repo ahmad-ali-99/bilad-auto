@@ -2,8 +2,6 @@ import React, { useEffect, useState } from 'react';
 
 const SETTINGS_FIELDS = [
   { key: 'system_voltage', label: 'فولتية النظام (لتحويل الأمبير لواط)' },
-  { key: 'panel_ref_amps', label: 'أمبير اللوح المرجعي (عدد الألواح = الأمبير النهاري ÷ هذا الرقم)' },
-  { key: 'panel_ref_watt', label: 'واطية اللوح المرجعي (الأمبير أعلاه يخص هذه الواطية)' },
   { key: 'charge_panels_per_battery', label: 'ألواح الشحن الإضافية لكل بطارية' },
   { key: 'battery_charge_hours', label: 'ساعات شحن البطارية الواحدة' },
   { key: 'inverter_safety_factor', label: 'معامل أمان الانفيرتر' },

@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { openDb } = require('./db');
 const quoteService = require('./lib/quoteService');
-const { buildInvoiceHtml } = require('./lib/invoiceTemplate');
+const { buildInvoiceHtml, logoDataUri } = require('./lib/invoiceTemplate');
 
 const isDev = process.env.NODE_ENV === 'development';
 let db;
@@ -241,7 +241,11 @@ function registerIpcHandlers() {
   // ---------- بيانات الشركة ----------
   ipcMain.handle('company:get', () => {
     const row = db.prepare('SELECT * FROM company_profile WHERE id = 1').get();
-    return { ...row, notes_default: JSON.parse(row.notes_default || '[]') };
+    return {
+      ...row,
+      notes_default: JSON.parse(row.notes_default || '[]'),
+      logo_data: logoDataUri(row.logo_path), // CSP بالواجهة يمنع file:// فنرسل الشعار كـ data URI
+    };
   });
   ipcMain.handle('company:update', (_e, data) => {
     db.prepare(

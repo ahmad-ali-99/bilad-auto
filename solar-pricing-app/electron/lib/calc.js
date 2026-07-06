@@ -10,9 +10,13 @@
 // مدمجة بالكود عمداً وليست خياراً بالإعدادات حتى لا تُغيَّر بالخطأ وتخرّب فحص الشحن
 const IRAQ_PEAK_SUN_HOURS = 7;
 
-// أمبير اللوح الواحد بحسب واطيته، متدرج خطياً من اللوح المرجعي (650 واط = 2.18 أمبير افتراضياً)
-function panelAmpsFor(panelWatt, { panelRefAmps, panelRefWatt }) {
-  return panelRefAmps * (panelWatt / panelRefWatt);
+// قاعدة الشركة الثابتة: لوح 650 واط يعطي 2.18 أمبير — النسبة مدمجة بالكود وليست خياراً بالإعدادات
+// واطية اللوح تؤخذ من مادة اللوح نفسها بالمخزون، والأمبير يشتق منها تلقائياً
+const PANEL_AMPS_PER_WATT = 2.18 / 650;
+
+// أمبير اللوح الواحد بحسب واطيته (لوح 650 = 2.18، لوح 720 = 2.41...)
+function panelAmpsFor(panelWatt) {
+  return panelWatt * PANEL_AMPS_PER_WATT;
 }
 
 // عدد وحدات البطارية المطلوبة لتغطية الليل بساعات التجهيز المدخلة بالعرض
@@ -24,7 +28,7 @@ function batteriesRequired(ampNight, nightSupplyHours, { systemVoltage, dod }, b
 
 // عدد الألواح النهائي = تغذية النهار + شحن البطاريات
 function panelsRequired(ampDay, batteryCount, settings, panelWatt) {
-  const feedPanels = ampDay > 0 ? Math.ceil(ampDay / panelAmpsFor(panelWatt, settings)) : 0;
+  const feedPanels = ampDay > 0 ? Math.ceil(ampDay / panelAmpsFor(panelWatt)) : 0;
   const chargePanels = Math.ceil(batteryCount * settings.chargePanelsPerBattery);
   return { feedPanels, chargePanels, total: feedPanels + chargePanels };
 }
@@ -122,6 +126,7 @@ function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings) {
 
 module.exports = {
   IRAQ_PEAK_SUN_HOURS,
+  PANEL_AMPS_PER_WATT,
   panelAmpsFor,
   batteriesRequired,
   panelsRequired,

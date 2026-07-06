@@ -18,8 +18,6 @@ function getSettings(db) {
     panelAreaM2: row.panel_area_m2,
     currency: row.currency,
     quoteNumberStart: row.quote_number_start,
-    panelRefAmps: row.panel_ref_amps,
-    panelRefWatt: row.panel_ref_watt,
     chargePanelsPerBattery: row.charge_panels_per_battery,
     batteryChargeHours: row.battery_charge_hours,
   };
