@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
-  computeRequirements,
-  panelsByLoadFor,
-  panelsByRoofFor,
+  panelAmpsFor,
+  batteriesRequired,
+  panelsRequired,
+  requiredRoofArea,
+  chargeTimeWarning,
+  inverterCapacityRequired,
   systemAmpSize,
   pickLaborTier,
   classifyTiers,
@@ -14,45 +17,75 @@ import {
 const DEFAULT_SETTINGS = {
   systemVoltage: 220,
   peakSunHours: 5.5,
-  systemEfficiency: 0.8,
   inverterSafetyFactor: 1.25,
   dod: 0.9,
-  nightCoverageHours: 8,
   panelAreaM2: 2.7,
+  panelRefAmps: 2.18,
+  panelRefWatt: 650,
+  chargePanelsPerBattery: 1.5,
+  batteryChargeHours: 2,
 };
 
-describe('computeRequirements - مثال مرجعي 15 أمبير نهار / 15 أمبير ليل', () => {
-  const req = computeRequirements({ ampDay: 15, ampNight: 15, ...DEFAULT_SETTINGS });
-
-  it('يحسب الأحمال بالواط بشكل صحيح', () => {
-    expect(req.dayLoadW).toBe(3300);
-    expect(req.nightLoadW).toBe(3300);
+describe('القاعدة المرجعية: منظومة 15 أمبير نهار/ليل، 8 ساعات تجهيز، لوح 650 وبطارية 16kWh', () => {
+  it('عدد البطاريات = 2 (طاقة الليل 3300×8=26.4kWh ÷ 0.9 ÷ 16)', () => {
+    expect(batteriesRequired(15, 8, DEFAULT_SETTINGS, 16)).toBe(2);
   });
 
-  it('سعة البطارية المطلوبة تؤدي لبطاريتين 16kWh (مطابق للفاتورة المرجعية)', () => {
-    expect(req.batteryCapacityKwhNeeded).toBeCloseTo(29.33, 1);
-    const units = Math.ceil(req.batteryCapacityKwhNeeded / 16);
-    expect(units).toBe(2);
+  it('ألواح التغذية = ceil(15 ÷ 2.18) = 7', () => {
+    const { feedPanels } = panelsRequired(15, 2, DEFAULT_SETTINGS, 650);
+    expect(feedPanels).toBe(7);
   });
 
-  it('قدرة الانفيرتر المطلوبة تؤدي لانفيرتر 6kW واحد (مطابق للفاتورة المرجعية)', () => {
-    expect(req.inverterCapacityW).toBeCloseTo(4125, 0);
-    const units = Math.ceil(req.inverterCapacityW / 6000);
-    expect(units).toBe(1);
+  it('ألواح الشحن = ceil(2 بطارية × 1.5) = 3', () => {
+    const { chargePanels } = panelsRequired(15, 2, DEFAULT_SETTINGS, 650);
+    expect(chargePanels).toBe(3);
   });
 
-  it('عدد الألواح بدون قيد مساحة (سطح كبير) = 18 لوح 650 واط حسب المعادلة الحرفية', () => {
-    const panelsByLoad = panelsByLoadFor(req.dayEnergyWh, 650, DEFAULT_SETTINGS);
-    expect(panelsByLoad).toBe(18);
+  it('عدد الألواح النهائي = 10 (مطابق للفاتورة المرجعية الفعلية)', () => {
+    const { total } = panelsRequired(15, 2, DEFAULT_SETTINGS, 650);
+    expect(total).toBe(10);
   });
 
-  it('عند تحديد مساحة سطح ~28م² (كما بالفاتورة المرجعية) يصير العدد النهائي 10 ألواح بسبب قيد المساحة', () => {
-    const panelsByLoad = panelsByLoadFor(req.dayEnergyWh, 650, DEFAULT_SETTINGS);
-    const panelsByRoof = panelsByRoofFor(28, DEFAULT_SETTINGS.panelAreaM2);
-    expect(panelsByRoof).toBe(10);
-    const finalCount = Math.min(panelsByLoad, panelsByRoof);
-    expect(finalCount).toBe(10);
-    expect(panelsByRoof < panelsByLoad).toBe(true); // roof_limited_warning = true
+  it('المساحة المطلوبة لـ10 ألواح = 27 م²', () => {
+    expect(requiredRoofArea(10, DEFAULT_SETTINGS)).toBeCloseTo(27, 5);
+  });
+
+  it('الانفيرتر المطلوب 4125 واط → وحدة 6kW واحدة', () => {
+    const w = inverterCapacityRequired(15, 15, DEFAULT_SETTINGS);
+    expect(w).toBeCloseTo(4125, 0);
+    expect(Math.ceil(w / 6000)).toBe(1);
+  });
+
+  it('بطاريتان × 2 ساعة شحن = 4 ساعات ≤ 5.5 ساعات شمس → لا تحذير', () => {
+    expect(chargeTimeWarning(2, DEFAULT_SETTINGS)).toBeNull();
+  });
+});
+
+describe('ساعات التجهيز المتغيرة بالعرض', () => {
+  it('4 ساعات تجهيز → بطارية واحدة تكفي', () => {
+    expect(batteriesRequired(15, 4, DEFAULT_SETTINGS, 16)).toBe(1);
+  });
+
+  it('12 ساعة تجهيز → 3 بطاريات', () => {
+    expect(batteriesRequired(15, 12, DEFAULT_SETTINGS, 16)).toBe(3);
+  });
+
+  it('3 بطاريات × 2 ساعة = 6 ساعات > 5.5 ساعات شمس → تحذير شحن', () => {
+    const warn = chargeTimeWarning(3, DEFAULT_SETTINGS);
+    expect(warn).not.toBeNull();
+    expect(warn.totalChargeHours).toBe(6);
+  });
+});
+
+describe('تدرج أمبير اللوح مع الواطية', () => {
+  it('لوح 650 واط = 2.18 أمبير بالضبط', () => {
+    expect(panelAmpsFor(650, DEFAULT_SETTINGS)).toBeCloseTo(2.18, 5);
+  });
+
+  it('لوح 550 واط يعطي أمبير أقل نسبياً وعدد ألواح تغذية أكثر', () => {
+    expect(panelAmpsFor(550, DEFAULT_SETTINGS)).toBeCloseTo(2.18 * 550 / 650, 5);
+    const { feedPanels } = panelsRequired(15, 0, DEFAULT_SETTINGS, 550);
+    expect(feedPanels).toBe(9); // 15 ÷ 1.844 = 8.13 → 9
   });
 });
 
@@ -99,22 +132,21 @@ describe('classifyTiers', () => {
   });
 });
 
-describe('اختيار المواد حسب المخزون - فلترة صارمة', () => {
-  const requirements = computeRequirements({ ampDay: 15, ampNight: 15, ...DEFAULT_SETTINGS });
-
+describe('اختيار المواد - فلترة صارمة على المخزون', () => {
   it('يستبعد الألواح غير الكافية بالمخزون رغم كفايتها بالقدرة', () => {
     const panels = [
-      { id: 1, watt_or_capacity: 650, price: 185000, quantity_stock: 5 }, // يحتاج 10 لكن المخزون 5 فقط -> يستبعد
+      { id: 1, watt_or_capacity: 650, price: 185000, quantity_stock: 5 }, // يحتاج 10 لكن المخزون 5 → يستبعد
       { id: 2, watt_or_capacity: 650, price: 200000, quantity_stock: 20 },
     ];
-    const result = selectPanelTiers(panels, requirements, 28, DEFAULT_SETTINGS);
+    const result = selectPanelTiers(panels, 15, 2, DEFAULT_SETTINGS);
     expect(result.singleOption).toBe(true);
     expect(result.economy.material.id).toBe(2);
+    expect(result.economy.units).toBe(10);
   });
 
-  it('تنبيه عدم كفاية المخزون عندما لا توجد أي مادة صالحة', () => {
+  it('تنبيه عدم كفاية المخزون عندما لا توجد أي بطارية صالحة', () => {
     const batteries = [{ id: 1, watt_or_capacity: 16, price: 2750000, quantity_stock: 1 }];
-    const result = selectBatteryTiers(batteries, requirements);
+    const result = selectBatteryTiers(batteries, 15, 8, DEFAULT_SETTINGS);
     expect(result.insufficient).toBe(true);
   });
 
@@ -124,7 +156,7 @@ describe('اختيار المواد حسب المخزون - فلترة صارم�
       { id: 2, watt_or_capacity: 8000, price: 900000, quantity_stock: 5 },
       { id: 3, watt_or_capacity: 5000, price: 500000, quantity_stock: 5 },
     ];
-    const result = selectInverterTiers(inverters, requirements);
+    const result = selectInverterTiers(inverters, 15, 15, DEFAULT_SETTINGS);
     expect(result.economy.material.id).toBe(3);
     expect(result.premium.material.id).toBe(2);
   });

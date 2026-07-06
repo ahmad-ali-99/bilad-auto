@@ -1,22 +1,46 @@
 // محرك حساب منظومة الطاقة الشمسية - وحدة منطقية بحتة بدون أي اعتماد على Electron أو قاعدة البيانات
 // كل الدوال هنا قابلة للاختبار بشكل مستقل (انظر tests/calc.test.js)
+//
+// القاعدة المعتمدة (طريقة عمل الشركة الفعلية):
+//   ألواح التغذية = ceil( أمبير نهاراً ÷ أمبير اللوح الواحد )       حيث أمبير اللوح = panelRefAmps × (واطية اللوح ÷ panelRefWatt)
+//   ألواح الشحن   = ceil( عدد البطاريات × chargePanelsPerBattery )
+//   عدد الألواح   = ألواح التغذية + ألواح الشحن (المساحة لا تغيّر العدد — نقصها خطأ حاجب)
 
-function computeRequirements({ ampDay, ampNight, systemVoltage, peakSunHours, systemEfficiency, inverterSafetyFactor, dod, nightCoverageHours }) {
-  const dayLoadW = ampDay * systemVoltage;
-  const nightLoadW = ampNight * systemVoltage;
-  const nightEnergyWh = nightLoadW * nightCoverageHours;
-  const dayEnergyWh = dayLoadW * peakSunHours + nightEnergyWh / systemEfficiency;
-  const batteryCapacityKwhNeeded = nightEnergyWh / dod / 1000;
-  const inverterCapacityW = Math.max(dayLoadW, nightLoadW) * inverterSafetyFactor;
-  return { dayLoadW, nightLoadW, nightEnergyWh, dayEnergyWh, batteryCapacityKwhNeeded, inverterCapacityW };
+// أمبير اللوح الواحد بحسب واطيته، متدرج خطياً من اللوح المرجعي (650 واط = 2.18 أمبير افتراضياً)
+function panelAmpsFor(panelWatt, { panelRefAmps, panelRefWatt }) {
+  return panelRefAmps * (panelWatt / panelRefWatt);
 }
 
-function panelsByLoadFor(dayEnergyWh, panelWattage, { peakSunHours, systemEfficiency }) {
-  return Math.ceil(dayEnergyWh / (peakSunHours * systemEfficiency * panelWattage));
+// عدد وحدات البطارية المطلوبة لتغطية الليل بساعات التجهيز المدخلة بالعرض
+function batteriesRequired(ampNight, nightSupplyHours, { systemVoltage, dod }, batteryKwh) {
+  if (ampNight <= 0) return 0;
+  const nightEnergyKwh = (ampNight * systemVoltage * nightSupplyHours) / 1000;
+  return Math.ceil(nightEnergyKwh / dod / batteryKwh);
 }
 
-function panelsByRoofFor(roofAreaM2, panelAreaM2) {
-  return Math.floor(roofAreaM2 / panelAreaM2);
+// عدد الألواح النهائي = تغذية النهار + شحن البطاريات
+function panelsRequired(ampDay, batteryCount, settings, panelWatt) {
+  const feedPanels = ampDay > 0 ? Math.ceil(ampDay / panelAmpsFor(panelWatt, settings)) : 0;
+  const chargePanels = Math.ceil(batteryCount * settings.chargePanelsPerBattery);
+  return { feedPanels, chargePanels, total: feedPanels + chargePanels };
+}
+
+function requiredRoofArea(panelCount, { panelAreaM2 }) {
+  return panelCount * panelAreaM2;
+}
+
+// تحذير غير حاجب: وقت شحن كل البطاريات مقابل ساعات الشمس المتاحة
+function chargeTimeWarning(batteryCount, { batteryChargeHours, peakSunHours }) {
+  const totalChargeHours = batteryCount * batteryChargeHours;
+  if (totalChargeHours > peakSunHours) {
+    return { totalChargeHours, peakSunHours };
+  }
+  return null;
+}
+
+// قدرة الانفيرتر المطلوبة (واط)
+function inverterCapacityRequired(ampDay, ampNight, { systemVoltage, inverterSafetyFactor }) {
+  return Math.max(ampDay, ampNight) * systemVoltage * inverterSafetyFactor;
 }
 
 // حجم النظام بالأمبير المستخدم لمطابقة أجور العمل = الأكبر بين النهار والليل
@@ -30,23 +54,6 @@ function pickLaborTier(laborTiers, systemAmps) {
     .sort((a, b) => a.system_amps - b.system_amps);
   if (candidates.length === 0) return null;
   return candidates[0];
-}
-
-// يبني كل التوليفات الممكنة (مادة واحدة + الكمية اللازمة) لفئة معينة
-// requiredUnitsFn(material) => عدد الوحدات اللازمة من هذه المادة لتحقيق المطلوب (integer)
-function buildFeasibleCombos(materials, requiredUnitsFn) {
-  const combos = [];
-  for (const material of materials) {
-    const units = requiredUnitsFn(material);
-    if (units == null || units <= 0) continue;
-    if (material.quantity_stock < units) continue; // لا يكفي المخزون بأي حال
-    combos.push({
-      material,
-      units,
-      totalPrice: units * material.price,
-    });
-  }
-  return combos;
 }
 
 // يصنف التوليفات الممكنة لثلاث مستويات: economy / standard / premium
@@ -73,49 +80,53 @@ function classifyTiers(combos) {
   return { economy, standard, premium, singleOption: false, insufficient: false, all: sorted };
 }
 
-function selectPanelTiers(panelMaterials, requirements, roofAreaM2, settings) {
+// توليفات البطاريات: لكل موديل بطارية عدد وحدات مطلوب حسب ساعات التجهيز الليلي
+function selectBatteryTiers(batteryMaterials, ampNight, nightSupplyHours, settings) {
   const combos = [];
-  for (const material of panelMaterials) {
-    const panelsByLoad = panelsByLoadFor(requirements.dayEnergyWh, material.watt_or_capacity, settings);
-    const panelsByRoof = panelsByRoofFor(roofAreaM2, settings.panelAreaM2);
-    const count = Math.min(panelsByLoad, panelsByRoof);
-    if (count <= 0) continue;
-    if (material.quantity_stock < count) continue;
-    combos.push({
-      material,
-      units: count,
-      totalPrice: count * material.price,
-      panelsByLoad,
-      panelsByRoof,
-      roofLimited: panelsByRoof < panelsByLoad,
-    });
+  for (const material of batteryMaterials) {
+    const units = batteriesRequired(ampNight, nightSupplyHours, settings, material.watt_or_capacity);
+    if (units <= 0) continue;
+    if (material.quantity_stock < units) continue;
+    combos.push({ material, units, totalPrice: units * material.price });
   }
   return classifyTiers(combos);
 }
 
-function selectBatteryTiers(batteryMaterials, requirements) {
-  const combos = buildFeasibleCombos(batteryMaterials, (m) =>
-    Math.ceil(requirements.batteryCapacityKwhNeeded / m.watt_or_capacity)
-  );
+// توليفات الألواح: العدد يعتمد على أمبير النهار + عدد بطاريات التوليفة المرافقة
+function selectPanelTiers(panelMaterials, ampDay, batteryCount, settings) {
+  const combos = [];
+  for (const material of panelMaterials) {
+    const { feedPanels, chargePanels, total } = panelsRequired(ampDay, batteryCount, settings, material.watt_or_capacity);
+    if (total <= 0) continue;
+    if (material.quantity_stock < total) continue;
+    combos.push({ material, units: total, feedPanels, chargePanels, totalPrice: total * material.price });
+  }
   return classifyTiers(combos);
 }
 
-function selectInverterTiers(inverterMaterials, requirements) {
-  const combos = buildFeasibleCombos(inverterMaterials, (m) =>
-    Math.ceil(requirements.inverterCapacityW / m.watt_or_capacity)
-  );
+function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings) {
+  const requiredW = inverterCapacityRequired(ampDay, ampNight, settings);
+  const combos = [];
+  for (const material of inverterMaterials) {
+    const units = Math.ceil(requiredW / material.watt_or_capacity);
+    if (units <= 0) continue;
+    if (material.quantity_stock < units) continue;
+    combos.push({ material, units, totalPrice: units * material.price });
+  }
   return classifyTiers(combos);
 }
 
 module.exports = {
-  computeRequirements,
-  panelsByLoadFor,
-  panelsByRoofFor,
+  panelAmpsFor,
+  batteriesRequired,
+  panelsRequired,
+  requiredRoofArea,
+  chargeTimeWarning,
+  inverterCapacityRequired,
   systemAmpSize,
   pickLaborTier,
-  buildFeasibleCombos,
   classifyTiers,
-  selectPanelTiers,
   selectBatteryTiers,
+  selectPanelTiers,
   selectInverterTiers,
 };

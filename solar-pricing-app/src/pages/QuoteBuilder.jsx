@@ -28,6 +28,7 @@ export default function QuoteBuilder() {
   const [roofAreaM2, setRoofAreaM2] = useState('');
   const [ampDay, setAmpDay] = useState('');
   const [ampNight, setAmpNight] = useState('');
+  const [nightSupplyHours, setNightSupplyHours] = useState('');
   const [tier, setTier] = useState('economy');
   const [overrides, setOverrides] = useState({});
   const [cableMeters, setCableMeters] = useState({});
@@ -38,10 +39,13 @@ export default function QuoteBuilder() {
 
   useEffect(() => {
     window.api.company.get().then((c) => setNotes(c.notes_default || []));
+    window.api.settings.get().then((s) => {
+      setNightSupplyHours((prev) => (prev === '' ? String(s.night_coverage_hours) : prev));
+    });
   }, []);
 
   const debouncedInputs = useDebouncedValue(
-    { roofAreaM2, ampDay, ampNight, tier, overrides, cableMeters },
+    { roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, cableMeters },
     300
   );
 
@@ -59,6 +63,7 @@ export default function QuoteBuilder() {
         roofAreaM2: Number(debouncedInputs.roofAreaM2),
         ampDay: Number(debouncedInputs.ampDay),
         ampNight: Number(debouncedInputs.ampNight),
+        nightSupplyHours: debouncedInputs.nightSupplyHours === '' ? null : Number(debouncedInputs.nightSupplyHours),
         tier: debouncedInputs.tier,
         overrides: debouncedInputs.overrides,
         cableMeters: debouncedInputs.cableMeters,
@@ -87,6 +92,7 @@ export default function QuoteBuilder() {
       roofAreaM2: Number(roofAreaM2),
       ampDay: Number(ampDay),
       ampNight: Number(ampNight),
+      nightSupplyHours: nightSupplyHours === '' ? null : Number(nightSupplyHours),
       tier,
       overrides,
       cableMeters,
@@ -123,6 +129,14 @@ export default function QuoteBuilder() {
   const draft = preview?.draft;
   const hasBlockingErrors = draft && Object.keys(draft.errors).length > 0;
 
+  // قوائم التبديل اليدوي: البطاريات والانفيرترات من options، الألواح من draft (تعتمد على البطارية المختارة)
+  function tiersResultFor(cat) {
+    if (!preview) return null;
+    if (cat === 'panel') return draft?.panelTiers;
+    if (cat === 'battery') return preview.options.batteryTiers;
+    return preview.options.inverterTiers;
+  }
+
   return (
     <div>
       <h2 className="page-title">إنشاء عرض سعر</h2>
@@ -145,7 +159,7 @@ export default function QuoteBuilder() {
       </div>
 
       <div className="card">
-        <div className="big-inputs">
+        <div className="big-inputs big-inputs-4">
           <div className="field">
             <label>مساحة السطح (م²)</label>
             <input type="number" value={roofAreaM2} onChange={(e) => setRoofAreaM2(e.target.value)} />
@@ -157,6 +171,10 @@ export default function QuoteBuilder() {
           <div className="field">
             <label>أمبير مطلوب ليلاً</label>
             <input type="number" value={ampNight} onChange={(e) => setAmpNight(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>ساعات التجهيز الليلي</label>
+            <input type="number" value={nightSupplyHours} onChange={(e) => setNightSupplyHours(e.target.value)} />
           </div>
         </div>
 
@@ -189,11 +207,13 @@ export default function QuoteBuilder() {
 
       {preview && draft && (
         <>
-          {draft.roofLimitedWarning && (
-            <div className="alert alert-warning">تنبيه: مساحة السطح لا تكفي لتغطية الحمل المطلوب كاملاً — تم اعتماد أقصى عدد ألواح يسمح به السطح المتوفر</div>
-          )}
           {Object.entries(draft.errors).map(([key, msg]) => (
             <div className="alert alert-danger" key={key}>
+              {msg}
+            </div>
+          ))}
+          {Object.entries(draft.warnings || {}).map(([key, msg]) => (
+            <div className="alert alert-warning" key={key}>
               {msg}
             </div>
           ))}
@@ -211,10 +231,16 @@ export default function QuoteBuilder() {
               <span className="total-badge">المجموع الكلي: {fmt(draft.total)} دينار</span>
             </div>
 
+            {draft.panelBreakdown && (
+              <p className="muted" style={{ marginTop: 0 }}>
+                الألواح: {draft.panelBreakdown.feedPanels} للتغذية النهارية + {draft.panelBreakdown.chargePanels} لشحن البطاريات
+              </p>
+            )}
+
             <div className="grid-3">
               {['panel', 'battery', 'inverter'].map((cat) => {
-                const tiersResult = cat === 'panel' ? preview.options.panelTiers : cat === 'battery' ? preview.options.batteryTiers : preview.options.inverterTiers;
-                if (tiersResult.insufficient) return null;
+                const tiersResult = tiersResultFor(cat);
+                if (!tiersResult || tiersResult.insufficient) return null;
                 const chosenId = overrides[cat] ?? tiersResult[tier]?.material.id;
                 return (
                   <div className="field" key={cat}>

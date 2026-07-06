@@ -69,10 +69,6 @@ function buildInvoiceHtml({ quote, items, notes, company, assetsDir }) {
 
   const notesHtml = notes.map((n) => `<li>${escapeHtml(n)}</li>`).join('');
 
-  const roofWarningHtml = quote.roof_limited_warning
-    ? `<div class="roof-warning">تنبيه: مساحة السطح لا تكفي لتغطية الحمل المطلوب كاملاً — تم اعتماد أقصى عدد ألواح يسمح به السطح المتوفر</div>`
-    : '';
-
   return `<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
@@ -123,17 +119,6 @@ body {
   border-radius: 3px;
 }
 
-.roof-warning {
-  background: #fdecea;
-  color: #a33;
-  border: 1px solid #e5a3a3;
-  padding: 4px 10px;
-  margin-bottom: 6px;
-  font-size: 0.85em;
-  border-radius: 3px;
-  font-weight: 700;
-  text-align: center;
-}
 
 .items-table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
 .items-table th {
@@ -213,7 +198,6 @@ body {
   </table>
 
   <div class="title-bar">عرض سعر منظومة شمسية بسعة ${formatNumber(systemAmps)} أمبير</div>
-  ${roofWarningHtml}
 
   <table class="items-table">
     <thead>

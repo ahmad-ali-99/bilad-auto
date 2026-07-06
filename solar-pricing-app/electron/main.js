@@ -101,6 +101,7 @@ function registerIpcHandlers() {
       roofAreaM2: input.roofAreaM2,
       ampDay: input.ampDay,
       ampNight: input.ampNight,
+      nightSupplyHours: input.nightSupplyHours,
     });
     const draft = quoteService.buildQuoteDraft(options, {
       tier: input.tier,
@@ -115,6 +116,7 @@ function registerIpcHandlers() {
       roofAreaM2: input.roofAreaM2,
       ampDay: input.ampDay,
       ampNight: input.ampNight,
+      nightSupplyHours: input.nightSupplyHours,
     });
     const draft = quoteService.buildQuoteDraft(options, {
       tier: input.tier,
@@ -173,6 +175,7 @@ function registerIpcHandlers() {
       roofAreaM2: input.roofAreaM2,
       ampDay: input.ampDay,
       ampNight: input.ampNight,
+      nightSupplyHours: input.nightSupplyHours,
     });
     const draft = quoteService.buildQuoteDraft(options, {
       tier: input.tier,
@@ -193,7 +196,6 @@ function registerIpcHandlers() {
       total_price: draft.total,
       required_amp_day: input.ampDay,
       required_amp_night: input.ampNight,
-      roof_limited_warning: draft.roofLimitedWarning ? 1 : 0,
     };
 
     const html = buildInvoiceHtml({ quote: pseudoQuote, items: draft.items, notes, company: profile, assetsDir: getAssetsDir() });
@@ -228,7 +230,9 @@ function registerIpcHandlers() {
       `UPDATE settings SET
         system_voltage=@system_voltage, peak_sun_hours=@peak_sun_hours, system_efficiency=@system_efficiency,
         inverter_safety_factor=@inverter_safety_factor, dod=@dod, night_coverage_hours=@night_coverage_hours,
-        panel_area_m2=@panel_area_m2, currency=@currency, quote_number_start=@quote_number_start
+        panel_area_m2=@panel_area_m2, currency=@currency, quote_number_start=@quote_number_start,
+        panel_ref_amps=@panel_ref_amps, panel_ref_watt=@panel_ref_watt,
+        charge_panels_per_battery=@charge_panels_per_battery, battery_charge_hours=@battery_charge_hours
       WHERE id = 1`
     ).run(data);
     return db.prepare('SELECT * FROM settings WHERE id = 1').get();
@@ -277,13 +281,13 @@ function normalizeMaterialInput(data) {
 }
 
 function serializeOptions(options) {
-  // نرسل فقط ما تحتاجه الواجهة (قوائم البدائل والمتطلبات)، بدون كائنات دالة
+  // نرسل فقط ما تحتاجه الواجهة (قوائم البدائل)، بدون كائنات دالة
+  // ملاحظة: توليفات الألواح تعتمد على البطارية المختارة فتُرسل داخل draft.panelTiers وليس هنا
   return {
-    requirements: options.requirements,
     systemAmps: options.systemAmps,
+    nightSupplyHours: options.nightSupplyHours,
     labor: options.labor,
     secondary: options.secondary,
-    panelTiers: options.panelTiers,
     batteryTiers: options.batteryTiers,
     inverterTiers: options.inverterTiers,
   };

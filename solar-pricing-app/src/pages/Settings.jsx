@@ -3,10 +3,13 @@ import React, { useEffect, useState } from 'react';
 const SETTINGS_FIELDS = [
   { key: 'system_voltage', label: 'فولتية النظام (لتحويل الأمبير لواط)' },
   { key: 'peak_sun_hours', label: 'ساعات الشمس الفعالة' },
-  { key: 'system_efficiency', label: 'كفاءة النظام (0-1)' },
+  { key: 'panel_ref_amps', label: 'أمبير اللوح المرجعي (عدد الألواح = الأمبير النهاري ÷ هذا الرقم)' },
+  { key: 'panel_ref_watt', label: 'واطية اللوح المرجعي (الأمبير أعلاه يخص هذه الواطية)' },
+  { key: 'charge_panels_per_battery', label: 'ألواح الشحن الإضافية لكل بطارية' },
+  { key: 'battery_charge_hours', label: 'ساعات شحن البطارية الواحدة' },
   { key: 'inverter_safety_factor', label: 'معامل أمان الانفيرتر' },
   { key: 'dod', label: 'نسبة التفريغ الآمن للبطارية (0-1)' },
-  { key: 'night_coverage_hours', label: 'ساعات التغطية الليلية' },
+  { key: 'night_coverage_hours', label: 'ساعات التجهيز الليلي الافتراضية (تتغير بكل عرض)' },
   { key: 'panel_area_m2', label: 'مساحة اللوح الواحد مع هامش التركيب (م²)' },
   { key: 'quote_number_start', label: 'بداية ترقيم العروض' },
 ];

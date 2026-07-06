@@ -45,7 +45,11 @@ CREATE TABLE IF NOT EXISTS settings (
   night_coverage_hours REAL NOT NULL DEFAULT 8,
   panel_area_m2 REAL NOT NULL DEFAULT 2.7,
   currency TEXT NOT NULL DEFAULT 'دينار عراقي',
-  quote_number_start INTEGER NOT NULL DEFAULT 7400
+  quote_number_start INTEGER NOT NULL DEFAULT 7400,
+  panel_ref_amps REAL NOT NULL DEFAULT 2.18,
+  panel_ref_watt REAL NOT NULL DEFAULT 650,
+  charge_panels_per_battery REAL NOT NULL DEFAULT 1.5,
+  battery_charge_hours REAL NOT NULL DEFAULT 2
 );
 
 CREATE TABLE IF NOT EXISTS quotes (
@@ -86,6 +90,7 @@ CREATE TABLE IF NOT EXISTS quote_notes (
 function initSchema(db) {
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA_SQL);
+  migrateSettingsColumns(db);
   const settingsRow = db.prepare('SELECT COUNT(*) AS c FROM settings').get();
   if (settingsRow.c === 0) {
     db.prepare('INSERT INTO settings (id) VALUES (1)').run();
@@ -110,6 +115,23 @@ function initSchema(db) {
         'أي تغيير بالأسعار يتم نقاشه من قبل الطرفين',
       ])
     );
+  }
+}
+
+// قواعد بيانات منشأة بنسخ أقدم لا تملك الأعمدة الجديدة — SQLite لا يدعم IF NOT EXISTS للأعمدة
+function migrateSettingsColumns(db) {
+  const newColumns = [
+    'panel_ref_amps REAL NOT NULL DEFAULT 2.18',
+    'panel_ref_watt REAL NOT NULL DEFAULT 650',
+    'charge_panels_per_battery REAL NOT NULL DEFAULT 1.5',
+    'battery_charge_hours REAL NOT NULL DEFAULT 2',
+  ];
+  const existing = db.prepare("PRAGMA table_info(settings)").all().map((c) => c.name);
+  for (const colDef of newColumns) {
+    const name = colDef.split(' ')[0];
+    if (!existing.includes(name)) {
+      db.exec(`ALTER TABLE settings ADD COLUMN ${colDef}`);
+    }
   }
 }
 

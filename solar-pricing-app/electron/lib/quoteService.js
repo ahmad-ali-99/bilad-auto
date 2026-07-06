@@ -18,25 +18,41 @@ function getSettings(db) {
     panelAreaM2: row.panel_area_m2,
     currency: row.currency,
     quoteNumberStart: row.quote_number_start,
+    panelRefAmps: row.panel_ref_amps,
+    panelRefWatt: row.panel_ref_watt,
+    chargePanelsPerBattery: row.charge_panels_per_battery,
+    batteryChargeHours: row.battery_charge_hours,
   };
 }
 
-function computeOptions(db, { roofAreaM2, ampDay, ampNight }) {
+function computeOptions(db, { roofAreaM2, ampDay, ampNight, nightSupplyHours }) {
   const settings = getSettings(db);
-  const requirements = calc.computeRequirements({ ampDay, ampNight, ...settings });
-  const panels = db.prepare("SELECT * FROM materials WHERE category='panel' ORDER BY price").all();
+  const supplyHours = nightSupplyHours != null && nightSupplyHours !== '' ? Number(nightSupplyHours) : settings.nightCoverageHours;
+
+  const panelMaterials = db.prepare("SELECT * FROM materials WHERE category='panel' ORDER BY price").all();
   const batteries = db.prepare("SELECT * FROM materials WHERE category='battery' ORDER BY price").all();
   const inverters = db.prepare("SELECT * FROM materials WHERE category='inverter' ORDER BY price").all();
   const secondary = db.prepare("SELECT * FROM materials WHERE category='secondary' ORDER BY id").all();
   const laborTiers = db.prepare('SELECT * FROM labor_tiers').all();
 
-  const panelTiers = calc.selectPanelTiers(panels, requirements, roofAreaM2, settings);
-  const batteryTiers = calc.selectBatteryTiers(batteries, requirements);
-  const inverterTiers = calc.selectInverterTiers(inverters, requirements);
+  const batteryTiers = calc.selectBatteryTiers(batteries, ampNight, supplyHours, settings);
+  const inverterTiers = calc.selectInverterTiers(inverters, ampDay, ampNight, settings);
   const systemAmps = calc.systemAmpSize(ampDay, ampNight);
   const labor = calc.pickLaborTier(laborTiers, systemAmps);
 
-  return { settings, requirements, panelTiers, batteryTiers, inverterTiers, secondary, labor, systemAmps };
+  return {
+    settings,
+    roofAreaM2,
+    ampDay,
+    ampNight,
+    nightSupplyHours: supplyHours,
+    panelMaterials,
+    secondary,
+    labor,
+    systemAmps,
+    batteryTiers,
+    inverterTiers,
+  };
 }
 
 function secondaryUnitQuantity(material, panelCount) {
@@ -50,32 +66,55 @@ function secondaryUnitQuantity(material, panelCount) {
   return 0; // 'متر' يُدخل يدوياً فقط
 }
 
-// يبني مسودة العرض الكاملة لتوليفة مستوى معين (tier) مع دعم استبدال يدوي لمادة بفئة معينة
-// overrides: { panel: materialId, battery: materialId, inverter: materialId }
-// cableMeters: { [materialId]: meters }
+function pickCombo(tiersResult, tier, overrides, category, errors) {
+  if (tiersResult.insufficient) {
+    errors[category] = `لا توجد مادة كافية بالمخزون لفئة ${CATEGORY_LABELS_AR[category]} — يحتاج توريد`;
+    return null;
+  }
+  const overrideId = overrides[category];
+  if (overrideId != null) {
+    const found = tiersResult.all.find((c) => c.material.id === overrideId);
+    if (found) return found;
+  }
+  return tiersResult[tier];
+}
+
+// يبني مسودة العرض الكاملة لمستوى معين مع دعم استبدال يدوي لمادة بفئة معينة
+// ترتيب الحساب: بطاريات أولاً (ساعات التجهيز تحدد عددها) ← ألواح (تغذية + شحن البطاريات) ← انفيرتر
 function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {} }) {
-  const { panelTiers, batteryTiers, inverterTiers, secondary, labor, systemAmps, requirements } = options;
+  const { settings, roofAreaM2, ampDay, ampNight, batteryTiers, inverterTiers, panelMaterials, secondary, labor, systemAmps } = options;
 
   const errors = {};
-  function pickCombo(tiersResult, category) {
-    if (tiersResult.insufficient) {
-      errors[category] = `لا توجد مادة كافية بالمخزون لفئة ${CATEGORY_LABELS_AR[category]} — يحتاج توريد`;
-      return null;
-    }
-    const overrideId = overrides[category];
-    if (overrideId != null) {
-      const found = tiersResult.all.find((c) => c.material.id === overrideId);
-      if (found) return found;
-    }
-    return tiersResult[tier];
-  }
+  const warnings = {};
 
-  const panelCombo = pickCombo(panelTiers, 'panel');
-  const batteryCombo = pickCombo(batteryTiers, 'battery');
-  const inverterCombo = pickCombo(inverterTiers, 'inverter');
+  const batteryCombo = pickCombo(batteryTiers, tier, overrides, 'battery', errors);
+  const batteryCount = batteryCombo ? batteryCombo.units : 0;
+
+  // توليفات الألواح تعتمد على عدد بطاريات التوليفة المختارة فعلياً (بما فيها التبديل اليدوي)
+  const panelTiers = calc.selectPanelTiers(panelMaterials, ampDay, batteryCount, settings);
+  const panelCombo = pickCombo(panelTiers, tier, overrides, 'panel', errors);
+  const inverterCombo = pickCombo(inverterTiers, tier, overrides, 'inverter', errors);
 
   if (!labor) {
     errors.labor = 'لا يوجد سعر عمل معرّف لهذا الحجم — أضف حجماً جديداً من المخزون';
+  }
+
+  // فحص المساحة الحاجب: المساحة المطلوبة لعدد الألواح النهائي مقابل المتوفرة
+  if (panelCombo) {
+    const requiredArea = calc.requiredRoofArea(panelCombo.units, settings);
+    if (roofAreaM2 < requiredArea) {
+      errors.roofArea =
+        `المساحة لا تكفي للعمل — المساحة المطلوبة: ${Math.ceil(requiredArea * 10) / 10} م²، ` +
+        `المتوفرة: ${roofAreaM2} م². يرجى توفير المساحة المناسبة`;
+    }
+  }
+
+  // تحذير غير حاجب: وقت شحن البطاريات مقابل ساعات الشمس
+  const chargeIssue = calc.chargeTimeWarning(batteryCount, settings);
+  if (chargeIssue) {
+    warnings.chargeTime =
+      `وقت شحن البطاريات (${chargeIssue.totalChargeHours} ساعات) أكثر من ساعات الشمس المتاحة ` +
+      `(${chargeIssue.peakSunHours}) — الشحن قد لا يكتمل خلال النهار`;
   }
 
   const items = [];
@@ -162,15 +201,16 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {} }) {
     items,
     total,
     systemAmps,
-    roofLimitedWarning: !!(panelCombo && panelCombo.roofLimited),
+    panelBreakdown: panelCombo ? { feedPanels: panelCombo.feedPanels, chargePanels: panelCombo.chargePanels } : null,
+    panelTiers,
     singleOptionCategories: {
       panel: panelTiers.singleOption,
       battery: batteryTiers.singleOption,
       inverter: inverterTiers.singleOption,
     },
     errors,
+    warnings,
     warrantyNotes,
-    requirements,
   };
 }
 
@@ -184,7 +224,7 @@ function nextQuoteNumber(db) {
 function saveQuote(db, { clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, tier, draft, notes }) {
   const insertQuote = db.prepare(`
     INSERT INTO quotes (quote_number, client_name, client_phone, location, roof_area_m2, required_amp_day, required_amp_night, selected_tier, total_price, roof_limited_warning)
-    VALUES (@quote_number, @client_name, @client_phone, @location, @roof_area_m2, @required_amp_day, @required_amp_night, @selected_tier, @total_price, @roof_limited_warning)
+    VALUES (@quote_number, @client_name, @client_phone, @location, @roof_area_m2, @required_amp_day, @required_amp_night, @selected_tier, @total_price, 0)
   `);
   const insertItem = db.prepare(`
     INSERT INTO quote_items (quote_id, material_id, description_snapshot, quantity, unit, unit_price, subtotal, sort_order)
@@ -204,7 +244,6 @@ function saveQuote(db, { clientName, clientPhone, location, roofAreaM2, ampDay, 
       required_amp_night: ampNight,
       selected_tier: tier,
       total_price: draft.total,
-      roof_limited_warning: draft.roofLimitedWarning ? 1 : 0,
     });
     const quoteId = result.lastInsertRowid;
     draft.items.forEach((item, idx) => {
