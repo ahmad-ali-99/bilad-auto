@@ -1,0 +1,11 @@
+{
+  "appId": "com.biladauto.solarpricing",
+  "appName": "تسعير الطاقة الشمسية",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

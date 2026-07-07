@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">تسعير الطاقة الشمسية</string>
+    <string name="title_activity_main">تسعير الطاقة الشمسية</string>
+    <string name="package_name">com.biladauto.solarpricing</string>
+    <string name="custom_url_scheme">com.biladauto.solarpricing</string>
+</resources>
