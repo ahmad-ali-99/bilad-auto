@@ -10,4 +10,9 @@ import App from './App.jsx';
 // نفس واجهة سطح المكتب — الصفحات المشتركة تستدعي window.api بدون تعديل
 window.api = api;
 
+// طلب تخزين دائم من المتصفح (مهم للآيفون: يحمي البيانات من الحذف التلقائي)
+if (navigator.storage && navigator.storage.persist) {
+  navigator.storage.persist().catch(() => {});
+}
+
 createRoot(document.getElementById('root')).render(<App />);

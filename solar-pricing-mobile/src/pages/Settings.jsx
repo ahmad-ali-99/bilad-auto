@@ -164,6 +164,33 @@ export default function Settings() {
           حفظ بيانات الشركة
         </button>
       </form>
+
+      <div className="card">
+        <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>النسخة الاحتياطية</h3>
+        <p className="muted">
+          حمّل نسخة من كل بياناتك (المخزون والعروض والإعدادات) واحتفظ بها — وتقدر تسترجعها بأي وقت أو تنقلها لجهاز ثاني.
+        </p>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-primary"
+            onClick={async () => {
+              await window.api.backup.export();
+              setMessage('تم تصدير النسخة الاحتياطية ✔');
+            }}
+          >
+            ⬇ تنزيل نسخة احتياطية
+          </button>
+          <button
+            className="btn btn-danger"
+            onClick={async () => {
+              if (!confirm('استرجاع نسخة احتياطية راح يستبدل كل البيانات الحالية — متأكد؟')) return;
+              await window.api.backup.import();
+            }}
+          >
+            استرجاع نسخة احتياطية
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

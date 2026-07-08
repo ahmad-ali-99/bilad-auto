@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
-import { getDb } from './db.js';
+import { getDb, exportDbBytes, importDbBytes } from './db.js';
 import * as quoteService from './quoteService.js';
 import * as excelImport from './excelImport.js';
 import { exportInvoicePdf } from './pdfExport.js';
@@ -308,6 +308,38 @@ export const api = {
         WHERE id = 1
       `).run(data);
       return db.prepare('SELECT * FROM settings WHERE id = 1').get();
+    },
+  },
+
+  backup: {
+    // تنزيل/مشاركة ملف النسخة الاحتياطية الكامل (المخزون + العروض + الإعدادات)
+    async export() {
+      const bytes = await exportDbBytes();
+      const fileName = `نسخة_احتياطية_تسعير_${new Date().toISOString().slice(0, 10)}.db`;
+      if (Capacitor.isNativePlatform()) {
+        const write = await Filesystem.writeFile({
+          path: fileName,
+          directory: Directory.Cache,
+          data: arrayBufferToBase64(bytes.buffer),
+        });
+        await Share.share({ title: fileName, files: [write.uri] });
+        return { ok: true };
+      }
+      const blob = new Blob([bytes], { type: 'application/octet-stream' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      return { ok: true };
+    },
+    // استرجاع نسخة احتياطية من ملف .db (يستبدل كل البيانات الحالية)
+    async import() {
+      const file = await pickFile('.db,application/octet-stream');
+      if (!file) return { canceled: true };
+      const buffer = await readFileAsArrayBuffer(file);
+      await importDbBytes(new Uint8Array(buffer));
+      return { ok: true };
     },
   },
 

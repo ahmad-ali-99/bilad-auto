@@ -56,6 +56,22 @@ async function persist(sqlDb) {
   }, 300);
 }
 
+// نسخة احتياطية: تصدير بايتات قاعدة البيانات كما هي
+export async function exportDbBytes() {
+  const db = await getDb();
+  return db.raw.export();
+}
+
+// استرجاع نسخة احتياطية: استبدال الملف المحفوظ ثم إعادة تحميل التطبيق
+export async function importDbBytes(bytes) {
+  await Filesystem.writeFile({
+    path: DB_FILE,
+    directory: Directory.Data,
+    data: bytesToBase64(bytes),
+  });
+  window.location.reload();
+}
+
 export function getDb() {
   if (!dbPromise) {
     dbPromise = (async () => {
