@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { parseRequest } from '../lib/assistant.js';
-import { getAgentKey, runAgent } from '../lib/agent.js';
+import { getAgentKey, runAgent, getIsAdmin } from '../lib/agent.js';
 
 // المساعد بالواجهة الأولى:
 // - إذا مفتاح Gemini المجاني مفعّل (الإعدادات) → ايجنت حقيقي بمحادثة كاملة وأدوات
@@ -12,11 +12,13 @@ export default function AssistantBar({ onQuote, onInventory, getDraft }) {
   const [messages, setMessages] = useState([]); // {role:'user'|'agent', text}
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
   const historyRef = useRef([]);
   const scrollRef = useRef(null);
 
   useEffect(() => {
     getAgentKey().then((k) => setApiKey(k || ''));
+    getIsAdmin().then(setIsAdmin);
   }, []);
 
   useEffect(() => {
@@ -69,6 +71,7 @@ export default function AssistantBar({ onQuote, onInventory, getDraft }) {
         userText,
         executor,
         onStatus: setStatus,
+        isAdmin,
       });
       historyRef.current = history.slice(-20); // نحتفظ بآخر جزء من المحادثة
       setMessages((m) => [...m, { role: 'agent', text: reply }]);
@@ -83,7 +86,8 @@ export default function AssistantBar({ onQuote, onInventory, getDraft }) {
   return (
     <div className="card" style={{ marginBottom: 12 }}>
       <label style={{ fontWeight: 700, color: 'var(--navy)' }}>
-        🤖 المساعد الذكي {apiKey === '' && <span className="muted" style={{ fontWeight: 400 }}>(وضع سريع — فعّل Gemini المجاني من الإعدادات للمحادثة الكاملة)</span>}
+        🤖 المساعد الذكي{isAdmin && ' — صلاحية تعديل ✏'}
+        {apiKey === '' && <span className="muted" style={{ fontWeight: 400 }}> (وضع سريع — فعّل Gemini المجاني من الإعدادات للمحادثة الكاملة)</span>}
       </label>
 
       {messages.length > 0 && (
