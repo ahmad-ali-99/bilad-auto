@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { getAgentKey, setAgentKey, SHARE_KEY_SQL } from '../lib/agent.js';
 
 const SETTINGS_FIELDS = [
   { key: 'system_voltage', label: 'فولتية النظام (لتحويل الأمبير لواط)' },
@@ -14,13 +15,28 @@ export default function Settings() {
   const [settings, setSettings] = useState(null);
   const [company, setCompany] = useState(null);
   const [message, setMessage] = useState('');
+  const [agentKey, setAgentKeyInput] = useState('');
+  const [agentMsg, setAgentMsg] = useState(null);
 
   function reload() {
     window.api.settings.get().then(setSettings);
     window.api.company.get().then(setCompany);
+    getAgentKey().then(setAgentKeyInput);
   }
 
   useEffect(reload, []);
+
+  async function saveAgentKey(e) {
+    e.preventDefault();
+    const { shared } = await setAgentKey(agentKey);
+    if (!agentKey.trim()) {
+      setAgentMsg({ kind: 'info', text: 'انحذف المفتاح — المساعد رجع للوضع السريع المحلي' });
+    } else if (shared) {
+      setAgentMsg({ kind: 'info', text: 'تم الحفظ ✔ المفتاح مشترك لكل الموظفين — المساعد الذكي الكامل شغال' });
+    } else {
+      setAgentMsg({ kind: 'warn', text: 'تم الحفظ على هذا الجهاز فقط ✔ حتى يصير مشتركاً لكل الموظفين، افتح لوحة Supabase ← SQL Editor والصق السطور أدناه واضغط Run، بعدها احفظ المفتاح مرة ثانية من هنا.' });
+    }
+  }
 
   async function saveSettings(e) {
     e.preventDefault();
@@ -92,6 +108,37 @@ export default function Settings() {
         <button className="btn btn-primary" type="submit">
           حفظ ثوابت المعادلات
         </button>
+      </form>
+
+      <form className="card" onSubmit={saveAgentKey}>
+        <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>🤖 المساعد الذكي (مجاني)</h3>
+        <p className="muted" style={{ marginTop: 0 }}>
+          المساعد يشتغل على Google Gemini بالطبقة المجانية (بدون بطاقة). طريقة الحصول على المفتاح:
+          <br />1. افتح <b>aistudio.google.com/apikey</b> وسجل بحساب Google
+          <br />2. اضغط <b>Create API key</b> وانسخ المفتاح
+          <br />3. الصقه هنا واحفظ — يشتغل فوراً لكل الموظفين
+        </p>
+        <div className="field">
+          <label>مفتاح Gemini API</label>
+          <input
+            type="password"
+            value={agentKey}
+            onChange={(e) => setAgentKeyInput(e.target.value)}
+            placeholder="AIza..."
+            dir="ltr"
+          />
+        </div>
+        <button className="btn btn-primary" type="submit">
+          حفظ مفتاح المساعد
+        </button>
+        {agentMsg && (
+          <div className={`alert ${agentMsg.kind === 'warn' ? 'alert-warning' : 'alert-info'}`} style={{ marginTop: 10, marginBottom: 0 }}>
+            {agentMsg.text}
+            {agentMsg.kind === 'warn' && (
+              <pre dir="ltr" style={{ background: '#fff', padding: 8, borderRadius: 6, marginTop: 8, overflowX: 'auto', fontSize: '0.78rem' }}>{SHARE_KEY_SQL}</pre>
+            )}
+          </div>
+        )}
       </form>
 
       <form className="card" onSubmit={saveCompany}>

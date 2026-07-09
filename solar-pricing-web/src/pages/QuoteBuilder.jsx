@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import SecondaryPickerModal from '../components/SecondaryPickerModal.jsx';
 import AssistantBar from '../components/AssistantBar.jsx';
 
@@ -167,6 +167,9 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
 
   const draft = preview?.draft;
   const hasBlockingErrors = draft && Object.keys(draft.errors).length > 0;
+  // مرجع حي للمسودة حتى يقدر الايجنت يقرأ نتيجة الحساب الحالية
+  const draftRef = useRef(null);
+  draftRef.current = draft || null;
 
   // قوائم التبديل اليدوي: البطاريات والانفيرترات من options، الألواح من draft (تعتمد على البطارية المختارة)
   function tiersResultFor(cat) {
@@ -180,7 +183,7 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
     <div>
       <h2 className="page-title">إنشاء عرض سعر</h2>
 
-      <AssistantBar onQuote={onAssistantQuote} onInventory={onAssistantInventory} />
+      <AssistantBar onQuote={onAssistantQuote} onInventory={onAssistantInventory} getDraft={() => draftRef.current} />
 
       <div className="card">
         <div className="grid-3">
