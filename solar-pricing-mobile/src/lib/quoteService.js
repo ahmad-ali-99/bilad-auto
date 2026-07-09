@@ -10,7 +10,6 @@ function getSettings(db) {
   const row = db.prepare('SELECT * FROM settings WHERE id = 1').get();
   return {
     systemVoltage: row.system_voltage,
-    peakSunHours: calc.IRAQ_PEAK_SUN_HOURS, // ثابتة بالكود — قيمة قاعدة البيانات مهملة عمداً
     systemEfficiency: row.system_efficiency,
     inverterSafetyFactor: row.inverter_safety_factor,
     dod: row.dod,
@@ -19,7 +18,6 @@ function getSettings(db) {
     currency: row.currency,
     quoteNumberStart: row.quote_number_start,
     chargePanelsPerBattery: row.charge_panels_per_battery,
-    batteryChargeHours: row.battery_charge_hours,
   };
 }
 
@@ -105,14 +103,6 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {} }) {
         `المساحة لا تكفي للعمل — المساحة المطلوبة: ${Math.ceil(requiredArea * 10) / 10} م²، ` +
         `المتوفرة: ${roofAreaM2} م². يرجى توفير المساحة المناسبة`;
     }
-  }
-
-  // تحذير غير حاجب: وقت شحن البطاريات مقابل ساعات الشمس
-  const chargeIssue = calc.chargeTimeWarning(batteryCount, settings);
-  if (chargeIssue) {
-    warnings.chargeTime =
-      `وقت شحن البطاريات (${chargeIssue.totalChargeHours} ساعات) أكثر من ساعات الشمس المتاحة ` +
-      `(${chargeIssue.peakSunHours}) — الشحن قد لا يكتمل خلال النهار`;
   }
 
   const items = [];

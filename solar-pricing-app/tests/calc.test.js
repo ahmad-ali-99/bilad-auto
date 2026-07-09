@@ -4,7 +4,6 @@ import {
   batteriesRequired,
   panelsRequired,
   requiredRoofArea,
-  chargeTimeWarning,
   inverterCapacityRequired,
   systemAmpSize,
   pickLaborTier,
@@ -20,7 +19,6 @@ const DEFAULT_SETTINGS = {
   dod: 0.9,
   panelAreaM2: 2.7,
   chargePanelsPerBattery: 1.5,
-  batteryChargeHours: 2,
 };
 
 describe('القاعدة المرجعية: منظومة 15 أمبير نهار/ليل، 8 ساعات تجهيز، لوح 650 وبطارية 16kWh', () => {
@@ -53,9 +51,6 @@ describe('القاعدة المرجعية: منظومة 15 أمبير نهار/�
     expect(Math.ceil(w / 6000)).toBe(1);
   });
 
-  it('بطاريتان × 2 ساعة شحن = 4 ساعات ≤ 7 ساعات شمس العراق الثابتة → لا تحذير', () => {
-    expect(chargeTimeWarning(2, DEFAULT_SETTINGS)).toBeNull();
-  });
 });
 
 describe('ساعات التجهيز المتغيرة بالعرض', () => {
@@ -65,17 +60,6 @@ describe('ساعات التجهيز المتغيرة بالعرض', () => {
 
   it('12 ساعة تجهيز → 3 بطاريات', () => {
     expect(batteriesRequired(15, 12, DEFAULT_SETTINGS, 16)).toBe(3);
-  });
-
-  it('3 بطاريات × 2 ساعة = 6 ساعات ≤ 7 → لا تحذير', () => {
-    expect(chargeTimeWarning(3, DEFAULT_SETTINGS)).toBeNull();
-  });
-
-  it('4 بطاريات × 2 ساعة = 8 ساعات > 7 ساعات شمس → تحذير شحن', () => {
-    const warn = chargeTimeWarning(4, DEFAULT_SETTINGS);
-    expect(warn).not.toBeNull();
-    expect(warn.totalChargeHours).toBe(8);
-    expect(warn.peakSunHours).toBe(7);
   });
 });
 

@@ -3,7 +3,6 @@ import React, { useEffect, useState } from 'react';
 const SETTINGS_FIELDS = [
   { key: 'system_voltage', label: 'فولتية النظام (لتحويل الأمبير لواط)' },
   { key: 'charge_panels_per_battery', label: 'ألواح الشحن الإضافية لكل بطارية' },
-  { key: 'battery_charge_hours', label: 'ساعات شحن البطارية الواحدة' },
   { key: 'inverter_safety_factor', label: 'معامل أمان الانفيرتر' },
   { key: 'dod', label: 'نسبة التفريغ الآمن للبطارية (0-1)' },
   { key: 'night_coverage_hours', label: 'ساعات التجهيز الليلي الافتراضية (تتغير بكل عرض)' },
