@@ -207,6 +207,7 @@ export const api = {
         tier: input.tier,
         overrides: input.overrides || {},
         cableMeters: input.cableMeters || {},
+        secondarySelections: input.secondarySelections || null,
       });
       return {
         options: {
@@ -236,6 +237,7 @@ export const api = {
         tier: input.tier,
         overrides: input.overrides || {},
         cableMeters: input.cableMeters || {},
+        secondarySelections: input.secondarySelections || null,
       });
       const { data: profile } = await supabase.from('company_profile').select('notes_default').eq('id', 1).single();
       const defaultNotes = Array.isArray(profile?.notes_default) ? profile.notes_default : JSON.parse(profile?.notes_default || '[]');
@@ -316,6 +318,7 @@ export const api = {
         tier: input.tier,
         overrides: input.overrides || {},
         cableMeters: input.cableMeters || {},
+        secondarySelections: input.secondarySelections || null,
       });
       const { data: company } = await supabase.from('company_profile').select('*').eq('id', 1).single();
       const defaultNotes = Array.isArray(company?.notes_default) ? company.notes_default : JSON.parse(company?.notes_default || '[]');

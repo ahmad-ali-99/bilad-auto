@@ -79,7 +79,10 @@ function pickCombo(tiersResult, tier, overrides, category, errors) {
 }
 
 // يبني مسودة العرض الكاملة لمستوى معين — بدون أي فحص لكمية المخزون (المواد مجرد خيارات)
-function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {} }) {
+// secondarySelections (اختياري): { [materialId]: { qty } } — إذا مرّر، تنضاف فقط المواد الثانوية
+// المذكورة فيه؛ qty رقم = كمية يدوية، وqty فارغ/null = كمية تلقائية (حسب الألواح أو وحدة واحدة).
+// إذا لم يمرّر يبقى السلوك القديم: كل الثانوية "عدد/قطعي" تنضاف تلقائياً + أمتار من cableMeters.
+function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, secondarySelections = null }) {
   const { settings, roofAreaM2, ampDay, ampNight, batteryTiers, inverterTiers, panelMaterials, secondary, labor, systemAmps } = options;
 
   const errors = {};
@@ -125,7 +128,19 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {} }) {
   const panelCount = panelCombo ? panelCombo.units : 0;
   for (const material of secondary) {
     let quantity;
-    if (material.unit === 'متر') {
+    if (secondarySelections != null) {
+      const sel = secondarySelections[material.id];
+      if (!sel) continue; // غير محددة => ما تنضاف للعرض
+      const manualQty = sel.qty === '' || sel.qty == null ? null : Number(sel.qty);
+      if (manualQty != null && manualQty > 0) {
+        quantity = manualQty;
+      } else if (material.unit === 'متر') {
+        continue; // مادة متر بدون أمتار محددة => ما تنضاف
+      } else {
+        quantity = secondaryUnitQuantity(material, panelCount);
+      }
+      if (quantity <= 0) continue;
+    } else if (material.unit === 'متر') {
       quantity = Number(cableMeters[material.id]) || 0;
       if (quantity <= 0) continue;
     } else {

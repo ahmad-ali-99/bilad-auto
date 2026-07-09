@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import SecondaryPickerModal from '../components/SecondaryPickerModal.jsx';
 
 const TIERS = [
   { key: 'economy', label: 'اقتصادي' },
@@ -31,7 +32,10 @@ export default function QuoteBuilder() {
   const [nightSupplyHours, setNightSupplyHours] = useState('');
   const [tier, setTier] = useState('economy');
   const [overrides, setOverrides] = useState({});
-  const [cableMeters, setCableMeters] = useState({});
+  // المواد الثانوية المختارة للعرض: { [materialId]: { qty } } — تبدأ بالأساسيات (هيكل + صبات)
+  const [secondarySel, setSecondarySel] = useState({});
+  const [secondaryMaterials, setSecondaryMaterials] = useState([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [notes, setNotes] = useState(null);
   const [preview, setPreview] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -42,10 +46,23 @@ export default function QuoteBuilder() {
     window.api.settings.get().then((s) => {
       setNightSupplyHours((prev) => (prev === '' ? String(s.night_coverage_hours) : prev));
     });
+    // الافتراضي: الأساسيات اللي تنحسب حسب عدد الألواح (هيكل + صبات) تبقى بالعرض تلقائياً
+    window.api.materials.list().then((all) => {
+      const secondary = (all || []).filter((m) => m.category === 'secondary');
+      setSecondaryMaterials(secondary);
+      setSecondarySel((prev) => {
+        if (Object.keys(prev).length > 0) return prev;
+        const defaults = {};
+        for (const m of secondary) {
+          if (m.qty_per_panel && m.qty_per_panel > 0) defaults[m.id] = { qty: '' };
+        }
+        return defaults;
+      });
+    });
   }, []);
 
   const debouncedInputs = useDebouncedValue(
-    { roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, cableMeters },
+    { roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel },
     300
   );
 
@@ -66,22 +83,13 @@ export default function QuoteBuilder() {
         nightSupplyHours: debouncedInputs.nightSupplyHours === '' ? null : Number(debouncedInputs.nightSupplyHours),
         tier: debouncedInputs.tier,
         overrides: debouncedInputs.overrides,
-        cableMeters: debouncedInputs.cableMeters,
+        secondarySelections: debouncedInputs.secondarySel,
       })
       .then(setPreview);
   }, [debouncedInputs, validInputs]);
 
-  const cableMaterials = useMemo(
-    () => (preview ? preview.options.secondary.filter((m) => m.unit === 'متر') : []),
-    [preview]
-  );
-
   function setOverride(category, materialId) {
     setOverrides((o) => ({ ...o, [category]: materialId ? Number(materialId) : undefined }));
-  }
-
-  function setCableMeter(materialId, value) {
-    setCableMeters((c) => ({ ...c, [materialId]: value }));
   }
 
   function buildBaseInput() {
@@ -95,7 +103,7 @@ export default function QuoteBuilder() {
       nightSupplyHours: nightSupplyHours === '' ? null : Number(nightSupplyHours),
       tier,
       overrides,
-      cableMeters,
+      secondarySelections: secondarySel,
       notes: notes || [],
     };
   }
@@ -195,30 +203,29 @@ export default function QuoteBuilder() {
           </div>
         </div>
 
-        {cableMaterials.length > 0 && (
-          <div className="grid-3">
-            {cableMaterials.map((m) => (
-              <div className="field" key={m.id}>
-                <label>أمتار: {m.model}</label>
-                <input
-                  type="number"
-                  value={cableMeters[m.id] || ''}
-                  onChange={(e) => setCableMeter(m.id, e.target.value)}
-                  placeholder="حسب الذرعة الموقعية"
-                />
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="tier-toggle">
+        <div className="tier-toggle" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           {TIERS.map((t) => (
             <button key={t.key} className={tier === t.key ? 'active' : ''} onClick={() => setTier(t.key)}>
               {t.label}
             </button>
           ))}
+          {secondaryMaterials.length > 0 && (
+            <button className="btn btn-secondary" onClick={() => setPickerOpen(true)} style={{ marginInlineStart: 'auto' }}>
+              المواد الثانوية ({Object.keys(secondarySel).length} مضافة)
+            </button>
+          )}
         </div>
       </div>
+
+      {pickerOpen && (
+        <SecondaryPickerModal
+          secondary={secondaryMaterials}
+          selections={secondarySel}
+          panelCount={preview?.draft?.panelBreakdown ? preview.draft.panelBreakdown.feedPanels + preview.draft.panelBreakdown.chargePanels : 0}
+          onChange={setSecondarySel}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
 
       {!validInputs && <div className="alert alert-info">أدخل مساحة السطح والأمبير المطلوب (نهاراً و/أو ليلاً) لعرض الحساب</div>}
 
