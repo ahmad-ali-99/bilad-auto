@@ -131,8 +131,6 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
     const check = calc.chargingCheck({
       panelArrayW,
       inverterW: inverterCombo.units * inverterCombo.material.watt_or_capacity,
-      ampDay,
-      systemVoltage: settings.systemVoltage,
       bankKwh: batteryCombo.units * batteryCombo.material.watt_or_capacity,
       dod: settings.dod,
     });

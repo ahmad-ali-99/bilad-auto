@@ -49,21 +49,16 @@ function inverterCapacityRequired(ampDay, ampNight, { systemVoltage, inverterSaf
 }
 
 // فحص شحن البطاريات من الألواح (تحذير غير حاجب — العرض يُحفظ ويُطبع بالحالتين):
-// قدرة شحن الانفيرتر الهجين ≈ قدرته الاسمية (Deye 8K: 190A×48V ≈ 9.1kW، Growatt 5K: 100A ≈ 4.8kW)
-// القدرة المتاحة للشحن = min(قدرة الانفيرتر، إنتاج الألواح×0.8) − حمل النهار
-// ساعات الشحن المطلوبة = الطاقة المسحوبة من البنك ÷ (القدرة المتاحة × كفاءة 0.9) ≤ 7 ساعات شمس العراق
+// الشحن من الوطنية عادي وسريع (بورد الشحن يكمل البنك كله ~ساعتين مهما كان العدد — قاعدة الشركة).
+// الفحص هنا فقط لحالة انقطاع الوطنية: الشحن من الألواح عبر الانفيرتر.
+// قدرة الشحن = الأصغر بين إنتاج مصفوفة الألواح وقدرة الانفيرتر (شحن الهجين ≈ قدرته الاسمية:
+// Deye 8K = 190A×48V ≈ 9.1kW، Growatt 5K = 100A ≈ 4.8kW)، بكفاءة 0.9.
+// ساعات الشحن = الطاقة المسحوبة من البنك ÷ قدرة الشحن ≤ 7 ساعات شمس العراق، وإلا تحذير.
 const IRAQ_SUN_HOURS = 7;
-function chargingCheck({ panelArrayW, inverterW, ampDay, systemVoltage, bankKwh, dod }) {
+function chargingCheck({ panelArrayW, inverterW, bankKwh, dod }) {
   if (!bankKwh || bankKwh <= 0) return { ok: true };
-  const dayLoadW = ampDay * systemVoltage;
-  const chargeW = Math.min(inverterW, panelArrayW * 0.8) - dayLoadW;
-  if (chargeW <= 0) {
-    return {
-      ok: false,
-      message:
-        'تحذير الشحن: إنتاج الألواح بالكاد يغطي حمل النهار — إذا انقطعت الوطنية ما راح يتوفر فائض لشحن البطاريات. زيد ألواح أو كبّر الانفيرتر.',
-    };
-  }
+  const chargeW = Math.min(inverterW, panelArrayW);
+  if (chargeW <= 0) return { ok: true };
   const usedKwh = bankKwh * dod;
   const hoursNeeded = usedKwh / ((chargeW / 1000) * 0.9);
   if (hoursNeeded > IRAQ_SUN_HOURS) {
@@ -71,8 +66,9 @@ function chargingCheck({ panelArrayW, inverterW, ampDay, systemVoltage, bankKwh,
       ok: false,
       hoursNeeded,
       message:
-        `تحذير الشحن: شحن البطاريات من الألواح يحتاج ~${Math.ceil(hoursNeeded)} ساعة والشمس المضمونة ${IRAQ_SUN_HOURS} ساعات — ` +
-        'إذا انقطعت الوطنية ما راح يكتمل الشحن بيوم واحد. زيد ألواح أو كبّر الانفيرتر إذا الزبون يعتمد على الشمس بالشحن.',
+        `ملاحظة الشحن: إذا انقطعت الوطنية، شحن البطاريات من الألواح وحدها ياخذ ~${Math.ceil(hoursNeeded)} ساعة ` +
+        `(أكثر من ${IRAQ_SUN_HOURS} ساعات الشمس) — زيد ألواح أو كبّر الانفيرتر إذا الزبون يعتمد على الشمس بالشحن. ` +
+        'الشحن من الوطنية طبيعي وسريع ولا يتأثر.',
     };
   }
   return { ok: true, hoursNeeded };
