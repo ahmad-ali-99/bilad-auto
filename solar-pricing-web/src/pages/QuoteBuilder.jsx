@@ -43,9 +43,7 @@ export default function QuoteBuilder() {
 
   useEffect(() => {
     window.api.company.get().then((c) => setNotes(c.notes_default || []));
-    window.api.settings.get().then((s) => {
-      setNightSupplyHours((prev) => (prev === '' ? String(s.night_coverage_hours) : prev));
-    });
+    // ساعات التجهيز الليلي بدون قيمة افتراضية — البياع يحددها بكل عرض
     // الافتراضي: الأساسيات اللي تنحسب حسب عدد الألواح (هيكل + صبات) تبقى بالعرض تلقائياً
     window.api.materials.list().then((all) => {
       const secondary = (all || []).filter((m) => m.category === 'secondary');
@@ -68,7 +66,9 @@ export default function QuoteBuilder() {
 
   const validInputs =
     Number(debouncedInputs.roofAreaM2) > 0 && Number(debouncedInputs.ampDay) >= 0 && Number(debouncedInputs.ampNight) >= 0 &&
-    (Number(debouncedInputs.ampDay) > 0 || Number(debouncedInputs.ampNight) > 0);
+    (Number(debouncedInputs.ampDay) > 0 || Number(debouncedInputs.ampNight) > 0) &&
+    // إذا اكو حمل ليلي لازم تحديد ساعات التجهيز — ما ننطي عدد بطاريات بدون ما يحددها البياع
+    (Number(debouncedInputs.ampNight) === 0 || Number(debouncedInputs.nightSupplyHours) > 0);
 
   useEffect(() => {
     if (!validInputs) {
@@ -199,7 +199,12 @@ export default function QuoteBuilder() {
           </div>
           <div className="field">
             <label>ساعات التجهيز الليلي</label>
-            <input type="number" value={nightSupplyHours} onChange={(e) => setNightSupplyHours(e.target.value)} />
+            <input
+              type="number"
+              value={nightSupplyHours}
+              onChange={(e) => setNightSupplyHours(e.target.value)}
+              placeholder="حددها بكل عرض"
+            />
           </div>
         </div>
 
@@ -227,7 +232,11 @@ export default function QuoteBuilder() {
         />
       )}
 
-      {!validInputs && <div className="alert alert-info">أدخل مساحة السطح والأمبير المطلوب (نهاراً و/أو ليلاً) لعرض الحساب</div>}
+      {!validInputs && (
+        <div className="alert alert-info">
+          أدخل مساحة السطح والأمبير المطلوب (نهاراً و/أو ليلاً) — وإذا اكو حمل ليلي أدخل ساعات التجهيز الليلي (تتحكم بعدد البطاريات)
+        </div>
+      )}
 
       {preview && draft && (
         <>
