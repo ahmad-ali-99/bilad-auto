@@ -73,7 +73,7 @@ export default function AssistantBar({ onQuote, onInventory, getDraft }) {
         onStatus: setStatus,
         isAdmin,
       });
-      historyRef.current = history.slice(-20); // نحتفظ بآخر جزء من المحادثة
+      historyRef.current = history.slice(-40); // نحتفظ بآخر جزء من المحادثة
       setMessages((m) => [...m, { role: 'agent', text: reply }]);
     } catch (err) {
       setMessages((m) => [...m, { role: 'agent', text: 'صار خطأ بالاتصال: ' + err.message }]);
