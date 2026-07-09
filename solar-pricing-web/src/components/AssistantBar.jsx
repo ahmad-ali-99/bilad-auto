@@ -34,8 +34,15 @@ export default function AssistantBar({ onQuote, onInventory, getDraft }) {
     if (!userText || busy) return;
     setText('');
 
+    // نعيد فحص المفتاح بكل إرسال — يمكن انضاف/انحذف بعد فتح الصفحة
+    let key = apiKey;
+    if (!key) {
+      key = (await getAgentKey()) || '';
+      if (key !== apiKey) setApiKey(key);
+    }
+
     // بدون مفتاح → المحلل المحلي السريع
-    if (!apiKey) {
+    if (!key) {
       const result = parseRequest(userText);
       let reply;
       if (result.intent === 'inventory') {
@@ -57,7 +64,7 @@ export default function AssistantBar({ onQuote, onInventory, getDraft }) {
     setStatus('يفكر...');
     try {
       const { text: reply, history } = await runAgent({
-        apiKey,
+        apiKey: key,
         history: historyRef.current,
         userText,
         executor,

@@ -232,7 +232,8 @@ async function runAgent({ apiKey, history, userText, executor, onStatus }) {
 
     const parts = data.candidates?.[0]?.content?.parts || [];
     const calls = parts.filter((p) => p.functionCall);
-    const texts = parts.filter((p) => p.text).map((p) => p.text);
+    // نستبعد أجزاء "التفكير" الداخلية للموديلات الحديثة — للبياع النص النهائي فقط
+    const texts = parts.filter((p) => p.text && !p.thought).map((p) => p.text);
 
     if (calls.length === 0) {
       const text = texts.join('\n').trim() || 'ما وصلني رد مفهوم — عيد صياغة الطلب.';
