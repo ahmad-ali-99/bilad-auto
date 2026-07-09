@@ -36,9 +36,46 @@ function requiredRoofArea(panelCount, { panelAreaM2 }) {
   return panelCount * panelAreaM2;
 }
 
-// قدرة الانفيرتر المطلوبة (واط)
-function inverterCapacityRequired(ampDay, ampNight, { systemVoltage, inverterSafetyFactor }) {
-  return Math.max(ampDay, ampNight) * systemVoltage * inverterSafetyFactor;
+// نسبة تحميل الألواح المسموحة على الانفيرتر الهجين (Deye 8kW يقبل 10.4kW ألواح ≈ 1.3×،
+// وGrowatt 5kW يقبل 6kW ≈ 1.2× — نعتمد 1.3 كحد معياري للهجينة LV)
+const PV_OVERSIZE_RATIO = 1.3;
+
+// قدرة الانفيرتر المطلوبة (واط): الأكبر بين حمل البيت بمعامل الأمان، ومصفوفة الألواح
+// مقسومة على نسبة التحميل — حتى الانفيرتر ياخذ إنتاج الألواح كاملاً قبل كل شيء
+function inverterCapacityRequired(ampDay, ampNight, { systemVoltage, inverterSafetyFactor }, panelArrayW = 0) {
+  const loadW = Math.max(ampDay, ampNight) * systemVoltage * inverterSafetyFactor;
+  const pvW = panelArrayW > 0 ? panelArrayW / PV_OVERSIZE_RATIO : 0;
+  return Math.max(loadW, pvW);
+}
+
+// فحص شحن البطاريات من الألواح (تحذير غير حاجب — العرض يُحفظ ويُطبع بالحالتين):
+// قدرة شحن الانفيرتر الهجين ≈ قدرته الاسمية (Deye 8K: 190A×48V ≈ 9.1kW، Growatt 5K: 100A ≈ 4.8kW)
+// القدرة المتاحة للشحن = min(قدرة الانفيرتر، إنتاج الألواح×0.8) − حمل النهار
+// ساعات الشحن المطلوبة = الطاقة المسحوبة من البنك ÷ (القدرة المتاحة × كفاءة 0.9) ≤ 7 ساعات شمس العراق
+const IRAQ_SUN_HOURS = 7;
+function chargingCheck({ panelArrayW, inverterW, ampDay, systemVoltage, bankKwh, dod }) {
+  if (!bankKwh || bankKwh <= 0) return { ok: true };
+  const dayLoadW = ampDay * systemVoltage;
+  const chargeW = Math.min(inverterW, panelArrayW * 0.8) - dayLoadW;
+  if (chargeW <= 0) {
+    return {
+      ok: false,
+      message:
+        'تحذير الشحن: إنتاج الألواح بالكاد يغطي حمل النهار — إذا انقطعت الوطنية ما راح يتوفر فائض لشحن البطاريات. زيد ألواح أو كبّر الانفيرتر.',
+    };
+  }
+  const usedKwh = bankKwh * dod;
+  const hoursNeeded = usedKwh / ((chargeW / 1000) * 0.9);
+  if (hoursNeeded > IRAQ_SUN_HOURS) {
+    return {
+      ok: false,
+      hoursNeeded,
+      message:
+        `تحذير الشحن: شحن البطاريات من الألواح يحتاج ~${Math.ceil(hoursNeeded)} ساعة والشمس المضمونة ${IRAQ_SUN_HOURS} ساعات — ` +
+        'إذا انقطعت الوطنية ما راح يكتمل الشحن بيوم واحد. زيد ألواح أو كبّر الانفيرتر إذا الزبون يعتمد على الشمس بالشحن.',
+    };
+  }
+  return { ok: true, hoursNeeded };
 }
 
 // حجم النظام بالأمبير المستخدم لمطابقة أجور العمل = الأكبر بين النهار والليل
@@ -79,6 +116,8 @@ function classifyTiers(combos) {
 }
 
 // توليفات البطاريات: لكل موديل بطارية عدد وحدات مطلوب حسب ساعات التجهيز الليلي
+// الاقتصادي = أرخص توليفة تغطي الطاقة حتى لو بعدد وحدات أكثر (قرار الشركة بعد اختبار
+// 10/20/30/40A على البيانات الحية — التكديس صحيح تشغيلياً والتبديل اليدوي متاح)
 function selectBatteryTiers(batteryMaterials, ampNight, nightSupplyHours, settings) {
   const combos = [];
   for (const material of batteryMaterials) {
@@ -100,8 +139,8 @@ function selectPanelTiers(panelMaterials, ampDay, batteryCount, settings) {
   return classifyTiers(combos);
 }
 
-function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings) {
-  const requiredW = inverterCapacityRequired(ampDay, ampNight, settings);
+function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, panelArrayW = 0) {
+  const requiredW = inverterCapacityRequired(ampDay, ampNight, settings, panelArrayW);
   const combos = [];
   for (const material of inverterMaterials) {
     const units = Math.ceil(requiredW / material.watt_or_capacity);
@@ -113,6 +152,9 @@ function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings) {
 
 export {
   PANEL_AMPS_PER_WATT,
+  PV_OVERSIZE_RATIO,
+  IRAQ_SUN_HOURS,
+  chargingCheck,
   panelAmpsFor,
   batteriesRequired,
   panelsRequired,

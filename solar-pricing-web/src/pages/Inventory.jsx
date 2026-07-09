@@ -17,10 +17,22 @@ function capacityLabel(category) {
   return 'القدرة/السعة';
 }
 
-export default function Inventory() {
+export default function Inventory({ initialSearch }) {
   const [tab, setTab] = useState('panel');
   const [materials, setMaterials] = useState([]);
   const [search, setSearch] = useState('');
+
+  // توجيه من المساعد: يعبي البحث وينتقل للتبويب المناسب حسب كلمة المادة
+  useEffect(() => {
+    if (!initialSearch || !initialSearch.term) return;
+    const term = initialSearch.term;
+    if (/بطاري|نضائد|ليثيوم/.test(term)) setTab('battery');
+    else if (/انفيرتر|انفرتر|عاكس/.test(term)) setTab('inverter');
+    else if (/لوح|الواح|ألواح|طاقة/.test(term)) setTab('panel');
+    else if (/اجور|أجور|عمل/.test(term)) setTab('labor');
+    else setTab('secondary');
+    setSearch(term.replace(/^(بطارية|بطاريات|انفيرتر|انفرتر|لوح|الواح|ألواح)\s*/, '').trim() || term);
+  }, [initialSearch]);
   const [editingMaterial, setEditingMaterial] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [importParsed, setImportParsed] = useState(null);

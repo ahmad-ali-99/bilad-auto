@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import SecondaryPickerModal from '../components/SecondaryPickerModal.jsx';
+import AssistantBar from '../components/AssistantBar.jsx';
 
 const TIERS = [
   { key: 'economy', label: 'اقتصادي' },
@@ -22,7 +23,7 @@ function useDebouncedValue(value, delay) {
   return debounced;
 }
 
-export default function QuoteBuilder() {
+export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInventory }) {
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   const [location, setLocation] = useState('');
@@ -36,6 +37,7 @@ export default function QuoteBuilder() {
   const [secondarySel, setSecondarySel] = useState({});
   const [secondaryMaterials, setSecondaryMaterials] = useState([]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [showPriceNotes, setShowPriceNotes] = useState(false);
   const [notes, setNotes] = useState(null);
   const [preview, setPreview] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -58,6 +60,18 @@ export default function QuoteBuilder() {
       });
     });
   }, []);
+
+  // تعبئة من المساعد: أي حقل جاء بالأمر ينكتب، والباقي يبقى مثل ما هو
+  useEffect(() => {
+    if (!prefill) return;
+    if (prefill.clientName != null) setClientName(prefill.clientName);
+    if (prefill.clientPhone != null) setClientPhone(prefill.clientPhone);
+    if (prefill.roofAreaM2 != null) setRoofAreaM2(String(prefill.roofAreaM2));
+    if (prefill.ampDay != null) setAmpDay(String(prefill.ampDay));
+    if (prefill.ampNight != null) setAmpNight(String(prefill.ampNight));
+    if (prefill.nightSupplyHours != null) setNightSupplyHours(String(prefill.nightSupplyHours));
+    if (prefill.tier != null) setTier(prefill.tier);
+  }, [prefill]);
 
   const debouncedInputs = useDebouncedValue(
     { roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel },
@@ -159,12 +173,14 @@ export default function QuoteBuilder() {
     if (!preview) return null;
     if (cat === 'panel') return draft?.panelTiers;
     if (cat === 'battery') return preview.options.batteryTiers;
-    return preview.options.inverterTiers;
+    return draft?.inverterTiers; // الانفيرتر صار يُختار بعد الألواح (يعتمد على مصفوفتها)
   }
 
   return (
     <div>
       <h2 className="page-title">إنشاء عرض سعر</h2>
+
+      <AssistantBar onQuote={onAssistantQuote} onInventory={onAssistantInventory} />
 
       <div className="card">
         <div className="grid-3">
@@ -263,6 +279,26 @@ export default function QuoteBuilder() {
               <h3 style={{ margin: 0, color: 'var(--navy)' }}>معاينة العرض</h3>
               <span className="total-badge">المجموع الكلي: {fmt(draft.total)} دينار</span>
             </div>
+
+            {draft.internalNotes && draft.internalNotes.length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <button className="btn btn-secondary btn-sm" onClick={() => setShowPriceNotes((v) => !v)}>
+                  📌 ملاحظات الأسعار ({draft.internalNotes.length}) {showPriceNotes ? '▲' : '▼'}
+                </button>
+                {showPriceNotes && (
+                  <div className="alert alert-warning" style={{ marginTop: 8, marginBottom: 0 }}>
+                    <div className="muted" style={{ marginBottom: 6 }}>
+                      هاي ملاحظات داخلية إلك (مصدر السعر وتاريخه) — ما تنطبع بالعرض ولا يشوفها الزبون:
+                    </div>
+                    {draft.internalNotes.map((n, i) => (
+                      <div key={i}>
+                        <b>{n.label}:</b> {n.note}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {draft.panelBreakdown && (
               <p className="muted" style={{ marginTop: 0 }}>

@@ -17,6 +17,9 @@ export default function App() {
   const [page, setPage] = useState('quote');
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  // تعبئة من المساعد: للعرض (حقول جاهزة) أو للمخزون (نص بحث) — nonce حتى تنطبق بكل أمر جديد
+  const [quotePrefill, setQuotePrefill] = useState(null);
+  const [inventorySearch, setInventorySearch] = useState(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -57,9 +60,18 @@ export default function App() {
         </button>
       </header>
       <main className="mobile-content">
-        {page === 'quote' && <QuoteBuilder />}
+        {page === 'quote' && (
+          <QuoteBuilder
+            prefill={quotePrefill}
+            onAssistantQuote={(fields) => setQuotePrefill({ ...fields, nonce: Date.now() })}
+            onAssistantInventory={(search) => {
+              setInventorySearch({ term: search, nonce: Date.now() });
+              setPage('inventory');
+            }}
+          />
+        )}
         {page === 'quotes' && <Quotes />}
-        {page === 'inventory' && <Inventory />}
+        {page === 'inventory' && <Inventory initialSearch={inventorySearch} />}
         {page === 'settings' && <Settings />}
       </main>
       <nav className="mobile-bottomnav">
