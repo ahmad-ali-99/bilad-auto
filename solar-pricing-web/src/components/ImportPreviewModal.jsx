@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const CATEGORY_OPTIONS = [
   { value: 'panel', label: 'لوح' },
@@ -13,15 +13,29 @@ function fmt(n) {
 
 export default function ImportPreviewModal({ parsed, onClose, onDone }) {
   const [rows, setRows] = useState(parsed.rows.map((r) => ({ ...r, include: true })));
-  const [laborInclude, setLaborInclude] = useState(true);
+  const [laborRows, setLaborRows] = useState(parsed.labor.map((l) => ({ ...l, include: true })));
+  const [existingLaborAmps, setExistingLaborAmps] = useState(null);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    if (parsed.labor.length === 0) return;
+    window.api.laborTiers
+      .list()
+      .then((tiers) => setExistingLaborAmps(new Set((tiers || []).map((t) => Number(t.system_amps)))))
+      .catch(() => setExistingLaborAmps(new Set()));
+  }, [parsed.labor.length]);
 
   function setRow(idx, field, value) {
     setRows((rs) => rs.map((r, i) => (i === idx ? { ...r, [field]: value } : r)));
   }
 
+  function setLaborRow(idx, field, value) {
+    setLaborRows((ls) => ls.map((l, i) => (i === idx ? { ...l, [field]: value } : l)));
+  }
+
   const includedCount = rows.filter((r) => r.include).length;
+  const includedLaborCount = laborRows.filter((l) => l.include).length;
 
   async function handleImport() {
     setImporting(true);
@@ -42,7 +56,9 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
         }));
       const summary = await window.api.materials.importRows({
         materials,
-        labor: laborInclude ? parsed.labor : [],
+        labor: laborRows
+          .filter((l) => l.include)
+          .map((l) => ({ system_amps: Number(l.system_amps), price: Number(l.price) || 0, note: l.note })),
       });
       setResult(summary);
     } finally {
@@ -163,12 +179,57 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
           </table>
         </div>
 
-        {parsed.labor.length > 0 && (
+        {laborRows.length > 0 && (
           <div className="card" style={{ marginTop: 12 }}>
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 700 }}>
-              <input type="checkbox" checked={laborInclude} onChange={(e) => setLaborInclude(e.target.checked)} style={{ width: 'auto' }} />
-              استيراد أجور العمل أيضاً ({parsed.labor.length} حجم: {parsed.labor.map((l) => l.system_amps).join('، ')})
-            </label>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 8 }}>
+              <b>أجور العمل بالملف — اختار الي تريد تستوردها ({includedLaborCount} من {laborRows.length})</b>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  const all = includedLaborCount < laborRows.length;
+                  setLaborRows((ls) => ls.map((l) => ({ ...l, include: all })));
+                }}
+              >
+                {includedLaborCount < laborRows.length ? 'تحديد الكل' : 'إلغاء تحديد الكل'}
+              </button>
+            </div>
+            <div className="import-table-wrap">
+              <table className="data-table import-table">
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>الحالة</th>
+                    <th>الحجم بالأمبير</th>
+                    <th>السعر</th>
+                    <th>ملاحظة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {laborRows.map((l, idx) => (
+                    <tr key={idx}>
+                      <td>
+                        <input type="checkbox" checked={l.include} onChange={(e) => setLaborRow(idx, 'include', e.target.checked)} />
+                      </td>
+                      <td>
+                        {existingLaborAmps == null ? (
+                          <span className="muted">...</span>
+                        ) : existingLaborAmps.has(Number(l.system_amps)) ? (
+                          <span className="tag tag-update" title="راح يحدّث سعر نفس الحجم الموجود">تحديث</span>
+                        ) : (
+                          <span className="tag tag-new">جديد</span>
+                        )}
+                      </td>
+                      <td style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{l.system_amps} أمبير</td>
+                      <td>
+                        <input type="number" value={l.price} onChange={(e) => setLaborRow(idx, 'price', e.target.value)} />
+                      </td>
+                      <td className="muted">{l.note || ''}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
@@ -176,8 +237,10 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
           <button className="btn btn-secondary" onClick={onClose} disabled={importing}>
             إلغاء
           </button>
-          <button className="btn btn-primary" onClick={handleImport} disabled={importing || includedCount === 0}>
-            {importing ? 'جاري الاستيراد...' : `استيراد ${fmt(includedCount)} مادة`}
+          <button className="btn btn-primary" onClick={handleImport} disabled={importing || (includedCount === 0 && includedLaborCount === 0)}>
+            {importing
+              ? 'جاري الاستيراد...'
+              : `استيراد ${fmt(includedCount)} مادة${includedLaborCount > 0 ? ` + ${fmt(includedLaborCount)} أجور` : ''}`}
           </button>
         </div>
       </div>
