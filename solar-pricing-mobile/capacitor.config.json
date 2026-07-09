@@ -6,6 +6,7 @@
     "allowMixedContent": false
   },
   "server": {
+    "url": "https://ahmad-ali-99.github.io/bilad-auto/app/",
     "androidScheme": "https"
   }
 }

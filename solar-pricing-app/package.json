@@ -1,41 +1,18 @@
 {
   "name": "solar-pricing-app",
-  "version": "1.0.0",
-  "description": "برنامج تسعير منظومات الطاقة الشمسية - بلاد اوتو",
+  "version": "2.0.0",
+  "description": "برنامج تسعير منظومات الطاقة الشمسية - بلاد اوتو (غلاف سطح المكتب للتطبيق السحابي)",
   "author": "Bilad Auto",
   "main": "electron/main.js",
   "private": true,
   "scripts": {
-    "dev:renderer": "vite",
-    "dev:electron": "wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .",
-    "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
-    "build:renderer": "vite build",
-    "build": "npm run build:renderer && electron-builder",
-    "build:win": "npm run build:renderer && electron-builder --win",
-    "pretest": "npm rebuild better-sqlite3 --update-binary",
-    "test": "vitest run",
-    "posttest": "npm run rebuild:electron",
-    "rebuild:electron": "electron-rebuild -f -w better-sqlite3",
-    "postinstall": "electron-rebuild -f -w better-sqlite3",
-    "seed": "node electron/db/seed.js"
+    "dev": "electron .",
+    "build:win": "electron-builder --win"
   },
-  "dependencies": {
-    "@fontsource/cairo": "^5.2.7",
-    "better-sqlite3": "^11.10.0",
-    "xlsx": "^0.18.5"
-  },
+  "dependencies": {},
   "devDependencies": {
-    "@electron/rebuild": "^3.7.2",
-    "@vitejs/plugin-react": "^4.3.4",
-    "concurrently": "^9.1.2",
-    "cross-env": "^7.0.3",
     "electron": "^33.4.5",
-    "electron-builder": "^25.1.8",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "vite": "^6.0.7",
-    "vitest": "^2.1.8",
-    "wait-on": "^8.0.1"
+    "electron-builder": "^25.1.8"
   },
   "build": {
     "appId": "com.biladauto.solarpricing",
@@ -46,15 +23,8 @@
       "output": "release"
     },
     "files": [
-      "dist/**/*",
-      "electron/**/*",
+      "electron/main.js",
       "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "assets",
-        "to": "assets"
-      }
     ],
     "win": {
       "target": [
