@@ -5,7 +5,9 @@
 import { supabase } from './supabase.js';
 
 const LS_KEY = 'biladauto_gemini_key';
-const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+// مرتبة: الأقوى أولاً، والخفيفة احتياط لأنها الأقل ازدحاماً بالطبقة المجانية —
+// عند 404 (موديل متقاعد) أو 503 (ازدحام) أو 429 (حصة ممتلئة) ننتقل للي بعده تلقائياً
+const MODELS = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-flash-lite-latest', 'gemini-3.1-flash-lite', 'gemini-3-flash-preview'];
 
 // ===== تخزين المفتاح =====
 async function getAgentKey() {
@@ -200,24 +202,32 @@ async function callGemini(apiKey, model, contents) {
 // history: [{role:'user'|'model', parts:[...]}] — يرجع {text, history}
 async function runAgent({ apiKey, history, userText, executor, onStatus }) {
   const contents = [...history, { role: 'user', parts: [{ text: userText }] }];
-  let model = MODELS[0];
+  let modelIdx = 0;
+
+  // يستدعي الموديل الحالي وينزل بالقائمة تلقائياً عند التقاعد/الازدحام/امتلاء الحصة
+  async function callWithFallback() {
+    for (; modelIdx < MODELS.length; modelIdx++) {
+      try {
+        return await callGemini(apiKey, MODELS[modelIdx], contents);
+      } catch (err) {
+        if ([404, 429, 503].includes(err.status) && modelIdx < MODELS.length - 1) continue;
+        throw err;
+      }
+    }
+  }
 
   for (let step = 0; step < 6; step++) {
     let data;
     try {
-      data = await callGemini(apiKey, model, contents);
+      data = await callWithFallback();
     } catch (err) {
-      // موديل غير متوفر → جرب الأقدم؛ 429 → طبقة مجانية ممتلئة مؤقتاً
-      if (err.status === 404 && model !== MODELS[1]) {
-        model = MODELS[1];
-        data = await callGemini(apiKey, model, contents);
-      } else if (err.status === 429) {
-        return { text: 'الطبقة المجانية وصلت حدها هاللحظة — انتظر دقيقة وعيد المحاولة.', history: contents };
-      } else if (err.status === 400 || err.status === 403) {
-        return { text: 'المفتاح غير صالح أو منتهي — تأكد من مفتاح Gemini بالإعدادات.', history: contents };
-      } else {
-        throw err;
+      if (err.status === 429 || err.status === 503) {
+        return { text: 'كل الموديلات المجانية مزدحمة أو ممتلئة هاللحظة — انتظر دقيقة وعيد المحاولة.', history: contents };
       }
+      if (err.status === 400 || err.status === 403) {
+        return { text: 'المفتاح غير صالح أو منتهي — تأكد من مفتاح Gemini بالإعدادات.', history: contents };
+      }
+      throw err;
     }
 
     const parts = data.candidates?.[0]?.content?.parts || [];
