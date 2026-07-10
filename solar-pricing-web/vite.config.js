@@ -4,6 +4,10 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   base: './',
+  // رقم النسخة يظهر بالشريط العلوي — حتى نعرف فوراً أي نسخة شغالة عند المستخدم
+  define: {
+    __APP_VERSION__: JSON.stringify('v' + new Date().toISOString().slice(2, 16).replace('T', ' ')),
+  },
   plugins: [
     react(),
     // PWA للآيفون: تعمل أوفلاين بالكامل بعد أول فتح، وتُضاف للشاشة الرئيسية مثل أي تطبيق

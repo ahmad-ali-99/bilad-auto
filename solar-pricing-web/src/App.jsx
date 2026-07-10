@@ -56,7 +56,10 @@ export default function App() {
     <div className="mobile-shell">
       <GlobalLoadingBar />
       <header className="mobile-topbar">
-        <span>تسعير الطاقة الشمسية — بلاد اوتو</span>
+        <span>
+          تسعير الطاقة الشمسية — بلاد اوتو{' '}
+          <span style={{ fontSize: '0.62rem', opacity: 0.65, fontWeight: 400 }}>{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : ''}</span>
+        </span>
         <button className="topbar-logout" onClick={logout} title="تسجيل الخروج">
           {currentUser ? `${currentUser} ⏻` : 'خروج'}
         </button>

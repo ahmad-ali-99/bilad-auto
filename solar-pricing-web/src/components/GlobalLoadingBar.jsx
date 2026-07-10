@@ -11,7 +11,7 @@ export default function GlobalLoadingBar() {
       const busy = e.detail?.busy;
       if (busy) {
         if (!timerRef.current) {
-          timerRef.current = setTimeout(() => setVisible(true), 200);
+          timerRef.current = setTimeout(() => setVisible(true), 120);
         }
       } else {
         clearTimeout(timerRef.current);
