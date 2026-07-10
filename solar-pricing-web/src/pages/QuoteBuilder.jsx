@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import SecondaryPickerModal from '../components/SecondaryPickerModal.jsx';
 import AssistantBar from '../components/AssistantBar.jsx';
+import { buildEditPrefill } from '../lib/editPrefill.js';
 
 const TIERS = [
   { key: 'economy', label: 'اقتصادي' },
@@ -77,24 +78,86 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
 
   // وضع تعديل عرض محفوظ: {id, quote_number} — الحفظ يحدث نفس العرض
   const [editingQuote, setEditingQuote] = useState(null);
+  // الحقول المعبأة تلقائياً (من المساعد أو فتح عرض) تومض حتى ينتبهلها البياع
+  const [flashFields, setFlashFields] = useState(new Set());
+  const flashTimerRef = useRef(null);
+  // تنبيه التكرار الحي: عرض سابق لنفس الاسم/الرقم
+  const [dupMatch, setDupMatch] = useState(null);
+  const dupDismissedRef = useRef(new Set());
 
-  // تعبئة من المساعد أو من «تعديل عرض محفوظ»: أي حقل جاء ينكتب، والباقي يبقى مثل ما هو
-  useEffect(() => {
-    if (!prefill) return;
-    if (prefill.clientName != null) setClientName(prefill.clientName);
-    if (prefill.clientPhone != null) setClientPhone(prefill.clientPhone);
-    if (prefill.location != null) setLocation(prefill.location);
-    if (prefill.roofAreaM2 != null) setRoofAreaM2(String(prefill.roofAreaM2));
-    if (prefill.ampDay != null) setAmpDay(String(prefill.ampDay));
-    if (prefill.ampNight != null) setAmpNight(String(prefill.ampNight));
-    if (prefill.nightSupplyHours != null) setNightSupplyHours(String(prefill.nightSupplyHours));
-    if (prefill.tier != null) setTier(prefill.tier);
-    if (prefill.overrides) setOverrides(prefill.overrides);
-    if (prefill.secondarySelections) setSecondarySel(prefill.secondarySelections);
-    if (prefill.notes) setNotes(prefill.notes);
-    setEditingQuote(prefill.editing || null);
+  // تطبيق تعبئة (من المساعد أو تعديل عرض أو تنبيه التكرار) مع وميض الحقول المتغيرة
+  function applyPrefill(p) {
+    if (!p) return;
+    const flashed = new Set();
+    const apply = (key, setter, val) => {
+      if (val == null) return;
+      setter(typeof val === 'string' ? val : String(val));
+      flashed.add(key);
+    };
+    apply('clientName', setClientName, p.clientName);
+    apply('clientPhone', setClientPhone, p.clientPhone);
+    apply('location', setLocation, p.location);
+    apply('roofAreaM2', setRoofAreaM2, p.roofAreaM2);
+    apply('ampDay', setAmpDay, p.ampDay);
+    apply('ampNight', setAmpNight, p.ampNight);
+    apply('nightSupplyHours', setNightSupplyHours, p.nightSupplyHours);
+    if (p.tier != null) setTier(p.tier);
+    if (p.overrides) setOverrides(p.overrides);
+    if (p.secondarySelections) setSecondarySel(p.secondarySelections);
+    if (p.notes) setNotes(p.notes);
+    setEditingQuote(p.editing || null);
     setSaveMessage('');
+    setFlashFields(flashed);
+    clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => setFlashFields(new Set()), 2600);
+  }
+
+  useEffect(() => {
+    if (prefill) applyPrefill(prefill);
   }, [prefill]);
+
+  // فحص حي أثناء الكتابة: إذا الاسم أو الرقم موجود بعرض سابق يطلع تنبيه وسط الشاشة
+  useEffect(() => {
+    const name = clientName.trim();
+    const phone = clientPhone.trim();
+    if (name.length < 3 && phone.length < 8) {
+      setDupMatch(null);
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        const match = await window.api.quotes.findClientMatch({ clientName: name, clientPhone: phone });
+        if (match && match.id !== editingQuote?.id && !dupDismissedRef.current.has(match.id)) {
+          setDupMatch(match);
+        } else {
+          setDupMatch(null);
+        }
+      } catch {
+        /* ignore */
+      }
+    }, 600);
+    return () => clearTimeout(t);
+  }, [clientName, clientPhone, editingQuote]);
+
+  async function openDupForEdit() {
+    const match = dupMatch;
+    setDupMatch(null);
+    const p = await buildEditPrefill(match.id);
+    if (p) applyPrefill(p);
+  }
+
+  function dismissDup() {
+    dupDismissedRef.current.add(dupMatch.id);
+    setDupMatch(null);
+  }
+
+  // كلاس الحقل: وميض التعبئة التلقائية + تلوين أحمر لحقلي الاسم/الرقم عند وجود تكرار
+  function fieldClass(key) {
+    let cls = 'field';
+    if (flashFields.has(key)) cls += ' flash-field';
+    if (dupMatch && (key === 'clientName' || key === 'clientPhone')) cls += ' dup-field';
+    return cls;
+  }
 
   function exitEditMode() {
     setEditingQuote(null);
@@ -237,6 +300,30 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
     <div>
       <h2 className="page-title">إنشاء عرض سعر</h2>
 
+      {dupMatch && (
+        <div className="dup-overlay" onClick={dismissDup}>
+          <div className="dup-popup" onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: '2rem' }}>⚠️</div>
+            <h3 style={{ margin: '4px 0', color: 'var(--navy)' }}>سويت لهذا الشخص عرض من قبل!</h3>
+            <p style={{ margin: '4px 0' }}>
+              <b>{dupMatch.client_name || '-'}</b>
+              {dupMatch.client_phone ? ` — ${dupMatch.client_phone}` : ''}
+              <br />
+              عرض رقم <b>{dupMatch.quote_number}</b> بتاريخ {new Date(dupMatch.created_at).toLocaleDateString('en-GB')} بمجموع{' '}
+              <b>{fmt(dupMatch.total_price)}</b> دينار
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 10 }}>
+              <button className="btn btn-primary" onClick={openDupForEdit}>
+                ✏ وديني عليه للتعديل
+              </button>
+              <button className="btn btn-secondary" onClick={dismissDup}>
+                تجاهل وكمل عرض جديد
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {editingQuote && (
         <div className="alert alert-warning" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <b>✏ وضع التعديل — العرض رقم {editingQuote.quote_number}</b>
@@ -251,15 +338,15 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
 
       <div className="card">
         <div className="grid-3">
-          <div className="field">
+          <div className={fieldClass('clientName')}>
             <label>اسم العميل</label>
             <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} />
           </div>
-          <div className="field">
+          <div className={fieldClass('clientPhone')}>
             <label>رقم الموبايل</label>
             <input type="tel" value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} />
           </div>
-          <div className="field">
+          <div className={fieldClass('location')}>
             <label>الموقع</label>
             <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} />
           </div>
@@ -268,19 +355,19 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
 
       <div className="card">
         <div className="big-inputs big-inputs-4">
-          <div className="field">
+          <div className={fieldClass('roofAreaM2')}>
             <label>مساحة السطح (م²)</label>
             <input type="number" value={roofAreaM2} onChange={(e) => setRoofAreaM2(e.target.value)} />
           </div>
-          <div className="field">
+          <div className={fieldClass('ampDay')}>
             <label>أمبير مطلوب نهاراً</label>
             <input type="number" value={ampDay} onChange={(e) => setAmpDay(e.target.value)} />
           </div>
-          <div className="field">
+          <div className={fieldClass('ampNight')}>
             <label>أمبير مطلوب ليلاً</label>
             <input type="number" value={ampNight} onChange={(e) => setAmpNight(e.target.value)} />
           </div>
-          <div className="field">
+          <div className={fieldClass('nightSupplyHours')}>
             <label>ساعات التجهيز الليلي</label>
             <input
               type="number"

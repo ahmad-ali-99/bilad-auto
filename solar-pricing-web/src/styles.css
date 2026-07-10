@@ -475,3 +475,116 @@ textarea { resize: vertical; min-height: 70px; }
   50% { right: -35%; }
   100% { right: 100%; }
 }
+
+/* ═══════════ تجميل الواجهة (2026-07) ═══════════ */
+
+/* بطاقات أنعم بظل خفيف */
+.card {
+  border-radius: 14px !important;
+  border: 1px solid #e6ecf3;
+  box-shadow: 0 2px 12px rgba(16, 42, 67, 0.06);
+  transition: box-shadow 0.2s;
+}
+
+/* الشريط العلوي بتدرج */
+.mobile-topbar {
+  background: linear-gradient(135deg, var(--navy-dark) 0%, var(--navy) 60%, #24507f 100%) !important;
+  box-shadow: 0 2px 10px rgba(16, 42, 67, 0.25);
+}
+
+/* أزرار أنعم مع لمسة حركة */
+.btn {
+  border-radius: 10px !important;
+  transition: transform 0.12s, box-shadow 0.12s, filter 0.12s;
+}
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(16, 42, 67, 0.18);
+  filter: brightness(1.05);
+}
+.btn:active:not(:disabled) { transform: translateY(0); }
+.btn-primary {
+  background: linear-gradient(135deg, var(--navy) 0%, #24507f 100%);
+}
+
+/* الحقول: حواف أنعم + توهج ملون عند التركيز حتى ينتبه البياع وين واصل */
+input, select, textarea {
+  border-radius: 10px !important;
+  border: 1.5px solid #d7dee7;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.3s;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: #2a6ab0 !important;
+  box-shadow: 0 0 0 3px rgba(42, 106, 176, 0.18);
+  background: #f8fbff;
+}
+
+/* وميض الحقول المعبأة تلقائياً (من المساعد الذكي أو فتح عرض للتعديل) */
+@keyframes flash-fill {
+  0%   { background: #fff3c4; box-shadow: 0 0 0 4px rgba(245, 166, 35, 0.35); border-color: #f5a623; }
+  70%  { background: #fffbe8; box-shadow: 0 0 0 2px rgba(245, 166, 35, 0.15); }
+  100% { background: #fff; box-shadow: none; }
+}
+.flash-field input { animation: flash-fill 2.5s ease-out; }
+
+/* حقلا الاسم والرقم يتلونان عند اكتشاف عرض سابق لنفس الشخص */
+.dup-field input {
+  border-color: var(--danger) !important;
+  background: var(--danger-bg) !important;
+  box-shadow: 0 0 0 3px rgba(179, 49, 44, 0.15);
+}
+
+/* تنبيه التكرار وسط الشاشة */
+.dup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 30, 46, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: dup-fade 0.2s ease-out;
+}
+@keyframes dup-fade { from { opacity: 0; } to { opacity: 1; } }
+.dup-popup {
+  background: #fff;
+  border-radius: 16px;
+  padding: 22px 26px;
+  max-width: 420px;
+  width: calc(100% - 40px);
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(16, 30, 46, 0.35);
+  border-top: 5px solid #f5a623;
+  animation: dup-pop 0.22s ease-out;
+}
+@keyframes dup-pop { from { transform: scale(0.92); opacity: 0.5; } to { transform: scale(1); opacity: 1; } }
+
+/* جداول أوضح: رأس ملون وصف يتظلل عند المرور */
+.data-table th {
+  background: var(--navy-light);
+  color: var(--navy);
+}
+.data-table tbody tr { transition: background 0.12s; }
+.data-table tbody tr:hover { background: #f2f7fc; }
+
+/* أزرار المستويات بشكل أقراص */
+.tier-toggle button {
+  border-radius: 999px !important;
+  transition: all 0.15s;
+}
+
+/* شارة المجموع بتدرج ذهبي خفيف */
+.total-badge {
+  background: linear-gradient(135deg, #f5a623 0%, #e8940a 100%) !important;
+  color: #fff !important;
+  border-radius: 999px !important;
+  box-shadow: 0 2px 8px rgba(245, 166, 35, 0.35);
+}
+
+/* التنقل السفلي: أيقونة نشطة بارزة */
+.mobile-bottomnav button.active {
+  color: #f5a623 !important;
+}
+.mobile-bottomnav button { transition: color 0.15s, transform 0.12s; }
+.mobile-bottomnav button:active { transform: scale(0.94); }

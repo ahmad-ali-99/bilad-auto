@@ -222,6 +222,23 @@ export const api = {
       };
     },
     // كشف تكرار العرض: هل يوجد عرض محفوظ بنفس اسم العميل ورقم الموبايل؟
+    // فحص حي أثناء الكتابة: هل اكو عرض سابق لنفس الاسم أو نفس رقم الهاتف؟ (نستثني المحذوفة)
+    async findClientMatch({ clientName, clientPhone }) {
+      const name = (clientName || '').trim();
+      const phone = (clientPhone || '').trim();
+      const conds = [];
+      if (name.length >= 3) conds.push(`client_name.eq.${name}`);
+      if (phone.length >= 8) conds.push(`client_phone.eq.${phone}`);
+      if (!conds.length) return null;
+      const { data, error } = await supabase
+        .from('quotes')
+        .select('id, quote_number, client_name, client_phone, created_at, total_price, deleted_at')
+        .or(conds.join(','))
+        .order('id', { ascending: false })
+        .limit(5);
+      throwIf(error);
+      return (data || []).find((q) => !q.deleted_at) || null;
+    },
     async findDuplicate({ clientName, clientPhone }) {
       if (!clientName && !clientPhone) return null;
       let q = supabase.from('quotes').select('id, quote_number, created_at, total_price').order('id', { ascending: false }).limit(1);

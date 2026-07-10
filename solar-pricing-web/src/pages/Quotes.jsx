@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { buildEditPrefill } from '../lib/editPrefill.js';
 
 const TIER_LABELS = { economy: 'اقتصادي', standard: 'متوسط', premium: 'ممتاز' };
 const MAX_ATTACH_MB = 8;
@@ -65,40 +66,12 @@ export default function Quotes({ onEditQuote }) {
     }
   }
 
-  // فتح عرض محفوظ للتعديل الكامل بالشاشة الرئيسية: نستنتج المواد المبدلة يدوياً
-  // والثانوية المختارة من بنود العرض المحفوظة (material_id) — بلا أي أعمدة جديدة
+  // فتح عرض محفوظ للتعديل الكامل بالشاشة الرئيسية (المنطق المشترك بـeditPrefill.js)
   async function handleEdit(id) {
     setBusyId(id);
     try {
-      const [full, materials] = await Promise.all([window.api.quotes.get(id), window.api.materials.list()]);
-      if (!full) return;
-      const byId = new Map(materials.map((m) => [m.id, m]));
-      const overrides = {};
-      const secondarySelections = {};
-      for (const item of full.items) {
-        const mat = item.material_id != null ? byId.get(item.material_id) : null;
-        if (!mat) continue; // أجور العمل أو مادة انحذفت من المخزون
-        if (mat.category === 'secondary') {
-          // المرتبطة بالألواح ترجع تلقائية حتى تتبع أي تعديل، والباقي بكميتها المحفوظة
-          secondarySelections[mat.id] = { qty: mat.qty_per_panel > 0 ? '' : item.quantity };
-        } else {
-          overrides[mat.category] = mat.id;
-        }
-      }
-      onEditQuote({
-        editing: { id: full.quote.id, quote_number: full.quote.quote_number },
-        clientName: full.quote.client_name || '',
-        clientPhone: full.quote.client_phone || '',
-        location: full.quote.location || '',
-        roofAreaM2: full.quote.roof_area_m2,
-        ampDay: full.quote.required_amp_day,
-        ampNight: full.quote.required_amp_night,
-        nightSupplyHours: full.quote.night_supply_hours,
-        tier: full.quote.selected_tier,
-        overrides,
-        secondarySelections,
-        notes: full.notes.map((n) => n.note_text),
-      });
+      const prefill = await buildEditPrefill(id);
+      if (prefill) onEditQuote(prefill);
     } finally {
       setBusyId(null);
     }
