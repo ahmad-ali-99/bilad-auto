@@ -47,17 +47,22 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
   useEffect(() => {
     window.api.company.get().then((c) => setNotes(c.notes_default || []));
     // ساعات التجهيز الليلي بدون قيمة افتراضية — البياع يحددها بكل عرض
-    // الافتراضي: الأساسيات حسب عدد الألواح (هيكل + صبات) + بوردة الحماية DC (وحدة بكل عرض)
-    window.api.materials.list().then((all) => {
+    // الافتراضي: القائمة الدائمة المشتركة من قاعدة البيانات (يحفظها الفريق من نافذة الثانوية)،
+    // وإذا ما محفوظة بعد: الأساسيات حسب الألواح (هيكل + صبات) + بوردة الحماية DC
+    Promise.all([window.api.materials.list(), window.api.config.get('secondary_defaults')]).then(([all, savedIds]) => {
       const secondary = (all || []).filter((m) => m.category === 'secondary');
       setSecondaryMaterials(secondary);
       setSecondarySel((prev) => {
         if (Object.keys(prev).length > 0) return prev;
         const defaults = {};
+        if (Array.isArray(savedIds) && savedIds.length > 0) {
+          const existing = new Set(secondary.map((m) => m.id));
+          for (const id of savedIds) if (existing.has(id)) defaults[id] = { qty: '' };
+          return defaults;
+        }
         for (const m of secondary) {
           if (m.qty_per_panel && m.qty_per_panel > 0) defaults[m.id] = { qty: '' };
         }
-        // بوردة الحماية DC — نستبعد بوردات AC/النضائد/الرئيسية
         const dcBoard = secondary.find((m) => {
           const name = `${m.model || ''} ${m.brand || ''}`;
           if (!/بورد/.test(name)) return false;

@@ -13,8 +13,21 @@ function effectiveQty(material, sel, panelCount) {
   return 1;
 }
 
-// نافذة وحدة لاختيار المواد الثانوية للعرض — الأساسيات (حسب الألواح) محددة افتراضياً والباقي حسب الحاجة
+// نافذة وحدة لاختيار المواد الثانوية للعرض — الأساسيات محددة افتراضياً والباقي حسب الحاجة
 export default function SecondaryPickerModal({ secondary, selections, panelCount, onChange, onClose }) {
+  const [defaultsMsg, setDefaultsMsg] = React.useState('');
+
+  // اعتماد التحديد الحالي كافتراضي دائم مشترك لكل المستخدمين (يخزن بقاعدة البيانات)
+  async function saveAsDefaults() {
+    try {
+      const ids = secondary.filter((m) => selections[m.id]).map((m) => m.id);
+      await window.api.config.set('secondary_defaults', ids);
+      setDefaultsMsg(`تم ✔ صارت هاي الـ${ids.length} مواد افتراضية دائمة بكل عرض جديد ولكل الموظفين`);
+    } catch (err) {
+      setDefaultsMsg('خطأ بالحفظ: ' + err.message);
+    }
+  }
+
   function toggle(material, checked) {
     const next = { ...selections };
     if (checked) next[material.id] = { qty: '' };
@@ -98,11 +111,17 @@ export default function SecondaryPickerModal({ secondary, selections, panelCount
           </table>
         </div>
 
-        <div className="toolbar" style={{ marginTop: 14 }}>
+        {defaultsMsg && <div className="alert alert-info" style={{ marginTop: 10 }}>{defaultsMsg}</div>}
+        <div className="toolbar" style={{ marginTop: 14, flexWrap: 'wrap', gap: 8 }}>
           <span className="total-badge">مجموع الثانوية المضافة: {fmt(includedTotal)} دينار</span>
-          <button className="btn btn-primary" onClick={onClose}>
-            تم
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary" onClick={saveAsDefaults} title="التحديد الحالي يصير الافتراضي الدائم بكل عرض جديد ولكل الموظفين">
+              💾 اعتماد كافتراضي دائم للكل
+            </button>
+            <button className="btn btn-primary" onClick={onClose}>
+              تم
+            </button>
+          </div>
         </div>
       </div>
     </div>

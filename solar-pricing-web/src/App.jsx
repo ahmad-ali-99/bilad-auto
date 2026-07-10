@@ -52,6 +52,17 @@ export default function App() {
     await supabase.auth.signOut();
   }
 
+  // رفرش كامل بضغطة: يفحص وجود نسخة أحدث من التطبيق ثم يعيد التحميل بأحدث بيانات
+  async function hardRefresh() {
+    try {
+      const reg = await navigator.serviceWorker?.getRegistration();
+      await reg?.update();
+    } catch {
+      /* نكمل للتحديث */
+    }
+    window.location.reload();
+  }
+
   return (
     <div className="mobile-shell">
       <GlobalLoadingBar />
@@ -60,9 +71,14 @@ export default function App() {
           تسعير الطاقة الشمسية — بلاد اوتو{' '}
           <span style={{ fontSize: '0.62rem', opacity: 0.65, fontWeight: 400 }}>{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : ''}</span>
         </span>
-        <button className="topbar-logout" onClick={logout} title="تسجيل الخروج">
-          {currentUser ? `${currentUser} ⏻` : 'خروج'}
-        </button>
+        <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button className="topbar-logout" onClick={hardRefresh} title="تحديث التطبيق والبيانات">
+            🔄
+          </button>
+          <button className="topbar-logout" onClick={logout} title="تسجيل الخروج">
+            {currentUser ? `${currentUser} ⏻` : 'خروج'}
+          </button>
+        </span>
       </header>
       <main className="mobile-content">
         {page === 'quote' && (

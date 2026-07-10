@@ -25,11 +25,16 @@ function batteriesRequired(ampNight, nightSupplyHours, { systemVoltage, dod }, b
   return Math.ceil(nightEnergyKwh / dod / batteryKwh);
 }
 
-// عدد الألواح النهائي = تغذية النهار + شحن البطاريات
+// عدد الألواح النهائي = تغذية النهار + شحن البطاريات — ودائماً زوجي (التركيب أزواج على 2 MPPT)
 function panelsRequired(ampDay, batteryCount, settings, panelWatt) {
-  const feedPanels = ampDay > 0 ? Math.ceil(ampDay / panelAmpsFor(panelWatt)) : 0;
+  let feedPanels = ampDay > 0 ? Math.ceil(ampDay / panelAmpsFor(panelWatt)) : 0;
   const chargePanels = Math.ceil(batteryCount * settings.chargePanelsPerBattery);
-  return { feedPanels, chargePanels, total: feedPanels + chargePanels };
+  let total = feedPanels + chargePanels;
+  if (total % 2 === 1) {
+    total += 1;
+    feedPanels += 1; // اللوح المكمل يظهر ضمن ألواح التغذية بالتفصيل
+  }
+  return { feedPanels, chargePanels, total };
 }
 
 function requiredRoofArea(panelCount, { panelAreaM2 }) {
@@ -111,12 +116,12 @@ function classifyTiers(combos) {
   return { economy, standard, premium, singleOption: false, insufficient: false, all: sorted };
 }
 
-// ===== دستور التسعير (الهندسة القيمية — معتمد من الشركة، بدون تفضيل ماركات) =====
-// economy: أرخص توليفة تغطي الحاجة حتى لو بعدد وحدات أكثر — أقل سعر نهائي.
-// standard: أقل عدد وحدات ممكن (وحدة وحدة إذا تتحمل)، وبين المتساوية السعر الوسط.
-// premium: نفس قاعدة أقل عدد وحدات، وبين المتساوية الأغلى (الأرقى مواصفات).
-// استثناء الانفيرترات بالـstandard: من 100 أمبير فما فوق نوزع الحمل على ~3 انفيرترات
-// (استمرارية Redundancy وتخفيف حراري) بدل جهاز عملاق واحد.
+// ===== دستور التسعير (الهندسة أولاً ثم السعر — معتمد من الشركة) =====
+// الهندسة ثابتة بكل المستويات: أقل عدد بطاريات وانفيرترات يغطي الأمبيرية المطلوبة.
+// economy: الأرخص ضمن مجموعة أقل عدد وحدات.
+// standard: الوسط سعراً ضمن نفس المجموعة.
+// premium: منظومة مرتاحة حتى لو زاد الحمل — الانفيرتر يتوزع على وحدتين بهامش ≥30%،
+// والبطاريات الأرقى ضمن أقل عدد + وحدة بطارية إضافية احتياط.
 
 // الوسط سعراً ضمن مجموعة (مرتبة تصاعدياً)
 function midByPrice(group) {
@@ -129,38 +134,37 @@ function fewestUnitsGroup(combos) {
   return combos.filter((c) => c.units === minUnits);
 }
 
-// standard: أقل عدد وحدات، وبين المتساوية السعر الوسط
+function pickFewestThenCheapest(combos) {
+  return fewestUnitsGroup(combos).sort((a, b) => a.totalPrice - b.totalPrice)[0];
+}
+
 function pickFewestThenMid(combos) {
   return midByPrice(fewestUnitsGroup(combos));
 }
 
-// premium: أقل عدد وحدات، وبين المتساوية الأغلى
-function pickFewestThenPriciest(combos) {
-  return fewestUnitsGroup(combos).sort((a, b) => b.totalPrice - a.totalPrice)[0];
-}
-
-// standard انفيرترات ≥100A: الأقرب لثلاث وحدات (توزيع الحمل)، وبين المتساوية السعر الوسط
-function pickClosestToThree(combos) {
-  const bestDist = Math.min(...combos.map((c) => Math.abs(c.units - 3)));
-  return midByPrice(combos.filter((c) => Math.abs(c.units - 3) === bestDist));
-}
-
-function assignTiers(combos, standardPick, premiumPick) {
+function assignTiers(combos, premiumPick) {
   if (combos.length === 0) {
     return { economy: null, standard: null, premium: null, singleOption: false, insufficient: true, all: [] };
   }
   const sorted = [...combos].sort((a, b) => a.totalPrice - b.totalPrice);
   if (sorted.length === 1) {
-    return { economy: sorted[0], standard: sorted[0], premium: sorted[0], singleOption: true, insufficient: false, all: sorted };
+    return { economy: sorted[0], standard: sorted[0], premium: premiumPick ? premiumPick(sorted) : sorted[0], singleOption: true, insufficient: false, all: sorted };
   }
   return {
-    economy: sorted[0],
-    standard: standardPick(sorted),
+    economy: pickFewestThenCheapest(sorted),
+    standard: pickFewestThenMid(sorted),
     premium: premiumPick(sorted),
     singleOption: false,
     insufficient: false,
     all: sorted,
   };
+}
+
+// premium بطاريات: الأغلى (الأرقى) ضمن أقل عدد + وحدة إضافية احتياط راحة
+function pickBatteryPremium(combos) {
+  const best = fewestUnitsGroup(combos).sort((a, b) => b.totalPrice - a.totalPrice)[0];
+  const units = best.units + 1;
+  return { material: best.material, units, totalPrice: units * best.material.price, extraUnit: true };
 }
 
 // توليفات البطاريات: لكل موديل بطارية عدد وحدات مطلوب حسب ساعات التجهيز الليلي
@@ -171,7 +175,7 @@ function selectBatteryTiers(batteryMaterials, ampNight, nightSupplyHours, settin
     if (units <= 0) continue;
     combos.push({ material, units, totalPrice: units * material.price });
   }
-  return assignTiers(combos, pickFewestThenMid, pickFewestThenPriciest);
+  return assignTiers(combos, pickBatteryPremium);
 }
 
 // توليفات الألواح: العدد يعتمد على أمبير النهار + عدد بطاريات التوليفة المرافقة
@@ -193,9 +197,20 @@ function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, pane
     if (units <= 0) continue;
     combos.push({ material, units, totalPrice: units * material.price });
   }
-  const systemAmps = systemAmpSize(ampDay, ampNight);
-  const standardPick = systemAmps >= 100 ? pickClosestToThree : pickFewestThenMid;
-  return assignTiers(combos, standardPick, pickFewestThenPriciest);
+
+  // premium: توزيع الحمل على وحدتين (على الأقل) بهامش ≥30% — كل جهاز محمل ≤~70% حتى
+  // المنظومة مرتاحة لو زاد الحمل، ونختار الأرخص المحقق للشرط
+  function pickInverterPremium(all) {
+    const candidates = all.map((c) => {
+      const units = Math.max(2, Math.ceil(requiredW / c.material.watt_or_capacity));
+      return { material: c.material, units, totalPrice: units * c.material.price, splitLoad: true };
+    });
+    const withMargin = candidates.filter((c) => c.units * c.material.watt_or_capacity >= requiredW * 1.3);
+    const pool = withMargin.length ? withMargin : candidates;
+    return pool.sort((a, b) => a.totalPrice - b.totalPrice)[0];
+  }
+
+  return assignTiers(combos, pickInverterPremium);
 }
 
 export {

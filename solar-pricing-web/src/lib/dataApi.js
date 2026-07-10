@@ -374,6 +374,23 @@ export const api = {
     },
   },
 
+  // إعدادات مشتركة خفيفة (key/value بجدول app_config) — مثل الثانوية الافتراضية الدائمة
+  config: {
+    async get(key) {
+      try {
+        const { data } = await supabase.from('app_config').select('value').eq('key', key).maybeSingle();
+        return data && data.value != null ? JSON.parse(data.value) : null;
+      } catch {
+        return null;
+      }
+    },
+    async set(key, value) {
+      const { error } = await supabase.from('app_config').upsert({ key, value: JSON.stringify(value) });
+      throwIf(error);
+      return { ok: true };
+    },
+  },
+
   settings: {
     async get() {
       const { data, error } = await supabase.from('settings').select('*').eq('id', 1).single();
