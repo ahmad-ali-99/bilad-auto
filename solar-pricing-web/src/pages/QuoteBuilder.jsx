@@ -47,7 +47,7 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
   useEffect(() => {
     window.api.company.get().then((c) => setNotes(c.notes_default || []));
     // ساعات التجهيز الليلي بدون قيمة افتراضية — البياع يحددها بكل عرض
-    // الافتراضي: الأساسيات اللي تنحسب حسب عدد الألواح (هيكل + صبات) تبقى بالعرض تلقائياً
+    // الافتراضي: الأساسيات حسب عدد الألواح (هيكل + صبات) + بوردة الحماية DC (وحدة بكل عرض)
     window.api.materials.list().then((all) => {
       const secondary = (all || []).filter((m) => m.category === 'secondary');
       setSecondaryMaterials(secondary);
@@ -57,6 +57,14 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
         for (const m of secondary) {
           if (m.qty_per_panel && m.qty_per_panel > 0) defaults[m.id] = { qty: '' };
         }
+        // بوردة الحماية DC — نستبعد بوردات AC/النضائد/الرئيسية
+        const dcBoard = secondary.find((m) => {
+          const name = `${m.model || ''} ${m.brand || ''}`;
+          if (!/بورد/.test(name)) return false;
+          if (/AC|نضائد|رئيسي|Main/i.test(name)) return false;
+          return /DC/i.test(name) || /حماية/.test(name);
+        });
+        if (dcBoard) defaults[dcBoard.id] = { qty: '' };
         return defaults;
       });
     });
@@ -232,18 +240,41 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
           </div>
         </div>
 
-        <div className="tier-toggle" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div className="tier-toggle">
           {TIERS.map((t) => (
             <button key={t.key} className={tier === t.key ? 'active' : ''} onClick={() => setTier(t.key)}>
               {t.label}
             </button>
           ))}
-          {secondaryMaterials.length > 0 && (
-            <button className="btn btn-secondary" onClick={() => setPickerOpen(true)} style={{ marginInlineStart: 'auto' }}>
-              المواد الثانوية ({Object.keys(secondarySel).length} مضافة)
-            </button>
-          )}
         </div>
+
+        {secondaryMaterials.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 12, paddingTop: 10, borderTop: '1px dashed #d5dde6' }}>
+            <b style={{ color: 'var(--navy)' }}>المواد الثانوية بالعرض:</b>
+            {secondaryMaterials
+              .filter((m) => secondarySel[m.id])
+              .map((m) => {
+                const manual = secondarySel[m.id]?.qty;
+                const perPanel = m.qty_per_panel > 0;
+                const panels = preview?.draft?.panelBreakdown
+                  ? preview.draft.panelBreakdown.feedPanels + preview.draft.panelBreakdown.chargePanels
+                  : 0;
+                const qty = manual !== '' && manual != null ? Number(manual) : perPanel ? panels || '؟' : m.unit === 'متر' ? '؟' : 1;
+                return (
+                  <span
+                    key={m.id}
+                    style={{ background: '#e6f0fb', color: '#1a5a9c', borderRadius: 14, padding: '3px 10px', fontSize: '0.82rem', whiteSpace: 'nowrap' }}
+                  >
+                    {m.model} ×{qty}
+                  </span>
+                );
+              })}
+            {Object.keys(secondarySel).length === 0 && <span className="muted">ماكو مواد ثانوية محددة</span>}
+            <button className="btn btn-primary btn-sm" onClick={() => setPickerOpen(true)} style={{ marginInlineStart: 'auto' }}>
+              ➕ إضافة / تعديل
+            </button>
+          </div>
+        )}
       </div>
 
       {pickerOpen && (
