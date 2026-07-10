@@ -40,6 +40,7 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
   const [showPriceNotes, setShowPriceNotes] = useState(false);
   const [notes, setNotes] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [calculating, setCalculating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
 
@@ -89,6 +90,7 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
       setPreview(null);
       return;
     }
+    setCalculating(true);
     window.api.quotes
       .preview({
         roofAreaM2: Number(debouncedInputs.roofAreaM2),
@@ -99,7 +101,8 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
         overrides: debouncedInputs.overrides,
         secondarySelections: debouncedInputs.secondarySel,
       })
-      .then(setPreview);
+      .then(setPreview)
+      .finally(() => setCalculating(false));
   }, [debouncedInputs, validInputs]);
 
   function setOverride(category, materialId) {
@@ -280,7 +283,9 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
           <div className="card">
             <div className="toolbar">
               <h3 style={{ margin: 0, color: 'var(--navy)' }}>معاينة العرض</h3>
-              <span className="total-badge">المجموع الكلي: {fmt(draft.total)} دينار</span>
+              <span className="total-badge" style={calculating ? { opacity: 0.55 } : {}}>
+                {calculating ? '⏳ يحسب... ' : ''}المجموع الكلي: {fmt(draft.total)} دينار
+              </span>
             </div>
 
             {draft.internalNotes && draft.internalNotes.length > 0 && (

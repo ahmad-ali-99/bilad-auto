@@ -4,6 +4,7 @@ import QuoteBuilder from './pages/QuoteBuilder.jsx';
 import Quotes from './pages/Quotes.jsx';
 import Settings from './pages/Settings.jsx';
 import Login from './pages/Login.jsx';
+import GlobalLoadingBar from './components/GlobalLoadingBar.jsx';
 import { supabase } from './lib/supabase.js';
 
 const PAGES = [
@@ -53,6 +54,7 @@ export default function App() {
 
   return (
     <div className="mobile-shell">
+      <GlobalLoadingBar />
       <header className="mobile-topbar">
         <span>تسعير الطاقة الشمسية — بلاد اوتو</span>
         <button className="topbar-logout" onClick={logout} title="تسجيل الخروج">

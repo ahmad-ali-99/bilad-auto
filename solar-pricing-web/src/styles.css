@@ -448,3 +448,30 @@ textarea { resize: vertical; min-height: 70px; }
   padding: 5px 12px; font-family: inherit; font-size: 0.8rem; cursor: pointer;
 }
 .topbar-logout:hover { background: rgba(255,255,255,0.28); }
+
+/* شريط التحميل الخفيف أعلى الشاشة — يظهر مع أي عملية جارية */
+.global-loading {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: rgba(26, 90, 156, 0.15);
+  z-index: 9999;
+  overflow: hidden;
+  pointer-events: none;
+}
+.global-loading-bar {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 35%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #1a5a9c, #f5a623);
+  animation: global-loading-slide 1s ease-in-out infinite;
+}
+@keyframes global-loading-slide {
+  0% { right: 100%; }
+  50% { right: -35%; }
+  100% { right: 100%; }
+}
