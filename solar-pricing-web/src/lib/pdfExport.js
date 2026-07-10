@@ -2,9 +2,40 @@
 // ثم مشاركة عبر Web Share API (يشتغل بالموبايل — واتساب مباشرة) أو تنزيل بالمتصفح.
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { PDFDocument } from 'pdf-lib';
 import { buildInvoiceInnerHtml } from './invoiceHtml.js';
 
-export async function exportInvoicePdf({ quote, items, notes, company, fileName }) {
+// يضيف مرفق التصميم لنهاية ملف العرض: صورة → صفحة جديدة بمقاسها، وPDF → دمج صفحاته كاملة
+async function appendAttachment(pdf, attachment) {
+  const data = attachment.data; // data URI: data:<mime>;base64,...
+  if (data.startsWith('data:application/pdf')) {
+    const merged = await PDFDocument.create();
+    const main = await PDFDocument.load(pdf.output('arraybuffer'));
+    const attach = await PDFDocument.load(Uint8Array.from(atob(data.split(',')[1]), (c) => c.charCodeAt(0)));
+    for (const p of await merged.copyPages(main, main.getPageIndices())) merged.addPage(p);
+    for (const p of await merged.copyPages(attach, attach.getPageIndices())) merged.addPage(p);
+    return new Blob([await merged.save()], { type: 'application/pdf' });
+  }
+  // صورة: نحملها لمعرفة أبعادها ونركبها على صفحة A4 بتناسب
+  const img = await new Promise((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = reject;
+    i.src = data;
+  });
+  pdf.addPage();
+  const pageW = 210;
+  const pageH = 297;
+  const margin = 10;
+  const ratio = Math.min((pageW - margin * 2) / img.width, (pageH - margin * 2) / img.height);
+  const w = img.width * ratio;
+  const h = img.height * ratio;
+  const fmt = data.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+  pdf.addImage(data, fmt, (pageW - w) / 2, (pageH - h) / 2, w, h);
+  return pdf.output('blob');
+}
+
+export async function exportInvoicePdf({ quote, items, notes, company, fileName, attachment = null }) {
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-2000px;top:0;width:794px;background:#fff;z-index:-1;';
   host.innerHTML = buildInvoiceInnerHtml({ quote, items, notes, company });
@@ -39,7 +70,13 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName 
       }
     }
 
-    const blob = pdf.output('blob');
+    // إذا اكو مرفق تصميم (صورة/PDF) نلحقه بنهاية الملف
+    let blob;
+    if (attachment && attachment.data) {
+      blob = await appendAttachment(pdf, attachment);
+    } else {
+      blob = pdf.output('blob');
+    }
     const pdfFile = new File([blob], fileName, { type: 'application/pdf' });
 
     // مشاركة (واتساب/إيميل...) إن كان الجهاز يدعمها — مثالي بالموبايل

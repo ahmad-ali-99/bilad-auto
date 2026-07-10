@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { parseRequest } from '../lib/assistant.js';
-import { getAgentKey, runAgent, getIsAdmin } from '../lib/agent.js';
+import { getAgentKey, runAgent, getIsAdmin, getCurrentUsername, loadChat, saveChat, clearChat } from '../lib/agent.js';
 
 // المساعد بالواجهة الأولى:
 // - إذا مفتاح Gemini المجاني مفعّل (الإعدادات) → ايجنت حقيقي بمحادثة كاملة وأدوات
@@ -14,12 +14,34 @@ export default function AssistantBar({ onQuote, onInventory, getDraft }) {
   const [status, setStatus] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const historyRef = useRef([]);
+  const usernameRef = useRef('');
   const scrollRef = useRef(null);
 
   useEffect(() => {
     getAgentKey().then((k) => setApiKey(k || ''));
     getIsAdmin().then(setIsAdmin);
+    // استرجاع محادثة المستخدم المحفوظة — تبقى بعد التنقل بين الصفحات والتحديث
+    getCurrentUsername().then(async (u) => {
+      usernameRef.current = u;
+      const saved = await loadChat(u);
+      if (saved.messages.length) {
+        setMessages(saved.messages);
+        historyRef.current = saved.history || [];
+      }
+    });
   }, []);
+
+  function persist(msgs) {
+    if (usernameRef.current !== '' || msgs.length) {
+      saveChat(usernameRef.current, { messages: msgs, history: historyRef.current });
+    }
+  }
+
+  async function handleClear() {
+    setMessages([]);
+    historyRef.current = [];
+    await clearChat(usernameRef.current);
+  }
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -56,7 +78,11 @@ export default function AssistantBar({ onQuote, onInventory, getDraft }) {
       } else {
         reply = 'ما فهمت — جرب: «زبون احمد يريد منظومة 20 امبير نهاري و10 ليلي 6 ساعات بمساحة 40 متر». وللمساعد الذكي الكامل فعّل مفتاح Gemini المجاني من الإعدادات.';
       }
-      setMessages((m) => [...m, { role: 'user', text: userText }, { role: 'agent', text: reply }]);
+      setMessages((m) => {
+        const next = [...m, { role: 'user', text: userText }, { role: 'agent', text: reply }];
+        persist(next);
+        return next;
+      });
       return;
     }
 
@@ -74,7 +100,11 @@ export default function AssistantBar({ onQuote, onInventory, getDraft }) {
         isAdmin,
       });
       historyRef.current = history.slice(-40); // نحتفظ بآخر جزء من المحادثة
-      setMessages((m) => [...m, { role: 'agent', text: reply }]);
+      setMessages((m) => {
+        const next = [...m, { role: 'agent', text: reply }];
+        persist(next);
+        return next;
+      });
     } catch (err) {
       setMessages((m) => [...m, { role: 'agent', text: 'صار خطأ بالاتصال: ' + err.message }]);
     } finally {
@@ -85,10 +115,17 @@ export default function AssistantBar({ onQuote, onInventory, getDraft }) {
 
   return (
     <div className="card" style={{ marginBottom: 12 }}>
-      <label style={{ fontWeight: 700, color: 'var(--navy)' }}>
-        🤖 المساعد الذكي{isAdmin && ' — صلاحية تعديل ✏'}
-        {apiKey === '' && <span className="muted" style={{ fontWeight: 400 }}> (وضع سريع — فعّل Gemini المجاني من الإعدادات للمحادثة الكاملة)</span>}
-      </label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <label style={{ fontWeight: 700, color: 'var(--navy)', flex: 1 }}>
+          🤖 المساعد الذكي{isAdmin && ' — صلاحية تعديل ✏'}
+          {apiKey === '' && <span className="muted" style={{ fontWeight: 400 }}> (وضع سريع — فعّل Gemini المجاني من الإعدادات للمحادثة الكاملة)</span>}
+        </label>
+        {messages.length > 0 && (
+          <button className="btn btn-secondary btn-sm" onClick={handleClear} title="مسح المحادثة">
+            🧹 مسح
+          </button>
+        )}
+      </div>
 
       {messages.length > 0 && (
         <div

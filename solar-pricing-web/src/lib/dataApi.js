@@ -280,7 +280,37 @@ export const api = {
     async list() {
       const { data, error } = await supabase.from('quotes').select('*').order('id', { ascending: false });
       throwIf(error);
-      return data || [];
+      // نستثني المحذوفة (سلة المهملات) — الفلترة محلية حتى تشتغل حتى قبل إضافة العمود
+      return (data || []).filter((q) => !q.deleted_at);
+    },
+    // سلة المحذوفات: آخر أسبوع فقط، مع تنظيف نهائي تلقائي للأقدم من 7 أيام
+    async listDeleted() {
+      const { data, error } = await supabase.from('quotes').select('*').order('id', { ascending: false });
+      throwIf(error);
+      const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
+      const deleted = (data || []).filter((q) => q.deleted_at);
+      const expired = deleted.filter((q) => new Date(q.deleted_at).getTime() < weekAgo);
+      if (expired.length) {
+        // البنود والملاحظات تنحذف تلقائياً معها (on delete cascade)
+        supabase.from('quotes').delete().in('id', expired.map((q) => q.id)).then(() => {});
+      }
+      return deleted.filter((q) => new Date(q.deleted_at).getTime() >= weekAgo);
+    },
+    async restore(id) {
+      const { error } = await supabase.from('quotes').update({ deleted_at: null, deleted_by: null }).eq('id', id);
+      throwIf(error);
+      return { ok: true };
+    },
+    // إرفاق ملف تصميم (صورة أو PDF) بالعرض — يخزن base64 ويتصدر مع ملف العرض
+    async setAttachment(id, { name, data }) {
+      const { error } = await supabase.from('quotes').update({ attachment_name: name, attachment_data: data }).eq('id', id);
+      throwIf(error);
+      return { ok: true };
+    },
+    async removeAttachment(id) {
+      const { error } = await supabase.from('quotes').update({ attachment_name: null, attachment_data: null }).eq('id', id);
+      throwIf(error);
+      return { ok: true };
     },
     async get(id) {
       const { data: quote } = await supabase.from('quotes').select('*').eq('id', id).single();
@@ -292,7 +322,13 @@ export const api = {
       return { quote, items: items || [], notes: notes || [] };
     },
     async remove(id) {
-      const { error } = await supabase.from('quotes').delete().eq('id', id);
+      // حذف ناعم: يروح لسلة المحذوفات مع تسجيل منو حذفه، ويمكن استرداده خلال أسبوع
+      const { data: { user } } = await supabase.auth.getUser();
+      const username = user?.user_metadata?.username || user?.email || 'غير معروف';
+      const { error } = await supabase
+        .from('quotes')
+        .update({ deleted_at: new Date().toISOString(), deleted_by: username })
+        .eq('id', id);
       throwIf(error);
       return { ok: true };
     },
@@ -310,6 +346,7 @@ export const api = {
         notes: (notes || []).map((n) => n.note_text),
         company,
         fileName: `عرض_سعر_${quote.quote_number}.pdf`,
+        attachment: quote.attachment_data ? { name: quote.attachment_name, data: quote.attachment_data } : null,
       });
     },
     async exportDraftPdf(input) {

@@ -56,6 +56,58 @@ async function getIsAdmin() {
   return ADMIN_USERS.includes(u);
 }
 
+// ===== حفظ محادثة المساعد لكل مستخدم (تبقى بعد التنقل والتحديث، ومشتركة عبر أجهزته) =====
+function chatKeyFor(username) {
+  return 'chat_' + encodeURIComponent(username || 'user').replace(/%/g, '');
+}
+
+async function loadChat(username) {
+  const key = chatKeyFor(username);
+  try {
+    const { data } = await supabase.from('app_config').select('value').eq('key', key).maybeSingle();
+    if (data && data.value) return JSON.parse(data.value);
+  } catch {
+    /* نكمل على المحلي */
+  }
+  try {
+    const raw = localStorage.getItem('biladauto_' + key);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    /* ignore */
+  }
+  return { messages: [], history: [] };
+}
+
+async function saveChat(username, { messages, history }) {
+  // نحد الحجم: آخر 60 رسالة ظاهرة وآخر 40 مدخلة سياق
+  const payload = JSON.stringify({ messages: messages.slice(-60), history: history.slice(-40) });
+  const key = chatKeyFor(username);
+  try {
+    localStorage.setItem('biladauto_' + key, payload);
+  } catch {
+    /* ignore */
+  }
+  try {
+    await supabase.from('app_config').upsert({ key, value: payload });
+  } catch {
+    /* ignore */
+  }
+}
+
+async function clearChat(username) {
+  const key = chatKeyFor(username);
+  try {
+    localStorage.removeItem('biladauto_' + key);
+  } catch {
+    /* ignore */
+  }
+  try {
+    await supabase.from('app_config').delete().eq('key', key);
+  } catch {
+    /* ignore */
+  }
+}
+
 // ===== تعريف الأدوات للموديل =====
 const TOOL_DECLARATIONS = [
   {
@@ -439,4 +491,4 @@ async function runAgent({ apiKey, history, userText, executor, onStatus, isAdmin
   return { text: 'الطلب طول أكثر من اللازم — جزئه وجرب مرة ثانية.', history: contents };
 }
 
-export { getAgentKey, setAgentKey, runAgent, getIsAdmin, SHARE_KEY_SQL };
+export { getAgentKey, setAgentKey, runAgent, getIsAdmin, getCurrentUsername, loadChat, saveChat, clearChat, SHARE_KEY_SQL };
