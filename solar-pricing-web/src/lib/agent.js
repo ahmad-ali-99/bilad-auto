@@ -51,9 +51,14 @@ async function getCurrentUsername() {
   }
 }
 
+// مقارنة متسامحة مع فروقات الهمزة (أ/إ/آ = ا) والمسافات
+function normalizeName(s) {
+  return String(s || '').trim().replace(/[أإآ]/g, 'ا');
+}
+
 async function getIsAdmin() {
-  const u = (await getCurrentUsername()).trim();
-  return ADMIN_USERS.includes(u);
+  const u = normalizeName(await getCurrentUsername());
+  return ADMIN_USERS.some((a) => normalizeName(a) === u);
 }
 
 // ===== حفظ محادثة المساعد لكل مستخدم (تبقى بعد التنقل والتحديث، ومشتركة عبر أجهزته) =====
@@ -413,20 +418,36 @@ async function executeTool(name, args, executor, isAdmin) {
 }
 
 // ===== حلقة الايجنت =====
+// مهلة قصوى لكل نداء — إذا علق السيرفر ما نبقى "نفكر" للأبد، ننتقل للموديل التالي
+const CALL_TIMEOUT_MS = 45000;
+
 async function callGemini(apiKey, model, contents, toolDeclarations) {
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents,
-        tools: [{ functionDeclarations: toolDeclarations }],
-        generationConfig: { temperature: 0.2 },
-      }),
-    }
-  );
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CALL_TIMEOUT_MS);
+  let res;
+  try {
+    res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents,
+          tools: [{ functionDeclarations: toolDeclarations }],
+          generationConfig: { temperature: 0.2 },
+        }),
+        signal: controller.signal,
+      }
+    );
+  } catch (err) {
+    // مهلة أو انقطاع شبكة → نعاملها مثل الازدحام حتى تجرب الحلقة الموديل التالي
+    const e = new Error(err.name === 'AbortError' ? 'مهلة الاتصال انتهت' : 'انقطاع بالاتصال: ' + err.message);
+    e.status = 503;
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) {
     const body = await res.text();
     const err = new Error(`Gemini ${res.status}: ${body.slice(0, 200)}`);
@@ -442,13 +463,16 @@ async function runAgent({ apiKey, history, userText, executor, onStatus, isAdmin
   const toolDeclarations = isAdmin ? [...TOOL_DECLARATIONS, ...ADMIN_TOOL_DECLARATIONS] : TOOL_DECLARATIONS;
   let modelIdx = 0;
 
-  // يستدعي الموديل الحالي وينزل بالقائمة تلقائياً عند التقاعد/الازدحام/امتلاء الحصة
+  // يستدعي الموديل الحالي وينزل بالقائمة تلقائياً عند التقاعد/الازدحام/امتلاء الحصة/المهلة
   async function callWithFallback() {
     for (; modelIdx < MODELS.length; modelIdx++) {
       try {
         return await callGemini(apiKey, MODELS[modelIdx], contents, toolDeclarations);
       } catch (err) {
-        if ([404, 429, 503].includes(err.status) && modelIdx < MODELS.length - 1) continue;
+        if ([404, 429, 503].includes(err.status) && modelIdx < MODELS.length - 1) {
+          if (onStatus) onStatus('الموديل مشغول — أجرب موديل ثاني...');
+          continue;
+        }
         throw err;
       }
     }
