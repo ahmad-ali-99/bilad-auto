@@ -111,46 +111,38 @@ function classifyTiers(combos) {
   return { economy, standard, premium, singleOption: false, insufficient: false, all: sorted };
 }
 
-// ===== دستور التسعير (الهندسة القيمية — معتمد من الشركة) =====
-// economy: أرخص توليفة تغطي الحاجة حتى لو بعدد وحدات أكثر أو ماركات أرخص — أقل سعر نهائي.
-// standard: أفضل قيمة — أقل عدد وحدات ممكن (تركيب أبسط) بأرخص ماركة تحقق القدرة.
-// premium: موثوقية قصوى — أكبر سعة/قدرة متاحة لتقليل الوحدات ونقاط العطل، وأرقى الماركات.
+// ===== دستور التسعير (الهندسة القيمية — معتمد من الشركة، بدون تفضيل ماركات) =====
+// economy: أرخص توليفة تغطي الحاجة حتى لو بعدد وحدات أكثر — أقل سعر نهائي.
+// standard: أقل عدد وحدات ممكن (وحدة وحدة إذا تتحمل)، وبين المتساوية السعر الوسط.
+// premium: نفس قاعدة أقل عدد وحدات، وبين المتساوية الأغلى (الأرقى مواصفات).
 // استثناء الانفيرترات بالـstandard: من 100 أمبير فما فوق نوزع الحمل على ~3 انفيرترات
 // (استمرارية Redundancy وتخفيف حراري) بدل جهاز عملاق واحد.
 
-// standard: أقل عدد وحدات، وبين المتساوية الأرخص
-function pickFewestThenCheapest(combos) {
+// الوسط سعراً ضمن مجموعة (مرتبة تصاعدياً)
+function midByPrice(group) {
+  const sorted = [...group].sort((a, b) => a.totalPrice - b.totalPrice);
+  return sorted[Math.floor((sorted.length - 1) / 2)];
+}
+
+function fewestUnitsGroup(combos) {
   const minUnits = Math.min(...combos.map((c) => c.units));
-  return combos.filter((c) => c.units === minUnits).sort((a, b) => a.totalPrice - b.totalPrice)[0];
+  return combos.filter((c) => c.units === minUnits);
 }
 
-// الماركات الأرقى المعتمدة بفئة premium (بروتوكولات اتصال متطورة وموثوقية أعلى) — Deye أولاً
-const PREMIUM_BRANDS = ['deye', 'ديه', 'ديا'];
-function isPremiumBrand(material) {
-  const s = `${material.brand || ''} ${material.model || ''}`.toLowerCase();
-  return PREMIUM_BRANDS.some((b) => s.includes(b));
+// standard: أقل عدد وحدات، وبين المتساوية السعر الوسط
+function pickFewestThenMid(combos) {
+  return midByPrice(fewestUnitsGroup(combos));
 }
 
-// premium بطاريات: أكبر سعة للوحدة (أقل وحدات ونقاط توصيل)، وبين المتساوية الماركة الأرقى ثم الأغلى
-function pickHighestCapacity(combos) {
-  const maxCap = Math.max(...combos.map((c) => c.material.watt_or_capacity));
-  const top = combos.filter((c) => c.material.watt_or_capacity === maxCap);
-  const preferred = top.filter((c) => isPremiumBrand(c.material));
-  return (preferred.length ? preferred : top).sort((a, b) => b.totalPrice - a.totalPrice)[0];
+// premium: أقل عدد وحدات، وبين المتساوية الأغلى
+function pickFewestThenPriciest(combos) {
+  return fewestUnitsGroup(combos).sort((a, b) => b.totalPrice - a.totalPrice)[0];
 }
 
-// premium انفيرترات: أقل عدد وحدات، ثم الماركة الأرقى، ثم أصغر قدرة كافية (بدون تضخيم بلا داعي)
-function pickFewestThenPremium(combos) {
-  const minUnits = Math.min(...combos.map((c) => c.units));
-  const few = combos.filter((c) => c.units === minUnits);
-  const preferred = few.filter((c) => isPremiumBrand(c.material));
-  return (preferred.length ? preferred : few).sort((a, b) => a.material.watt_or_capacity - b.material.watt_or_capacity)[0];
-}
-
-// standard انفيرترات ≥100A: الأقرب لثلاث وحدات (توزيع الحمل)، وبين المتساوية الأرخص
+// standard انفيرترات ≥100A: الأقرب لثلاث وحدات (توزيع الحمل)، وبين المتساوية السعر الوسط
 function pickClosestToThree(combos) {
   const bestDist = Math.min(...combos.map((c) => Math.abs(c.units - 3)));
-  return combos.filter((c) => Math.abs(c.units - 3) === bestDist).sort((a, b) => a.totalPrice - b.totalPrice)[0];
+  return midByPrice(combos.filter((c) => Math.abs(c.units - 3) === bestDist));
 }
 
 function assignTiers(combos, standardPick, premiumPick) {
@@ -179,7 +171,7 @@ function selectBatteryTiers(batteryMaterials, ampNight, nightSupplyHours, settin
     if (units <= 0) continue;
     combos.push({ material, units, totalPrice: units * material.price });
   }
-  return assignTiers(combos, pickFewestThenCheapest, pickHighestCapacity);
+  return assignTiers(combos, pickFewestThenMid, pickFewestThenPriciest);
 }
 
 // توليفات الألواح: العدد يعتمد على أمبير النهار + عدد بطاريات التوليفة المرافقة
@@ -202,8 +194,8 @@ function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, pane
     combos.push({ material, units, totalPrice: units * material.price });
   }
   const systemAmps = systemAmpSize(ampDay, ampNight);
-  const standardPick = systemAmps >= 100 ? pickClosestToThree : pickFewestThenCheapest;
-  return assignTiers(combos, standardPick, pickFewestThenPremium);
+  const standardPick = systemAmps >= 100 ? pickClosestToThree : pickFewestThenMid;
+  return assignTiers(combos, standardPick, pickFewestThenPriciest);
 }
 
 export {

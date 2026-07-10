@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import SecondaryPickerModal from '../components/SecondaryPickerModal.jsx';
 import AssistantBar from '../components/AssistantBar.jsx';
 
@@ -74,10 +74,12 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
     if (prefill.tier != null) setTier(prefill.tier);
   }, [prefill]);
 
-  const debouncedInputs = useDebouncedValue(
-    { roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel },
-    300
+  // useMemo ضروري: بدونه الكائن يتجدد بكل رندر → المؤقت ينعاد → حلقة إعادة حساب لا نهائية
+  const inputs = useMemo(
+    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel }),
+    [roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel]
   );
+  const debouncedInputs = useDebouncedValue(inputs, 300);
 
   const validInputs =
     Number(debouncedInputs.roofAreaM2) > 0 && Number(debouncedInputs.ampDay) >= 0 && Number(debouncedInputs.ampNight) >= 0 &&

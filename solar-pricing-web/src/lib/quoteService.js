@@ -126,6 +126,19 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
     errors.labor = 'لا يوجد سعر عمل معرّف لهذا الحجم — أضف حجماً جديداً من المخزون';
   }
 
+  // حارس الضبط الهندسي: التوازي المفرط يزيد نقاط العطل ويقترب من حدود التوازي العملية
+  // (بطاريات LiFePO4 عادة حتى ~16 وحدة، والهجينة أحادية الطور حتى ~6-10) — تحذير غير حاجب
+  if (batteryCombo && batteryCombo.units > 12) {
+    warnings.batteryParallel =
+      `ملاحظة هندسية: التوليفة تحتاج ${batteryCombo.units} بطارية بالتوازي — قريب من حدود التوازي العملية للـBMS. ` +
+      'الأفضل بطارية أكبر سعة (شوف مستوى ممتاز أو بدّل يدوياً).';
+  }
+  if (inverterCombo && inverterCombo.units > 4) {
+    warnings.inverterParallel =
+      `ملاحظة هندسية: التوليفة تحتاج ${inverterCombo.units} انفيرترات بالتوازي — تعقيد تركيب وتزامن عالي. ` +
+      'الأفضل انفيرتر أكبر قدرة (شوف مستوى متوسط أو ممتاز أو بدّل يدوياً).';
+  }
+
   // فحص شحن البطاريات من الألواح — تحذير فقط، العرض يُحفظ ويُطبع بالحالتين
   if (batteryCombo && inverterCombo && panelCombo) {
     const check = calc.chargingCheck({
