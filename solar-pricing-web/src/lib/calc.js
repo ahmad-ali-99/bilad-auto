@@ -111,9 +111,67 @@ function classifyTiers(combos) {
   return { economy, standard, premium, singleOption: false, insufficient: false, all: sorted };
 }
 
+// ===== دستور التسعير (الهندسة القيمية — معتمد من الشركة) =====
+// economy: أرخص توليفة تغطي الحاجة حتى لو بعدد وحدات أكثر أو ماركات أرخص — أقل سعر نهائي.
+// standard: أفضل قيمة — أقل عدد وحدات ممكن (تركيب أبسط) بأرخص ماركة تحقق القدرة.
+// premium: موثوقية قصوى — أكبر سعة/قدرة متاحة لتقليل الوحدات ونقاط العطل، وأرقى الماركات.
+// استثناء الانفيرترات بالـstandard: من 100 أمبير فما فوق نوزع الحمل على ~3 انفيرترات
+// (استمرارية Redundancy وتخفيف حراري) بدل جهاز عملاق واحد.
+
+// standard: أقل عدد وحدات، وبين المتساوية الأرخص
+function pickFewestThenCheapest(combos) {
+  const minUnits = Math.min(...combos.map((c) => c.units));
+  return combos.filter((c) => c.units === minUnits).sort((a, b) => a.totalPrice - b.totalPrice)[0];
+}
+
+// الماركات الأرقى المعتمدة بفئة premium (بروتوكولات اتصال متطورة وموثوقية أعلى) — Deye أولاً
+const PREMIUM_BRANDS = ['deye', 'ديه', 'ديا'];
+function isPremiumBrand(material) {
+  const s = `${material.brand || ''} ${material.model || ''}`.toLowerCase();
+  return PREMIUM_BRANDS.some((b) => s.includes(b));
+}
+
+// premium بطاريات: أكبر سعة للوحدة (أقل وحدات ونقاط توصيل)، وبين المتساوية الماركة الأرقى ثم الأغلى
+function pickHighestCapacity(combos) {
+  const maxCap = Math.max(...combos.map((c) => c.material.watt_or_capacity));
+  const top = combos.filter((c) => c.material.watt_or_capacity === maxCap);
+  const preferred = top.filter((c) => isPremiumBrand(c.material));
+  return (preferred.length ? preferred : top).sort((a, b) => b.totalPrice - a.totalPrice)[0];
+}
+
+// premium انفيرترات: أقل عدد وحدات، ثم الماركة الأرقى، ثم أصغر قدرة كافية (بدون تضخيم بلا داعي)
+function pickFewestThenPremium(combos) {
+  const minUnits = Math.min(...combos.map((c) => c.units));
+  const few = combos.filter((c) => c.units === minUnits);
+  const preferred = few.filter((c) => isPremiumBrand(c.material));
+  return (preferred.length ? preferred : few).sort((a, b) => a.material.watt_or_capacity - b.material.watt_or_capacity)[0];
+}
+
+// standard انفيرترات ≥100A: الأقرب لثلاث وحدات (توزيع الحمل)، وبين المتساوية الأرخص
+function pickClosestToThree(combos) {
+  const bestDist = Math.min(...combos.map((c) => Math.abs(c.units - 3)));
+  return combos.filter((c) => Math.abs(c.units - 3) === bestDist).sort((a, b) => a.totalPrice - b.totalPrice)[0];
+}
+
+function assignTiers(combos, standardPick, premiumPick) {
+  if (combos.length === 0) {
+    return { economy: null, standard: null, premium: null, singleOption: false, insufficient: true, all: [] };
+  }
+  const sorted = [...combos].sort((a, b) => a.totalPrice - b.totalPrice);
+  if (sorted.length === 1) {
+    return { economy: sorted[0], standard: sorted[0], premium: sorted[0], singleOption: true, insufficient: false, all: sorted };
+  }
+  return {
+    economy: sorted[0],
+    standard: standardPick(sorted),
+    premium: premiumPick(sorted),
+    singleOption: false,
+    insufficient: false,
+    all: sorted,
+  };
+}
+
 // توليفات البطاريات: لكل موديل بطارية عدد وحدات مطلوب حسب ساعات التجهيز الليلي
-// الاقتصادي = أرخص توليفة تغطي الطاقة حتى لو بعدد وحدات أكثر (قرار الشركة بعد اختبار
-// 10/20/30/40A على البيانات الحية — التكديس صحيح تشغيلياً والتبديل اليدوي متاح)
 function selectBatteryTiers(batteryMaterials, ampNight, nightSupplyHours, settings) {
   const combos = [];
   for (const material of batteryMaterials) {
@@ -121,7 +179,7 @@ function selectBatteryTiers(batteryMaterials, ampNight, nightSupplyHours, settin
     if (units <= 0) continue;
     combos.push({ material, units, totalPrice: units * material.price });
   }
-  return classifyTiers(combos);
+  return assignTiers(combos, pickFewestThenCheapest, pickHighestCapacity);
 }
 
 // توليفات الألواح: العدد يعتمد على أمبير النهار + عدد بطاريات التوليفة المرافقة
@@ -143,7 +201,9 @@ function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, pane
     if (units <= 0) continue;
     combos.push({ material, units, totalPrice: units * material.price });
   }
-  return classifyTiers(combos);
+  const systemAmps = systemAmpSize(ampDay, ampNight);
+  const standardPick = systemAmps >= 100 ? pickClosestToThree : pickFewestThenCheapest;
+  return assignTiers(combos, standardPick, pickFewestThenPremium);
 }
 
 export {
