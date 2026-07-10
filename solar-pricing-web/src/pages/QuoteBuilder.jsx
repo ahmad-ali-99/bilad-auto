@@ -75,17 +75,53 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
     });
   }, []);
 
-  // تعبئة من المساعد: أي حقل جاء بالأمر ينكتب، والباقي يبقى مثل ما هو
+  // وضع تعديل عرض محفوظ: {id, quote_number} — الحفظ يحدث نفس العرض
+  const [editingQuote, setEditingQuote] = useState(null);
+
+  // تعبئة من المساعد أو من «تعديل عرض محفوظ»: أي حقل جاء ينكتب، والباقي يبقى مثل ما هو
   useEffect(() => {
     if (!prefill) return;
     if (prefill.clientName != null) setClientName(prefill.clientName);
     if (prefill.clientPhone != null) setClientPhone(prefill.clientPhone);
+    if (prefill.location != null) setLocation(prefill.location);
     if (prefill.roofAreaM2 != null) setRoofAreaM2(String(prefill.roofAreaM2));
     if (prefill.ampDay != null) setAmpDay(String(prefill.ampDay));
     if (prefill.ampNight != null) setAmpNight(String(prefill.ampNight));
     if (prefill.nightSupplyHours != null) setNightSupplyHours(String(prefill.nightSupplyHours));
     if (prefill.tier != null) setTier(prefill.tier);
+    if (prefill.overrides) setOverrides(prefill.overrides);
+    if (prefill.secondarySelections) setSecondarySel(prefill.secondarySelections);
+    if (prefill.notes) setNotes(prefill.notes);
+    setEditingQuote(prefill.editing || null);
+    setSaveMessage('');
   }, [prefill]);
+
+  function exitEditMode() {
+    setEditingQuote(null);
+    setClientName('');
+    setClientPhone('');
+    setLocation('');
+    setRoofAreaM2('');
+    setAmpDay('');
+    setAmpNight('');
+    setNightSupplyHours('');
+    setOverrides({});
+    setSaveMessage('');
+  }
+
+  async function handleUpdate() {
+    setSaving(true);
+    setSaveMessage('');
+    try {
+      const saved = await window.api.quotes.update(editingQuote.id, buildBaseInput());
+      setSaveMessage(`تم تحديث العرض رقم ${saved.quote_number} بنجاح ✔`);
+      setEditingQuote(null);
+    } catch (err) {
+      setSaveMessage('حدث خطأ أثناء التحديث: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   // useMemo ضروري: بدونه الكائن يتجدد بكل رندر → المؤقت ينعاد → حلقة إعادة حساب لا نهائية
   const inputs = useMemo(
@@ -200,6 +236,16 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
   return (
     <div>
       <h2 className="page-title">إنشاء عرض سعر</h2>
+
+      {editingQuote && (
+        <div className="alert alert-warning" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <b>✏ وضع التعديل — العرض رقم {editingQuote.quote_number}</b>
+          <span className="muted">عدل أي شي وبعدها احفظ التعديلات، أو احفظه كعرض جديد برقم جديد</span>
+          <button className="btn btn-secondary btn-sm" onClick={exitEditMode} style={{ marginInlineStart: 'auto' }}>
+            إلغاء التعديل
+          </button>
+        </div>
+      )}
 
       <AssistantBar onQuote={onAssistantQuote} onInventory={onAssistantInventory} getDraft={() => draftRef.current} />
 
@@ -409,13 +455,24 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
 
           <div className="toolbar">
             <div>{saveMessage && <span className="muted">{saveMessage}</span>}</div>
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <button className="btn btn-secondary" disabled={saving || hasBlockingErrors} onClick={handleExportPdf}>
                 تصدير PDF
               </button>
-              <button className="btn btn-primary" disabled={saving || hasBlockingErrors} onClick={handleSave}>
-                حفظ العرض
-              </button>
+              {editingQuote ? (
+                <>
+                  <button className="btn btn-primary" disabled={saving || hasBlockingErrors} onClick={handleUpdate}>
+                    💾 حفظ التعديلات (عرض {editingQuote.quote_number})
+                  </button>
+                  <button className="btn btn-secondary" disabled={saving || hasBlockingErrors} onClick={handleSave}>
+                    حفظ كعرض جديد
+                  </button>
+                </>
+              ) : (
+                <button className="btn btn-primary" disabled={saving || hasBlockingErrors} onClick={handleSave}>
+                  حفظ العرض
+                </button>
+              )}
             </div>
           </div>
         </>

@@ -91,7 +91,14 @@ export default function App() {
             }}
           />
         )}
-        {page === 'quotes' && <Quotes />}
+        {page === 'quotes' && (
+          <Quotes
+            onEditQuote={(prefill) => {
+              setQuotePrefill({ ...prefill, nonce: Date.now() });
+              setPage('quote');
+            }}
+          />
+        )}
         {page === 'inventory' && <Inventory initialSearch={inventorySearch} />}
         {page === 'settings' && <Settings />}
       </main>

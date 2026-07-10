@@ -277,6 +277,54 @@ export const api = {
 
       return quote;
     },
+    // تحديث عرض محفوظ بمدخلات جديدة: نفس الرقم وتاريخ الإنشاء والمرفق، وبنود وملاحظات جديدة
+    async update(id, input) {
+      const options = await this._options(input);
+      const draft = quoteService.buildQuoteDraft(options, {
+        tier: input.tier,
+        overrides: input.overrides || {},
+        cableMeters: input.cableMeters || {},
+        secondarySelections: input.secondarySelections || null,
+      });
+      const notes = [...(input.notes || []), ...draft.warrantyNotes];
+
+      const { data: quote, error } = await supabase
+        .from('quotes')
+        .update({
+          client_name: input.clientName || null,
+          client_phone: input.clientPhone || null,
+          location: input.location || null,
+          roof_area_m2: input.roofAreaM2,
+          required_amp_day: input.ampDay,
+          required_amp_night: input.ampNight,
+          night_supply_hours: options.nightSupplyHours,
+          selected_tier: input.tier,
+          total_price: draft.total,
+        })
+        .eq('id', id)
+        .select()
+        .single();
+      throwIf(error);
+
+      throwIf((await supabase.from('quote_items').delete().eq('quote_id', id)).error);
+      throwIf((await supabase.from('quote_notes').delete().eq('quote_id', id)).error);
+
+      const itemsPayload = draft.items.map((item, idx) => ({
+        quote_id: id,
+        material_id: item.material_id,
+        description_snapshot: item.description,
+        quantity: item.quantity,
+        unit: item.unit,
+        unit_price: item.unit_price,
+        subtotal: item.subtotal,
+        sort_order: idx,
+      }));
+      throwIf((await supabase.from('quote_items').insert(itemsPayload)).error);
+      const notesPayload = notes.map((note_text, idx) => ({ quote_id: id, note_text, sort_order: idx }));
+      if (notesPayload.length) throwIf((await supabase.from('quote_notes').insert(notesPayload)).error);
+
+      return quote;
+    },
     async list() {
       const { data, error } = await supabase.from('quotes').select('*').order('id', { ascending: false });
       throwIf(error);
