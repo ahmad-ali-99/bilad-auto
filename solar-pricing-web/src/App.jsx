@@ -78,7 +78,7 @@ export default function App() {
       <header className="mobile-topbar">
         <span className="brand">
           <span className="brand-logo">
-            <img src="logo.png" alt="" />
+            <img src="logo-mark.png" alt="" />
           </span>
           <span className="brand-text">
             <b>بلاد اوتو</b>
