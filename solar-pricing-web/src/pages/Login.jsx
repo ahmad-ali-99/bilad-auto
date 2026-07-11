@@ -58,7 +58,7 @@ export default function Login({ onLoggedIn }) {
 
         <div className="field">
           <label>اسم المستخدم</label>
-          <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus placeholder="مثال: حيدر" />
+          <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus placeholder="مثال: حيدر — أو رقمك مثل 2" />
         </div>
         <div className="field">
           <label>الرمز</label>

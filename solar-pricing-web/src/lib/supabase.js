@@ -13,7 +13,11 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 
 // نحوّل اسم المستخدم البسيط (حيدر1) لإيميل صناعي داخلي حتى يقبله Supabase Auth
 export function usernameToEmail(username) {
-  const clean = String(username).trim().toLowerCase().replace(/\s+/g, '_');
+  let clean = String(username).trim().toLowerCase().replace(/\s+/g, '');
+  // الأرقام المجردة اختصار لحسابات الموظفين: «2» = حساب مستخدم2 وهكذا
+  if (/^[0-9\u0660-\u0669]+$/.test(clean)) {
+    clean = 'مستخدم' + clean.replace(/[\u0660-\u0669]/g, (d) => '\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669'.indexOf(d));
+  }
   // نرمّز الحروف العربية لتكون صالحة بجزء الإيميل المحلي
   const encoded = encodeURIComponent(clean).replace(/%/g, '');
   return `${encoded}@biladauto.local`;

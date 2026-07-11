@@ -46,7 +46,8 @@ export default function App() {
     return <Login onLoggedIn={() => {}} />;
   }
 
-  const currentUser = session.user?.user_metadata?.username || '';
+  // حسابات الموظفين المرقمة تظهر بالرقم فقط (مستخدم2 ← 2)
+  const currentUser = (session.user?.user_metadata?.username || '').replace(/^مستخدم(?=[0-9])/, '');
 
   // خروج فوري: نمسح الجلسة محلياً بدون انتظار السيرفر (كان يعلق إذا الشبكة بطيئة)
   async function logout() {
