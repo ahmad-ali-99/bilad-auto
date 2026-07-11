@@ -65,3 +65,72 @@ describe('فحص المساحة الحاجب باقٍ', () => {
     expect(draft.errors.roofArea).toContain('27');
   });
 });
+
+describe('نسبة الزيادة والخصم على العرض', () => {
+  const base = () => optionsFor({ roofAreaM2: 28, ampDay: 15, ampNight: 15, nightSupplyHours: 8 });
+
+  it('بدون adjustments: لا سطر زيادة/خصم والمجموع كما هو', () => {
+    const draft = buildQuoteDraft(base(), { tier: 'economy', cableMeters: { 6: 143 } });
+    expect(draft.total).toBe(9686000);
+    expect(draft.items.some((i) => /زيادة|خصم/.test(i.description))).toBe(false);
+    expect(draft.adjustments.markupAmount).toBe(0);
+    expect(draft.adjustments.discountAmount).toBe(0);
+  });
+
+  it('زيادة علنية 10%: سطر واضح بالعرض والمجموع يرتفع بالضبط', () => {
+    const draft = buildQuoteDraft(base(), {
+      tier: 'economy',
+      cableMeters: { 6: 143 },
+      adjustments: { markupPercent: 10, markupMode: 'visible' },
+    });
+    const row = draft.items.find((i) => i.description === 'نسبة زيادة 10%');
+    expect(row).toBeTruthy();
+    expect(row.subtotal).toBe(968600);
+    expect(draft.total).toBe(9686000 + 968600);
+    expect(draft.adjustments.subtotal).toBe(9686000);
+  });
+
+  it('زيادة موزعة 10%: بلا سطر إضافي، الأسعار نفسها ترتفع والمجموع يقارب +10%', () => {
+    const plain = buildQuoteDraft(base(), { tier: 'economy', cableMeters: { 6: 143 } });
+    const draft = buildQuoteDraft(base(), {
+      tier: 'economy',
+      cableMeters: { 6: 143 },
+      adjustments: { markupPercent: 10, markupMode: 'distributed' },
+    });
+    expect(draft.items.length).toBe(plain.items.length); // ماكو سطر زيادة
+    expect(draft.items.some((i) => /زيادة/.test(i.description))).toBe(false);
+    // كل بند سعره أعلى أو يساوي البند الأصلي، والمجموع ضمن ±1% من الهدف (بسبب تقريب الأسعار)
+    for (let i = 0; i < plain.items.length; i++) {
+      expect(draft.items[i].unit_price).toBeGreaterThanOrEqual(plain.items[i].unit_price);
+    }
+    const target = plain.total * 1.1;
+    expect(Math.abs(draft.total - target) / target).toBeLessThan(0.01);
+    // البند المجموع = الكمية × سعر الوحدة (متسق للطباعة)
+    for (const item of draft.items) expect(item.subtotal).toBe(Math.round(item.quantity * item.unit_price));
+  });
+
+  it('خصم 5%: سطر خصم بقيمة سالبة ينطرح من المجموع', () => {
+    const draft = buildQuoteDraft(base(), {
+      tier: 'economy',
+      cableMeters: { 6: 143 },
+      adjustments: { discountPercent: 5 },
+    });
+    const row = draft.items.find((i) => i.description === 'خصم 5%');
+    expect(row).toBeTruthy();
+    expect(row.subtotal).toBe(-484300);
+    expect(draft.total).toBe(9686000 - 484300);
+  });
+
+  it('زيادة علنية + خصم معاً: الخصم ينحسب على المجموع بعد الزيادة', () => {
+    const draft = buildQuoteDraft(base(), {
+      tier: 'economy',
+      cableMeters: { 6: 143 },
+      adjustments: { markupPercent: 10, markupMode: 'visible', discountPercent: 5 },
+    });
+    const afterMarkup = 9686000 + 968600;
+    const discount = Math.round(afterMarkup * 0.05);
+    expect(draft.total).toBe(afterMarkup - discount);
+    expect(draft.adjustments.markupAmount).toBe(968600);
+    expect(draft.adjustments.discountAmount).toBe(discount);
+  });
+});

@@ -1,7 +1,12 @@
 // بناء كائن التعبئة الكاملة لفتح عرض محفوظ بوضع التعديل — مشترك بين صفحة العروض
 // وتنبيه التكرار بصفحة إنشاء العرض. المواد المبدلة يدوياً والثانوية تُستنتج من البنود.
 export async function buildEditPrefill(quoteId) {
-  const [full, materials] = await Promise.all([window.api.quotes.get(quoteId), window.api.materials.list()]);
+  const [full, materials, adjustments] = await Promise.all([
+    window.api.quotes.get(quoteId),
+    window.api.materials.list(),
+    // نسبة الزيادة/الخصم المحفوظة للعرض — ترجع حتى الزيادة الموزعة (المخفية)
+    window.api.config.get(`quote_adj_${quoteId}`).catch(() => null),
+  ]);
   if (!full) return null;
   const byId = new Map(materials.map((m) => [m.id, m]));
   const overrides = {};
@@ -28,6 +33,7 @@ export async function buildEditPrefill(quoteId) {
     tier: full.quote.selected_tier,
     overrides,
     secondarySelections,
+    adjustments: adjustments || null,
     notes: full.notes.map((n) => n.note_text),
   };
 }

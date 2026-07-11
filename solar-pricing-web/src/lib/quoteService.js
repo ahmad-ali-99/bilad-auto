@@ -101,11 +101,60 @@ function pickCombo(tiersResult, tier, overrides, category, errors) {
   return tiersResult[tier];
 }
 
+// تقريب سعر معدَّل حتى يبقى شكله طبيعياً بالعرض (الزيادة الموزعة ما تطلع أرقام شاذة)
+function roundAdjustedPrice(p) {
+  const abs = Math.abs(p);
+  if (abs >= 100000) return Math.round(p / 1000) * 1000;
+  if (abs >= 10000) return Math.round(p / 250) * 250;
+  return Math.round(p / 50) * 50;
+}
+
+function formatPercent(p) {
+  return String(Math.round(p * 100) / 100);
+}
+
+// نسبة الزيادة/الخصم على المسودة — adjustments: { markupPercent, markupMode, discountPercent }
+// markupMode: 'visible' = سطر علني بالعرض، 'distributed' = تتوزع على أسعار البنود نفسها.
+// الخصم دائماً سطر علني يُطرح من المجموع النهائي.
+function applyAdjustments(items, total, adjustments) {
+  const markupPercent = Number(adjustments?.markupPercent) || 0;
+  const discountPercent = Number(adjustments?.discountPercent) || 0;
+  const markupMode = adjustments?.markupMode === 'distributed' ? 'distributed' : 'visible';
+  const summary = { markupPercent, markupMode, discountPercent, markupAmount: 0, discountAmount: 0, subtotal: total };
+
+  if (markupPercent > 0) {
+    if (markupMode === 'distributed') {
+      for (const item of items) {
+        item.unit_price = roundAdjustedPrice(item.unit_price * (1 + markupPercent / 100));
+        item.subtotal = Math.round(item.quantity * item.unit_price);
+      }
+      const newTotal = items.reduce((s, i) => s + i.subtotal, 0);
+      summary.markupAmount = newTotal - total;
+      total = newTotal;
+    } else {
+      const amount = Math.round((total * markupPercent) / 100);
+      items.push({ material_id: null, description: `نسبة زيادة ${formatPercent(markupPercent)}%`, unit: 'قطعي', quantity: 1, unit_price: amount, subtotal: amount });
+      summary.markupAmount = amount;
+      total += amount;
+    }
+  }
+
+  if (discountPercent > 0) {
+    const amount = Math.round((total * discountPercent) / 100);
+    items.push({ material_id: null, description: `خصم ${formatPercent(discountPercent)}%`, unit: 'قطعي', quantity: 1, unit_price: -amount, subtotal: -amount });
+    summary.discountAmount = amount;
+    total -= amount;
+  }
+
+  return { total, summary };
+}
+
 // يبني مسودة العرض الكاملة لمستوى معين — بدون أي فحص لكمية المخزون (المواد مجرد خيارات)
 // secondarySelections (اختياري): { [materialId]: { qty } } — إذا مرّر، تنضاف فقط المواد الثانوية
 // المذكورة فيه؛ qty رقم = كمية يدوية، وqty فارغ/null = كمية تلقائية (حسب الألواح أو وحدة واحدة).
 // إذا لم يمرّر يبقى السلوك القديم: كل الثانوية "عدد/قطعي" تنضاف تلقائياً + أمتار من cableMeters.
-function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, secondarySelections = null }) {
+// adjustments (اختياري): نسبة الزيادة (علنية/موزعة) ونسبة الخصم — تنطبق بعد اكتمال البنود.
+function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, secondarySelections = null, adjustments = null }) {
   const { settings, roofAreaM2, ampDay, ampNight, batteryTiers, panelMaterials, inverterMaterials, secondary, labor, systemAmps } = options;
 
   const errors = {};
@@ -216,6 +265,10 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
     total += labor.price;
   }
 
+  // نسبة الزيادة (علنية أو موزعة على الأسعار) ونسبة الخصم — على مجموع البنود النهائي
+  const adjusted = applyAdjustments(items, total, adjustments);
+  total = adjusted.total;
+
   const warrantyNotes = [panelCombo, inverterCombo, batteryCombo]
     .filter((c) => c && c.material.warranty_note)
     .map((c) => c.material.warranty_note);
@@ -228,6 +281,7 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
     panelTiers,
     inverterTiers,
     internalNotes,
+    adjustments: adjusted.summary,
     singleOptionCategories: {
       panel: panelTiers.singleOption,
       battery: batteryTiers.singleOption,

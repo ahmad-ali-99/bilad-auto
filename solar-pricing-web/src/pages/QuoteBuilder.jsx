@@ -33,6 +33,10 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
   const [ampNight, setAmpNight] = useState('');
   const [nightSupplyHours, setNightSupplyHours] = useState('');
   const [tier, setTier] = useState('economy');
+  // نسبة الزيادة: علنية (سطر بالعرض) أو موزعة (تنضرب على أسعار البنود نفسها) + نسبة الخصم
+  const [markupPercent, setMarkupPercent] = useState('');
+  const [markupMode, setMarkupMode] = useState('visible');
+  const [discountPercent, setDiscountPercent] = useState('');
   const [overrides, setOverrides] = useState({});
   // المواد الثانوية المختارة للعرض: { [materialId]: { qty } } — تبدأ بالأساسيات (هيكل + صبات)
   const [secondarySel, setSecondarySel] = useState({});
@@ -104,6 +108,13 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
     if (p.tier != null) setTier(p.tier);
     if (p.overrides) setOverrides(p.overrides);
     if (p.secondarySelections) setSecondarySel(p.secondarySelections);
+    // فتح عرض للتعديل يمرر adjustments دائماً (حتى لو null) — نرجع نسبه المحفوظة أو نصفرها
+    if ('adjustments' in p) {
+      const a = p.adjustments || {};
+      setMarkupPercent(Number(a.markupPercent) > 0 ? String(a.markupPercent) : '');
+      setMarkupMode(a.markupMode === 'distributed' ? 'distributed' : 'visible');
+      setDiscountPercent(Number(a.discountPercent) > 0 ? String(a.discountPercent) : '');
+    }
     if (p.notes) setNotes(p.notes);
     setEditingQuote(p.editing || null);
     setSaveMessage('');
@@ -169,6 +180,9 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
     setAmpNight('');
     setNightSupplyHours('');
     setOverrides({});
+    setMarkupPercent('');
+    setMarkupMode('visible');
+    setDiscountPercent('');
     setSaveMessage('');
   }
 
@@ -188,8 +202,8 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
 
   // useMemo ضروري: بدونه الكائن يتجدد بكل رندر → المؤقت ينعاد → حلقة إعادة حساب لا نهائية
   const inputs = useMemo(
-    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel }),
-    [roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel]
+    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent }),
+    [roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent]
   );
   const debouncedInputs = useDebouncedValue(inputs, 300);
 
@@ -214,6 +228,11 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
         tier: debouncedInputs.tier,
         overrides: debouncedInputs.overrides,
         secondarySelections: debouncedInputs.secondarySel,
+        adjustments: {
+          markupPercent: Number(debouncedInputs.markupPercent) || 0,
+          markupMode: debouncedInputs.markupMode,
+          discountPercent: Number(debouncedInputs.discountPercent) || 0,
+        },
       })
       .then(setPreview)
       .finally(() => setCalculating(false));
@@ -235,6 +254,11 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
       tier,
       overrides,
       secondarySelections: secondarySel,
+      adjustments: {
+        markupPercent: Number(markupPercent) || 0,
+        markupMode,
+        discountPercent: Number(discountPercent) || 0,
+      },
       notes: notes || [],
     };
   }
@@ -388,6 +412,59 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
           ))}
         </div>
 
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed #d5dde6' }}>
+          <b style={{ color: 'var(--navy)' }}>💹 زيادة / خصم على العرض</b>
+          <div className="grid-3" style={{ marginTop: 8 }}>
+            <div className={fieldClass('markupPercent')}>
+              <label>نسبة الزيادة %</label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={markupPercent}
+                onChange={(e) => setMarkupPercent(e.target.value)}
+                placeholder="بدون زيادة"
+              />
+            </div>
+            <div className="field">
+              <label>طريقة الزيادة</label>
+              <div className="tier-toggle" style={{ margin: 0, opacity: Number(markupPercent) > 0 ? 1 : 0.45 }}>
+                <button
+                  type="button"
+                  className={markupMode === 'visible' ? 'active' : ''}
+                  onClick={() => setMarkupMode('visible')}
+                  title="تنكتب سطر واضح بجدول العرض"
+                >
+                  علنية بالعرض
+                </button>
+                <button
+                  type="button"
+                  className={markupMode === 'distributed' ? 'active' : ''}
+                  onClick={() => setMarkupMode('distributed')}
+                  title="تنضرب على أسعار المواد نفسها — ما يبين منها شي للزبون"
+                >
+                  موزعة على الأسعار
+                </button>
+              </div>
+            </div>
+            <div className={fieldClass('discountPercent')}>
+              <label>نسبة الخصم %</label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={discountPercent}
+                onChange={(e) => setDiscountPercent(e.target.value)}
+                placeholder="بدون خصم"
+              />
+            </div>
+          </div>
+          <p className="muted" style={{ margin: '4px 0 0', fontSize: '0.82rem' }}>
+            العلنية تظهر سطر «نسبة زيادة» بجدول العرض، والموزعة ترفع أسعار البنود نفسها بدون أي سطر إضافي.
+            الخصم يظهر دائماً سطر «خصم» وينطرح من المجموع النهائي.
+          </p>
+        </div>
+
         {secondaryMaterials.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 12, paddingTop: 10, borderTop: '1px dashed #d5dde6' }}>
             <b style={{ color: 'var(--navy)' }}>المواد الثانوية بالعرض:</b>
@@ -460,6 +537,24 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
                 {calculating ? '⏳ يحسب... ' : ''}المجموع الكلي: {fmt(draft.total)} دينار
               </span>
             </div>
+
+            {draft.adjustments && (draft.adjustments.markupAmount > 0 || draft.adjustments.discountAmount > 0) && (
+              <p className="muted" style={{ marginTop: 2 }}>
+                مجموع البنود قبل الزيادة/الخصم: <b>{fmt(draft.adjustments.subtotal)}</b> دينار
+                {draft.adjustments.markupAmount > 0 && (
+                  <>
+                    {' — '}زيادة {draft.adjustments.markupPercent}%{' '}
+                    {draft.adjustments.markupMode === 'distributed' ? '(موزعة على الأسعار — ما تظهر للزبون)' : '(سطر علني بالعرض)'}:{' '}
+                    <b>+{fmt(draft.adjustments.markupAmount)}</b>
+                  </>
+                )}
+                {draft.adjustments.discountAmount > 0 && (
+                  <>
+                    {' — '}خصم {draft.adjustments.discountPercent}%: <b>−{fmt(draft.adjustments.discountAmount)}</b>
+                  </>
+                )}
+              </p>
+            )}
 
             {draft.internalNotes && draft.internalNotes.length > 0 && (
               <div style={{ marginBottom: 10 }}>
