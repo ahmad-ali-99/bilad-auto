@@ -12,6 +12,7 @@ function fmt(n) {
 }
 
 export default function ImportPreviewModal({ parsed, onClose, onDone }) {
+  const [maxed, setMaxed] = useState(false);
   const [rows, setRows] = useState(parsed.rows.map((r) => ({ ...r, include: true })));
   const [laborRows, setLaborRows] = useState(parsed.labor.map((l) => ({ ...l, include: true })));
   const [existingLaborAmps, setExistingLaborAmps] = useState(null);
@@ -90,7 +91,8 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+      <div className={maxed ? "modal modal-wide modal-max" : "modal modal-wide"} onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="modal-zoom-btn" onClick={() => setMaxed((m) => !m)} title="تكبير / تصغير النافذة">{maxed ? "🗕" : "⛶"}</button>
         <h3>معاينة الاستيراد — {parsed.fileName}</h3>
         <p className="muted">
           راجع الصفوف وعدّل أي شي غلط قبل الحفظ. المواد المعلّمة "تحديث" راح تحدّث سعر وكمية مادة موجودة

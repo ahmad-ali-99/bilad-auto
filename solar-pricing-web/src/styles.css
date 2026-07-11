@@ -836,3 +836,49 @@ h2.page-title::before {
   .brand-text small { font-size: 0.6rem; }
   h2.page-title { margin: 4px 0 10px; }
 }
+
+/* ═══ نوافذ قابلة للتكبير والتحجيم — للكتابة والتعديل المريح ═══ */
+.modal { position: relative; }
+/* زر تكبير/تصغير بزاوية النافذة */
+.modal-zoom-btn {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid #d7dee7;
+  background: #f4f7fa;
+  color: var(--navy);
+  font-size: 1rem;
+  cursor: pointer;
+  z-index: 5;
+  transition: background 0.15s, transform 0.12s;
+}
+.modal-zoom-btn:hover { background: #e8eef5; }
+.modal-zoom-btn:active { transform: scale(0.93); }
+
+/* وضع ملء الشاشة */
+.modal-max {
+  width: 96vw !important;
+  max-width: 96vw !important;
+  height: 93vh !important;
+  max-height: 93vh !important;
+  overflow-y: auto !important;
+}
+.modal-max textarea { min-height: 170px !important; }
+.modal-max .import-table-wrap { max-height: none !important; }
+
+/* على الحاسوب: سحب حجم النافذة من زاويتها السفلية */
+@media (hover: hover) and (pointer: fine) {
+  .modal { resize: both; overflow: auto; min-width: 340px; min-height: 200px; }
+}
+
+/* خانات النصوص تتمدد عمودياً براحة وخط أوضح للكتابة */
+.modal textarea {
+  resize: vertical;
+  min-height: 95px;
+  font-size: 15px;
+  line-height: 1.7;
+  font-family: 'Cairo', sans-serif;
+}

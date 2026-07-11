@@ -16,6 +16,7 @@ function emptyForm(category) {
 }
 
 export default function MaterialFormModal({ category, initial, onClose, onSave }) {
+  const [maxed, setMaxed] = useState(false);
   const [form, setForm] = useState(
     initial
       ? {
@@ -53,7 +54,8 @@ export default function MaterialFormModal({ category, initial, onClose, onSave }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className={maxed ? "modal modal-max" : "modal"} onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="modal-zoom-btn" onClick={() => setMaxed((m) => !m)} title="تكبير / تصغير النافذة">{maxed ? "🗕" : "⛶"}</button>
         <h3>{initial ? 'تعديل مادة' : 'إضافة مادة جديدة'}</h3>
         <form onSubmit={handleSubmit}>
           <div className="grid-2">

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 function fmt(n) {
   return Math.round(n || 0).toLocaleString('en-US');
@@ -15,6 +15,7 @@ function effectiveQty(material, sel, panelCount) {
 
 // نافذة وحدة لاختيار المواد الثانوية للعرض — الأساسيات محددة افتراضياً والباقي حسب الحاجة
 export default function SecondaryPickerModal({ secondary, selections, panelCount, onChange, onClose }) {
+  const [maxed, setMaxed] = useState(false);
   const [defaultsMsg, setDefaultsMsg] = React.useState('');
 
   // اعتماد التحديد الحالي كافتراضي دائم مشترك لكل المستخدمين (يخزن بقاعدة البيانات)
@@ -47,7 +48,8 @@ export default function SecondaryPickerModal({ secondary, selections, panelCount
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+      <div className={maxed ? "modal modal-wide modal-max" : "modal modal-wide"} onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="modal-zoom-btn" onClick={() => setMaxed((m) => !m)} title="تكبير / تصغير النافذة">{maxed ? "🗕" : "⛶"}</button>
         <h3>المواد الثانوية للعرض</h3>
         <p className="muted">
           أشّر على المواد اللي تريدها بهذا العرض. الهيكل والصبات محددة تلقائياً (أساسية بكل عرض)، وتكدر تشيل أو
