@@ -44,7 +44,21 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
   try {
     await document.fonts.ready;
     const sheet = host.querySelector('.inv-sheet');
+
+    // نجمع حدود العناصر (صفوف الجدول، الملاحظات، الترويسة...) قبل الرسم — حتى القص
+    // بين الصفحات يصير عند حدود الصفوف فقط ولا ينقص أي صف أو رقم من نصه
+    const sheetRect = sheet.getBoundingClientRect();
+    const domCuts = [];
+    sheet.querySelectorAll('tr, li, .title-bar, .header, .client-table, .notes-section h3, .footer').forEach((el) => {
+      const r = el.getBoundingClientRect();
+      domCuts.push(r.top - sheetRect.top, r.bottom - sheetRect.top);
+    });
+
     const canvas = await html2canvas(sheet, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+    const domToCanvas = canvas.width / sheetRect.width;
+    const cuts = [...new Set(domCuts.map((v) => Math.round(v * domToCanvas)))]
+      .filter((v) => v > 0 && v < canvas.height)
+      .sort((a, b) => a - b);
 
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageWmm = 210;
@@ -57,16 +71,26 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
       const pageHpx = Math.floor((pageHmm / pageWmm) * canvas.width);
       let y = 0;
       let first = true;
-      while (y < canvas.height) {
-        const sliceH = Math.min(pageHpx, canvas.height - y);
+      while (y < canvas.height - 2) {
+        const limit = y + pageHpx;
+        let next = Math.min(limit, canvas.height);
+        if (limit < canvas.height) {
+          // آخر حد آمن (نهاية صف) قبل حافة الصفحة — وإذا ماكو حد مناسب نقص عند الحافة
+          const safe = cuts.filter((c) => c > y + pageHpx * 0.35 && c <= limit);
+          if (safe.length) next = safe[safe.length - 1];
+        }
+        const sliceH = next - y;
         const slice = document.createElement('canvas');
         slice.width = canvas.width;
         slice.height = sliceH;
-        slice.getContext('2d').drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+        const ctx = slice.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, slice.width, slice.height);
+        ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
         if (!first) pdf.addPage();
         pdf.addImage(slice.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageWmm, (sliceH * pageWmm) / canvas.width);
         first = false;
-        y += sliceH;
+        y = next;
       }
     }
 
