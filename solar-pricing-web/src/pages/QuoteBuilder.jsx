@@ -135,7 +135,7 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
       } catch {
         /* ignore */
       }
-    }, 600);
+    }, 400);
     return () => clearTimeout(t);
   }, [clientName, clientPhone, editingQuote]);
 

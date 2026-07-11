@@ -222,22 +222,38 @@ export const api = {
       };
     },
     // كشف تكرار العرض: هل يوجد عرض محفوظ بنفس اسم العميل ورقم الموبايل؟
-    // فحص حي أثناء الكتابة: هل اكو عرض سابق لنفس الاسم أو نفس رقم الهاتف؟ (نستثني المحذوفة)
+    // فحص حي أثناء الكتابة: هل اكو عرض سابق لنفس الاسم أو نفس رقم الهاتف؟
+    // المطابقة محلية ومرنة: الأرقام تقارن كأرقام فقط (نتجاهل المسافات والرموز ونحول
+    // الأرقام العربية)، وتنطبق حتى لو المكتوب جزء من بداية الرقم المخزن أو العكس؛
+    // والأسماء تتطابق مع تجاهل فروقات الهمزة والمسافات. نستثني المحذوفة.
     async findClientMatch({ clientName, clientPhone }) {
-      const name = (clientName || '').trim();
-      const phone = (clientPhone || '').trim();
-      const conds = [];
-      if (name.length >= 3) conds.push(`client_name.eq.${name}`);
-      if (phone.length >= 8) conds.push(`client_phone.eq.${phone}`);
-      if (!conds.length) return null;
+      const toDigits = (s) =>
+        String(s || '')
+          .replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+          .replace(/\D/g, '');
+      const normName = (s) => String(s || '').trim().replace(/\s+/g, ' ').replace(/[أإآ]/g, 'ا');
+      const digits = toDigits(clientPhone);
+      const name = normName(clientName);
+      if (name.length < 3 && digits.length < 8) return null;
+
       const { data, error } = await supabase
         .from('quotes')
         .select('id, quote_number, client_name, client_phone, created_at, total_price, deleted_at')
-        .or(conds.join(','))
         .order('id', { ascending: false })
-        .limit(5);
+        .limit(1000);
       throwIf(error);
-      return (data || []).find((q) => !q.deleted_at) || null;
+      return (
+        (data || []).find((q) => {
+          if (q.deleted_at) return false;
+          const qDigits = toDigits(q.client_phone);
+          const phoneHit =
+            digits.length >= 8 &&
+            qDigits.length >= 8 &&
+            (qDigits === digits || qDigits.startsWith(digits) || digits.startsWith(qDigits));
+          const nameHit = name.length >= 3 && normName(q.client_name) === name;
+          return phoneHit || nameHit;
+        }) || null
+      );
     },
     async findDuplicate({ clientName, clientPhone }) {
       if (!clientName && !clientPhone) return null;
