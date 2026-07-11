@@ -40,12 +40,13 @@ export default function Login({ onLoggedIn }) {
     }
   }
 
-  const logo = company?.logo_path && company.logo_path.startsWith('data:') ? company.logo_path : null;
+  // شعار الشركة: المرفوع بقاعدة البيانات إن وجد، وإلا الشعار الرسمي المضمن بالتطبيق
+  const logo = company?.logo_path && company.logo_path.startsWith('data:') ? company.logo_path : 'logo.png';
 
   return (
     <div className="splash-overlay">
       <form className="login-card" onSubmit={handleLogin}>
-        {logo ? <img className="login-logo" src={logo} alt="الشعار" /> : <div className="login-logo-fallback">☀</div>}
+        <img className="login-logo" src={logo} alt="بلاد اوتو" />
         <h1 className="login-title">{company?.company_name || 'تسعير الطاقة الشمسية'}</h1>
         <p className="login-sub">تسجيل الدخول</p>
 

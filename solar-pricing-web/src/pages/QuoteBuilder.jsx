@@ -542,24 +542,28 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
             />
           </div>
 
-          <div className="toolbar">
-            <div>{saveMessage && <span className="muted">{saveMessage}</span>}</div>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {saveMessage && <div className="alert alert-info">{saveMessage}</div>}
+          {/* شريط إجراءات ثابت أسفل المحتوى: المجموع + الحفظ دائماً بمتناول اليد حتى مع التمرير */}
+          <div className="action-bar">
+            <span className="action-total">
+              {calculating ? '⏳' : '💰'} {fmt(draft.total)} <small>دينار</small>
+            </span>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               <button className="btn btn-secondary" disabled={saving || hasBlockingErrors} onClick={handleExportPdf}>
-                تصدير PDF
+                📄 PDF
               </button>
               {editingQuote ? (
                 <>
                   <button className="btn btn-primary" disabled={saving || hasBlockingErrors} onClick={handleUpdate}>
-                    💾 حفظ التعديلات (عرض {editingQuote.quote_number})
+                    💾 حفظ التعديلات ({editingQuote.quote_number})
                   </button>
                   <button className="btn btn-secondary" disabled={saving || hasBlockingErrors} onClick={handleSave}>
-                    حفظ كعرض جديد
+                    حفظ كجديد
                   </button>
                 </>
               ) : (
                 <button className="btn btn-primary" disabled={saving || hasBlockingErrors} onClick={handleSave}>
-                  حفظ العرض
+                  💾 حفظ العرض
                 </button>
               )}
             </div>

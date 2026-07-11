@@ -150,6 +150,7 @@ export default function Quotes({ onEditQuote }) {
       {showTrash && (
         <div className="card" style={{ border: '1px solid #e0b4b4' }}>
           <h3 style={{ marginTop: 0, color: '#a33' }}>سلة المحذوفات — تنحذف نهائياً بعد أسبوع من الحذف</h3>
+          <div className="table-scroll">
           <table className="data-table">
             <thead>
               <tr>
@@ -185,9 +186,11 @@ export default function Quotes({ onEditQuote }) {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
+      <div className="table-scroll">
       <table className="data-table">
         <thead>
           <tr>
@@ -249,6 +252,7 @@ export default function Quotes({ onEditQuote }) {
           )}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

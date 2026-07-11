@@ -35,7 +35,7 @@ export default function App() {
     return (
       <div className="splash-overlay">
         <div className="splash-center">
-          <div className="splash-logo-fallback">☀</div>
+          <img src="logo.png" alt="بلاد اوتو" className="splash-brand-logo" />
           <p style={{ color: '#fff' }}>جاري التحميل...</p>
         </div>
       </div>
@@ -48,8 +48,16 @@ export default function App() {
 
   const currentUser = session.user?.user_metadata?.username || '';
 
+  // خروج فوري: نمسح الجلسة محلياً بدون انتظار السيرفر (كان يعلق إذا الشبكة بطيئة)
   async function logout() {
-    await supabase.auth.signOut();
+    try {
+      await Promise.race([
+        supabase.auth.signOut({ scope: 'local' }),
+        new Promise((resolve) => setTimeout(resolve, 1500)),
+      ]);
+    } finally {
+      setSession(null);
+    }
   }
 
   // رفرش كامل بضغطة: يفحص وجود نسخة أحدث من التطبيق ثم يعيد التحميل بأحدث بيانات
@@ -68,7 +76,9 @@ export default function App() {
       <GlobalLoadingBar />
       <header className="mobile-topbar">
         <span className="brand">
-          <span className="brand-logo">☀</span>
+          <span className="brand-logo">
+            <img src="logo.png" alt="" />
+          </span>
           <span className="brand-text">
             <b>بلاد اوتو</b>
             <small>
