@@ -337,6 +337,7 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
       <AssistantBar onQuote={onAssistantQuote} onInventory={onAssistantInventory} getDraft={() => draftRef.current} />
 
       <div className="card">
+        <h3 className="card-heading">👤 معلومات الزبون</h3>
         <div className="grid-3">
           <div className={fieldClass('clientName')}>
             <label>اسم العميل</label>
@@ -354,6 +355,7 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
       </div>
 
       <div className="card">
+        <h3 className="card-heading">⚡ متطلبات المنظومة</h3>
         <div className="big-inputs big-inputs-4">
           <div className={fieldClass('roofAreaM2')}>
             <label>مساحة السطح (م²)</label>
