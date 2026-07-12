@@ -35,6 +35,135 @@ async function appendAttachment(pdf, attachment) {
   return pdf.output('blob');
 }
 
+// تحويل Blob إلى base64 خام (بدون ترويسة data:) — لكتابة الملف عبر جسر Capacitor
+const blobToBase64 = (blob) =>
+  new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',')[1]);
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+
+function downloadBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// داخل تطبيق الأندرويد (غلاف Capacitor): الـWebView ما يدعم مشاركة الويب أصلاً،
+// فنكتب الملف مؤقتاً بذاكرة التطبيق ونفتح نافذة المشاركة الأصلية (واتساب وغيرها).
+// يرجع null إذا ما احنا داخل التطبيق أو الجسر غير متوفر — عندها نكمل بمسارات الويب.
+async function shareViaCapacitor(blob, fileName) {
+  const cap = typeof window !== 'undefined' ? window.Capacitor : null;
+  const FS = cap?.Plugins?.Filesystem;
+  const NativeShare = cap?.Plugins?.Share;
+  if (!cap?.isNativePlatform?.() || !FS || !NativeShare) return null;
+  const isCancel = (err) => /cancel|abort|dismiss/i.test(String(err?.message || err?.code || ''));
+  let uri;
+  try {
+    const data = await blobToBase64(blob);
+    const written = await FS.writeFile({ path: fileName, data, directory: 'CACHE' });
+    uri = written.uri;
+  } catch {
+    return null; // فشلت الكتابة → نجرب مسارات الويب
+  }
+  try {
+    await NativeShare.share({ title: fileName, files: [uri] });
+    return { canceled: false, shared: true };
+  } catch (err) {
+    if (isCancel(err)) return { canceled: true };
+  }
+  try {
+    // نسخ أقدم من الإضافة ما تدعم files[] — نجرب الصيغة المفردة
+    await NativeShare.share({ title: fileName, url: uri });
+    return { canceled: false, shared: true };
+  } catch (err) {
+    return isCancel(err) ? { canceled: true } : null;
+  }
+}
+
+// نافذة خيارات احتياطية: بعض الأجهزة تلغي إذن المشاركة لأن توليد الملف ياخذ ثواني،
+// فنعرض زر مشاركة بضغطة جديدة (إذن جديد) + زر تنزيل — حتى ما يضيع الملف بصمت أبداً.
+function showDeliverDialog({ pdfFile, blob, fileName, allowShare }) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText =
+      'position:fixed;inset:0;background:rgba(12,22,38,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
+    const box = document.createElement('div');
+    box.style.cssText =
+      'background:#fff;border-radius:16px;padding:22px 20px;max-width:340px;width:100%;text-align:center;direction:rtl;font-family:inherit;box-shadow:0 14px 44px rgba(0,0,0,.35);';
+    box.innerHTML =
+      '<div style="font-size:2.2rem">📄</div>' +
+      '<h3 style="margin:6px 0 2px;color:#1a3a5c;font-size:1.05rem">ملف العرض جاهز</h3>' +
+      '<p style="margin:2px 0 14px;color:#5a6b7d;font-size:.88rem">اختار شلون تريد تطلعه:</p>';
+    const btn = (label, primary) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      b.style.cssText =
+        'display:block;width:100%;margin:8px 0;padding:12px;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;border:1px solid ' +
+        (primary ? '#f5a623;background:linear-gradient(135deg,#ffc251,#f5a623);color:#1a2a4a;' : '#c8d3de;background:#f4f7fa;color:#1a3a5c;');
+      return b;
+    };
+    const done = (result) => {
+      document.body.removeChild(overlay);
+      resolve(result);
+    };
+    if (allowShare) {
+      const shareBtn = btn('📤 مشاركة (واتساب وغيره)', true);
+      shareBtn.onclick = async () => {
+        try {
+          await navigator.share({ files: [pdfFile], title: fileName });
+          done({ canceled: false, shared: true });
+        } catch (err) {
+          if (err && err.name === 'AbortError') return; // رجع من قائمة المشاركة — النافذة تبقى
+          downloadBlob(blob, fileName);
+          done({ canceled: false, shared: false });
+        }
+      };
+      box.appendChild(shareBtn);
+    }
+    const dlBtn = btn('⬇ تنزيل الملف بالجهاز', !allowShare);
+    dlBtn.onclick = () => {
+      downloadBlob(blob, fileName);
+      done({ canceled: false, shared: false });
+    };
+    box.appendChild(dlBtn);
+    const cancelBtn = btn('إغلاق', false);
+    cancelBtn.style.opacity = '0.8';
+    cancelBtn.onclick = () => done({ canceled: true });
+    box.appendChild(cancelBtn);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+  });
+}
+
+// إيصال الملف للمستخدم بالترتيب: مشاركة أصلية (تطبيق أندرويد) ← مشاركة ويب ←
+// نافذة الخيارات عند فشل الإذن ← تنزيل مباشر. مصدَّرة حتى تنفحص بالاختبارات.
+export async function deliverPdf(blob, fileName) {
+  const pdfFile = new File([blob], fileName, { type: 'application/pdf' });
+
+  const nativeResult = await shareViaCapacitor(blob, fileName);
+  if (nativeResult) return nativeResult;
+
+  if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+    try {
+      await navigator.share({ files: [pdfFile], title: fileName });
+      return { canceled: false, shared: true };
+    } catch (err) {
+      if (err && err.name === 'AbortError') return { canceled: true };
+      // غالباً انتهى إذن المشاركة (NotAllowedError) — نعرض الخيارات بضغطة جديدة
+      return showDeliverDialog({ pdfFile, blob, fileName, allowShare: true });
+    }
+  }
+
+  downloadBlob(blob, fileName);
+  return { canceled: false, shared: false };
+}
+
 export async function exportInvoicePdf({ quote, items, notes, company, fileName, attachment = null }) {
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-2000px;top:0;width:794px;background:#fff;z-index:-1;';
@@ -101,27 +230,7 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
     } else {
       blob = pdf.output('blob');
     }
-    const pdfFile = new File([blob], fileName, { type: 'application/pdf' });
-
-    // مشاركة (واتساب/إيميل...) إن كان الجهاز يدعمها — مثالي بالموبايل
-    if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-      try {
-        await navigator.share({ files: [pdfFile], title: fileName });
-        return { canceled: false, shared: true };
-      } catch (err) {
-        if (err && err.name === 'AbortError') return { canceled: true };
-        // لو فشلت المشاركة نكمل للتنزيل
-      }
-    }
-
-    // تنزيل مباشر (سطح المكتب أو متصفح ما يدعم المشاركة)
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    a.click();
-    URL.revokeObjectURL(url);
-    return { canceled: false, shared: false };
+    return await deliverPdf(blob, fileName);
   } finally {
     document.body.removeChild(host);
   }
