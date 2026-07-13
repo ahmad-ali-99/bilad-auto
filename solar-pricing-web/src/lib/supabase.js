@@ -8,7 +8,9 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'PLACEHOLDER
 export const isConfigured = !SUPABASE_URL.includes('PLACEHOLDER') && !SUPABASE_ANON_KEY.includes('PLACEHOLDER');
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true },
+  // pkce + التقاط الجلسة من الرابط: ضروري لرجوع دخول Google (OAuth redirect) بثبات
+  // حتى داخل متصفحات التطبيقات — والتخزين المحلي يبقي الجلسة بعد إغلاق المتصفح
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' },
 });
 
 // نحوّل اسم المستخدم البسيط (حيدر1) لإيميل صناعي داخلي حتى يقبله Supabase Auth

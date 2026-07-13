@@ -32,8 +32,16 @@ export default function App() {
       setSession(data.session);
       setLoading(false);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
-    return () => sub.subscription.unsubscribe();
+    // صمام أمان: مهما صار ما تبقى شاشة التحميل معلقة — بعد 6 ثوانٍ نعرض الدخول
+    const failsafe = setTimeout(() => setLoading(false), 6000);
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+      setLoading(false);
+    });
+    return () => {
+      clearTimeout(failsafe);
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   if (loading) {

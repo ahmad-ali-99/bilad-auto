@@ -106,6 +106,21 @@ export default function Login({ onLoggedIn }) {
           {busy ? 'جاري الدخول...' : 'دخول'}
         </button>
         <div className="login-dev">تطوير: احمد علي — 07728736250</div>
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              const reg = await navigator.serviceWorker?.getRegistration();
+              await reg?.update();
+            } catch {
+              /* نكمل */
+            }
+            window.location.reload();
+          }}
+          style={{ background: 'none', border: 'none', color: '#8a97a5', marginTop: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.78rem', textDecoration: 'underline' }}
+        >
+          🔄 تحديث التطبيق لآخر نسخة
+        </button>
       </form>
     </div>
   );

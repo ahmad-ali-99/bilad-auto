@@ -31,6 +31,8 @@ export default function CustomerView({ user }) {
   const fullName = user?.user_metadata?.full_name || user?.user_metadata?.name || '';
 
   useEffect(() => {
+    // صمام أمان: إذا تأخر الجلب لأي سبب نعرض بوابة الهاتف بدل تعليق شاشة التحميل
+    const failsafe = setTimeout(() => setPhone((p) => (p === null ? '' : p)), 7000);
     supabase
       .from('leads')
       .select('phone')
@@ -38,6 +40,7 @@ export default function CustomerView({ user }) {
       .maybeSingle()
       .then(({ data }) => setPhone(data?.phone || ''))
       .catch(() => setPhone(''));
+    return () => clearTimeout(failsafe);
   }, [user.id]);
 
   async function savePhone() {
