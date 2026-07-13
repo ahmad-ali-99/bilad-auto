@@ -17,11 +17,31 @@ export default function Settings() {
   const [message, setMessage] = useState('');
   const [agentKey, setAgentKeyInput] = useState('');
   const [agentMsg, setAgentMsg] = useState(null);
+  // التقسيط المصرفي: نسبة الفائدة (معامل ضرب مثل 1.35) وعدد الأشهر — مشتركة لكل الموظفين
+  const [instRate, setInstRate] = useState('1.35');
+  const [instMonths, setInstMonths] = useState('60');
+  const [instMsg, setInstMsg] = useState('');
 
   function reload() {
     window.api.settings.get().then(setSettings);
     window.api.company.get().then(setCompany);
     getAgentKey().then(setAgentKeyInput);
+    window.api.config.get('installment').then((cfg) => {
+      if (cfg?.rate > 0) setInstRate(String(cfg.rate));
+      if (cfg?.months > 0) setInstMonths(String(cfg.months));
+    }).catch(() => {});
+  }
+
+  async function saveInstallment(e) {
+    e.preventDefault();
+    const rate = Number(instRate);
+    const months = Math.round(Number(instMonths));
+    if (!(rate > 0) || !(months > 0)) {
+      setInstMsg('أدخل نسبة وأشهر صحيحة — النسبة معامل ضرب مثل 1.35');
+      return;
+    }
+    await window.api.config.set('installment', { rate, months });
+    setInstMsg(`تم الحفظ ✔ كل عرض مؤشر عليه التقسيط راح يحسب: المجموع × ${rate} ÷ ${months} شهر`);
   }
 
   useEffect(reload, []);
@@ -108,6 +128,28 @@ export default function Settings() {
         <button className="btn btn-primary" type="submit">
           حفظ ثوابت المعادلات
         </button>
+      </form>
+
+      <form className="card" onSubmit={saveInstallment}>
+        <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>🏦 التقسيط المصرفي</h3>
+        <p className="muted" style={{ marginTop: 0 }}>
+          من تؤشر «التقسيط المصرفي» بأي عرض، يحسب تلقائياً: <b>المجموع الكلي × نسبة الفائدة ÷ عدد الأشهر</b>{' '}
+          ويطلع بالعرض المجموع مع الفائدة والقسط الشهري. النسبة معامل ضرب مباشر (مثال: 1.35 يعني المجموع + 35%).
+        </p>
+        <div className="grid-2">
+          <div className="field">
+            <label>نسبة فائدة المصرف (معامل الضرب)</label>
+            <input type="number" step="any" min="0" value={instRate} onChange={(e) => setInstRate(e.target.value)} placeholder="مثال: 1.35" />
+          </div>
+          <div className="field">
+            <label>عدد أشهر التقسيط</label>
+            <input type="number" min="1" value={instMonths} onChange={(e) => setInstMonths(e.target.value)} placeholder="60" />
+          </div>
+        </div>
+        <button className="btn btn-primary" type="submit">
+          حفظ إعدادات التقسيط
+        </button>
+        {instMsg && <div className="alert alert-info" style={{ marginTop: 10, marginBottom: 0 }}>{instMsg}</div>}
       </form>
 
       <form className="card" onSubmit={saveAgentKey}>

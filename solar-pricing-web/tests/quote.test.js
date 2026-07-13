@@ -134,3 +134,37 @@ describe('نسبة الزيادة والخصم على العرض', () => {
     expect(draft.adjustments.discountAmount).toBe(discount);
   });
 });
+
+describe('التقسيط المصرفي: المجموع × النسبة ÷ الأشهر (بدون جمع 1)', () => {
+  const base = () => optionsFor({ roofAreaM2: 28, ampDay: 15, ampNight: 15, nightSupplyHours: 8 });
+
+  it('نسبة 1.3 و60 شهر تطابق عروض الشركة القديمة', () => {
+    const draft = buildQuoteDraft(base(), {
+      tier: 'economy',
+      cableMeters: { 6: 143 },
+      adjustments: { installment: { enabled: true, rate: 1.3, months: 60 } },
+    });
+    expect(draft.total).toBe(9686000); // المجموع النقدي ما يتغير
+    expect(draft.installment.totalWithInterest).toBe(Math.round(9686000 * 1.3));
+    expect(draft.installment.monthly).toBe(Math.round((9686000 * 1.3) / 60));
+    // ما ينضاف أي سطر للجدول
+    expect(draft.items.some((i) => /تقسيط|فائدة/.test(i.description))).toBe(false);
+  });
+
+  it('التقسيط ينحسب على المجموع بعد الزيادة والخصم', () => {
+    const draft = buildQuoteDraft(base(), {
+      tier: 'economy',
+      cableMeters: { 6: 143 },
+      adjustments: { markupPercent: 10, markupMode: 'visible', installment: { enabled: true, rate: 1.35, months: 60 } },
+    });
+    const finalTotal = 9686000 + 968600;
+    expect(draft.total).toBe(finalTotal);
+    expect(draft.installment.totalWithInterest).toBe(Math.round(finalTotal * 1.35));
+    expect(draft.installment.monthly).toBe(Math.round((finalTotal * 1.35) / 60));
+  });
+
+  it('بدون تأشير: لا يوجد تقسيط بالمسودة', () => {
+    const draft = buildQuoteDraft(base(), { tier: 'economy', cableMeters: { 6: 143 } });
+    expect(draft.installment).toBe(null);
+  });
+});

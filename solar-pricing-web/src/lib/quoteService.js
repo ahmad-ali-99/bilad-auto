@@ -146,6 +146,18 @@ function applyAdjustments(items, total, adjustments) {
     total -= amount;
   }
 
+  // التقسيط المصرفي: المبلغ الكلي النهائي × نسبة الفائدة (معامل ضرب مثل 1.35 بدون جمع 1)
+  // ÷ عدد الأشهر = القسط الشهري. لا يغير مجموع العرض النقدي — يُعرض كسطرين إضافيين.
+  const inst = adjustments?.installment;
+  if (inst?.enabled) {
+    const rate = Number(inst.rate) || 0;
+    const months = Math.max(1, Math.round(Number(inst.months) || 60));
+    if (rate > 0) {
+      const totalWithInterest = Math.round(total * rate);
+      summary.installment = { rate, months, totalWithInterest, monthly: Math.round(totalWithInterest / months) };
+    }
+  }
+
   return { total, summary };
 }
 
@@ -282,6 +294,7 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
     inverterTiers,
     internalNotes,
     adjustments: adjusted.summary,
+    installment: adjusted.summary.installment || null,
     singleOptionCategories: {
       panel: panelTiers.singleOption,
       battery: batteryTiers.singleOption,

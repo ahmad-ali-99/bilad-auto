@@ -37,6 +37,8 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
   const [markupPercent, setMarkupPercent] = useState('');
   const [markupMode, setMarkupMode] = useState('visible');
   const [discountPercent, setDiscountPercent] = useState('');
+  // التقسيط المصرفي: جيك بوينت — النسبة والأشهر من الإعدادات، والمعادلة: المجموع × النسبة ÷ الأشهر
+  const [installment, setInstallment] = useState(false);
   const [overrides, setOverrides] = useState({});
   // المواد الثانوية المختارة للعرض: { [materialId]: { qty } } — تبدأ بالأساسيات (هيكل + صبات)
   const [secondarySel, setSecondarySel] = useState({});
@@ -114,6 +116,7 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
       setMarkupPercent(Number(a.markupPercent) > 0 ? String(a.markupPercent) : '');
       setMarkupMode(a.markupMode === 'distributed' ? 'distributed' : 'visible');
       setDiscountPercent(Number(a.discountPercent) > 0 ? String(a.discountPercent) : '');
+      setInstallment(!!a.installment?.enabled);
     }
     if (p.notes) setNotes(p.notes);
     setEditingQuote(p.editing || null);
@@ -183,6 +186,7 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
     setMarkupPercent('');
     setMarkupMode('visible');
     setDiscountPercent('');
+    setInstallment(false);
     setSaveMessage('');
   }
 
@@ -202,8 +206,8 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
 
   // useMemo ضروري: بدونه الكائن يتجدد بكل رندر → المؤقت ينعاد → حلقة إعادة حساب لا نهائية
   const inputs = useMemo(
-    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent }),
-    [roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent]
+    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment }),
+    [roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment]
   );
   const debouncedInputs = useDebouncedValue(inputs, 300);
 
@@ -233,6 +237,7 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
           markupMode: debouncedInputs.markupMode,
           discountPercent: Number(debouncedInputs.discountPercent) || 0,
         },
+        installment: debouncedInputs.installment,
       })
       .then(setPreview)
       .finally(() => setCalculating(false));
@@ -259,6 +264,7 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
         markupMode,
         discountPercent: Number(discountPercent) || 0,
       },
+      installment,
       notes: notes || [],
     };
   }
@@ -463,6 +469,13 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
             العلنية تظهر سطر «نسبة زيادة» بجدول العرض، والموزعة ترفع أسعار البنود نفسها بدون أي سطر إضافي.
             الخصم يظهر دائماً سطر «خصم» وينطرح من المجموع النهائي.
           </p>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontWeight: 700, color: 'var(--navy)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={installment} onChange={(e) => setInstallment(e.target.checked)} style={{ width: 18, height: 18 }} />
+            🏦 إدراج التقسيط المصرفي بالعرض
+            <span className="muted" style={{ fontWeight: 400, fontSize: '0.82rem' }}>
+              (المجموع × نسبة فائدة المصرف ÷ عدد الأشهر — النسبة والأشهر من الإعدادات)
+            </span>
+          </label>
         </div>
 
         {secondaryMaterials.length > 0 && (
@@ -554,6 +567,13 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
                   </>
                 )}
               </p>
+            )}
+
+            {draft.installment && (
+              <div className="alert alert-info" style={{ marginTop: 6, display: 'flex', gap: 16, flexWrap: 'wrap', fontWeight: 700 }}>
+                <span>🏦 المجموع مع فائدة المصرف (×{draft.installment.rate}): {fmt(draft.installment.totalWithInterest)} دينار</span>
+                <span>القسط الشهري لمدة {draft.installment.months} شهر: {fmt(draft.installment.monthly)} دينار</span>
+              </div>
             )}
 
             {draft.internalNotes && draft.internalNotes.length > 0 && (

@@ -33,7 +33,7 @@ function densityScale(itemCount) {
 }
 
 // يرجع HTML داخلي لعنصر بعرض 794px (A4 على 96dpi) جاهز للالتقاط بـhtml2canvas
-export function buildInvoiceInnerHtml({ quote, items, notes, company }) {
+export function buildInvoiceInnerHtml({ quote, items, notes, company, installment = null }) {
   const systemAmps = Math.max(quote.required_amp_day || 0, quote.required_amp_night || 0);
   const logo = company.logo_path && company.logo_path.startsWith('data:') ? company.logo_path : null;
   const { fontSize, cellPad } = densityScale(items.length);
@@ -88,6 +88,8 @@ export function buildInvoiceInnerHtml({ quote, items, notes, company }) {
 .inv-sheet .col-price { width: 16%; text-align: center; white-space: nowrap; }
 .inv-sheet .col-total { width: 20%; text-align: center; white-space: nowrap; font-weight: 700; }
 .inv-sheet .total-row td { background: #1a3a5c !important; color: #fff; font-weight: 700; font-size: 1.05em; padding: ${cellPad + 2}px 6px; }
+.inv-sheet .inst-row td { background: #f5a623 !important; color: #1a2a4a; font-weight: 700; font-size: 1em; padding: ${cellPad + 1}px 6px; }
+.inv-sheet .inst-monthly td { background: #ffd88a !important; }
 .inv-sheet .notes-section h3 { color: #1a3a5c; font-size: 0.95em; margin: 6px 0 2px; }
 .inv-sheet .notes-section ol { margin: 0; padding-right: 18px; }
 .inv-sheet .notes-section li { font-size: 0.85em; line-height: 1.35; }
@@ -131,6 +133,9 @@ export function buildInvoiceInnerHtml({ quote, items, notes, company }) {
     <tbody>
       ${rowsHtml}
       <tr class="total-row"><td colspan="5">المجموع الكلي</td><td>${formatNumber(quote.total_price)}</td></tr>
+      ${installment ? `
+      <tr class="inst-row"><td colspan="5">المجموع الكلي مع فائدة المصرف (بالتقسيط)</td><td>${formatNumber(installment.totalWithInterest)}</td></tr>
+      <tr class="inst-row inst-monthly"><td colspan="5">القسط الشهري لمدة ${formatNumber(installment.months)} شهر</td><td>${formatNumber(installment.monthly)}</td></tr>` : ''}
     </tbody>
   </table>
   <div class="notes-section"><h3>ملاحظات:</h3><ol>${notesHtml}</ol></div>

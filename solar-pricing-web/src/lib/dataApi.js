@@ -185,6 +185,20 @@ export const api = {
   },
 
   quotes: {
+    // إعدادات التقسيط المصرفي المشتركة (نسبة الفائدة كمعامل ضرب + عدد الأشهر) —
+    // تتعدل من صفحة الإعدادات وتنسحب تلقائياً على كل عرض مؤشر عليه التقسيط
+    async _installment(input) {
+      if (!input.installment) return null;
+      const cfg = await api.config.get('installment');
+      return {
+        enabled: true,
+        rate: Number(cfg?.rate) > 0 ? Number(cfg.rate) : 1.35,
+        months: Number(cfg?.months) > 0 ? Number(cfg.months) : 60,
+      };
+    },
+    async _adjustments(input) {
+      return { ...(input.adjustments || {}), installment: await this._installment(input) };
+    },
     async _options(input) {
       const [materials, { data: laborTiers }, { data: settingsRow }] = await Promise.all([
         allMaterials(),
@@ -208,7 +222,7 @@ export const api = {
         overrides: input.overrides || {},
         cableMeters: input.cableMeters || {},
         secondarySelections: input.secondarySelections || null,
-        adjustments: input.adjustments || null,
+        adjustments: await this._adjustments(input),
       });
       return {
         options: {
@@ -269,12 +283,17 @@ export const api = {
     // حتى ترجع بوضع التعديل حتى لو كانت الزيادة موزعة (مخفية) بدون سطر ظاهر
     async _saveAdjustments(quoteId, adjustments) {
       const a = adjustments || {};
-      const active = (Number(a.markupPercent) || 0) > 0 || (Number(a.discountPercent) || 0) > 0;
+      const active =
+        (Number(a.markupPercent) || 0) > 0 || (Number(a.discountPercent) || 0) > 0 || a.installment?.enabled;
       try {
         await api.config.set(`quote_adj_${quoteId}`, active ? {
           markupPercent: Number(a.markupPercent) || 0,
           markupMode: a.markupMode === 'distributed' ? 'distributed' : 'visible',
           discountPercent: Number(a.discountPercent) || 0,
+          // لقطة نسبة الفائدة والأشهر وقت الحفظ — تغيير الإعدادات لاحقاً لا يغير العروض المحفوظة
+          installment: a.installment?.enabled
+            ? { enabled: true, rate: Number(a.installment.rate) || 1.35, months: Number(a.installment.months) || 60 }
+            : null,
         } : null);
       } catch {
         /* جدول app_config اختياري — فشله لا يمنع حفظ العرض نفسه */
@@ -287,7 +306,7 @@ export const api = {
         overrides: input.overrides || {},
         cableMeters: input.cableMeters || {},
         secondarySelections: input.secondarySelections || null,
-        adjustments: input.adjustments || null,
+        adjustments: await this._adjustments(input),
       });
       const { data: profile } = await supabase.from('company_profile').select('notes_default').eq('id', 1).single();
       const defaultNotes = Array.isArray(profile?.notes_default) ? profile.notes_default : JSON.parse(profile?.notes_default || '[]');
@@ -325,7 +344,7 @@ export const api = {
       const notesPayload = notes.map((note_text, idx) => ({ quote_id: quote.id, note_text, sort_order: idx }));
       if (notesPayload.length) throwIf((await supabase.from('quote_notes').insert(notesPayload)).error);
 
-      await this._saveAdjustments(quote.id, input.adjustments);
+      await this._saveAdjustments(quote.id, await this._adjustments(input));
       return quote;
     },
     // تحديث عرض محفوظ بمدخلات جديدة: نفس الرقم وتاريخ الإنشاء والمرفق، وبنود وملاحظات جديدة
@@ -336,7 +355,7 @@ export const api = {
         overrides: input.overrides || {},
         cableMeters: input.cableMeters || {},
         secondarySelections: input.secondarySelections || null,
-        adjustments: input.adjustments || null,
+        adjustments: await this._adjustments(input),
       });
       const notes = [...(input.notes || []), ...draft.warrantyNotes];
 
@@ -375,7 +394,7 @@ export const api = {
       const notesPayload = notes.map((note_text, idx) => ({ quote_id: id, note_text, sort_order: idx }));
       if (notesPayload.length) throwIf((await supabase.from('quote_notes').insert(notesPayload)).error);
 
-      await this._saveAdjustments(id, input.adjustments);
+      await this._saveAdjustments(id, await this._adjustments(input));
       return quote;
     },
     async list() {
@@ -436,12 +455,22 @@ export const api = {
     async exportPdf(id) {
       const { data: quote } = await supabase.from('quotes').select('*').eq('id', id).single();
       if (!quote) throw new Error('العرض غير موجود');
-      const [{ data: items }, { data: notes }, { data: company }] = await Promise.all([
+      const [{ data: items }, { data: notes }, { data: company }, savedAdj] = await Promise.all([
         supabase.from('quote_items').select('*').eq('quote_id', id).order('sort_order'),
         supabase.from('quote_notes').select('*').eq('quote_id', id).order('sort_order'),
         supabase.from('company_profile').select('*').eq('id', 1).single(),
+        api.config.get(`quote_adj_${id}`).catch(() => null),
       ]);
+      // التقسيط انحفظ مع العرض بنسبته وأشهره وقت الحفظ — نعيد حسابه من مجموع العرض
+      let installment = null;
+      const inst = savedAdj?.installment;
+      if (inst?.enabled && Number(inst.rate) > 0) {
+        const months = Math.max(1, Math.round(Number(inst.months) || 60));
+        const totalWithInterest = Math.round(quote.total_price * Number(inst.rate));
+        installment = { rate: Number(inst.rate), months, totalWithInterest, monthly: Math.round(totalWithInterest / months) };
+      }
       return exportInvoicePdf({
+        installment,
         quote,
         items: (items || []).map((i) => ({ ...i, description: i.description_snapshot })),
         notes: (notes || []).map((n) => n.note_text),
@@ -457,7 +486,7 @@ export const api = {
         overrides: input.overrides || {},
         cableMeters: input.cableMeters || {},
         secondarySelections: input.secondarySelections || null,
-        adjustments: input.adjustments || null,
+        adjustments: await this._adjustments(input),
       });
       const { data: company } = await supabase.from('company_profile').select('*').eq('id', 1).single();
       const defaultNotes = Array.isArray(company?.notes_default) ? company.notes_default : JSON.parse(company?.notes_default || '[]');
@@ -472,7 +501,7 @@ export const api = {
         required_amp_day: input.ampDay,
         required_amp_night: input.ampNight,
       };
-      return exportInvoicePdf({ quote: pseudoQuote, items: draft.items, notes, company, fileName: 'عرض_سعر_معاينة.pdf' });
+      return exportInvoicePdf({ quote: pseudoQuote, items: draft.items, notes, company, fileName: 'عرض_سعر_معاينة.pdf', installment: draft.installment });
     },
   },
 

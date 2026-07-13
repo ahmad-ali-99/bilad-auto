@@ -164,10 +164,10 @@ export async function deliverPdf(blob, fileName) {
   return { canceled: false, shared: false };
 }
 
-export async function exportInvoicePdf({ quote, items, notes, company, fileName, attachment = null }) {
+export async function exportInvoicePdf({ quote, items, notes, company, fileName, attachment = null, installment = null }) {
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-2000px;top:0;width:794px;background:#fff;z-index:-1;';
-  host.innerHTML = buildInvoiceInnerHtml({ quote, items, notes, company });
+  host.innerHTML = buildInvoiceInnerHtml({ quote, items, notes, company, installment });
   document.body.appendChild(host);
 
   try {
