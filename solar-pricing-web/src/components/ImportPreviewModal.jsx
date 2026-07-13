@@ -95,8 +95,8 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
         <button type="button" className="modal-zoom-btn" onClick={() => setMaxed((m) => !m)} title="تكبير / تصغير النافذة">{maxed ? "🗕" : "⛶"}</button>
         <h3>معاينة الاستيراد — {parsed.fileName}</h3>
         <p className="muted">
-          راجع الصفوف وعدّل أي شي غلط قبل الحفظ. المواد المعلّمة "تحديث" راح تحدّث سعر وكمية مادة موجودة
-          (نفس الفئة والموديل والسعة)، والمعلّمة "جديد" تنضاف كمادة جديدة.
+          راجع الصفوف وصحّح أي خطأ قبل الحفظ. المواد المعلّمة "تحديث" ستُحدّث سعر وكمية مادة موجودة
+          (نفس الفئة والموديل والسعة)، والمعلّمة "جديد" تُضاف كمادة جديدة.
         </p>
 
         {parsed.warnings.length > 0 && (
@@ -129,7 +129,7 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
                   </td>
                   <td>
                     {row.matchStatus === 'update' ? (
-                      <span className="tag tag-update" title={`راح يحدّث: ${row.matchTarget}`}>تحديث</span>
+                      <span className="tag tag-update" title={`سيُحدّث: ${row.matchTarget}`}>تحديث</span>
                     ) : (
                       <span className="tag tag-new">جديد</span>
                     )}
@@ -173,7 +173,7 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={8} className="muted" style={{ textAlign: 'center', padding: 20 }}>
-                    ما انقرأ أي صف مواد من الملف
+                    لم يُقرأ أي صف مواد من الملف
                   </td>
                 </tr>
               )}
@@ -184,7 +184,7 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
         {laborRows.length > 0 && (
           <div className="card" style={{ marginTop: 12 }}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 8 }}>
-              <b>أجور العمل بالملف — اختار الي تريد تستوردها ({includedLaborCount} من {laborRows.length})</b>
+              <b>أجور العمل في الملف — اختر ما تريد استيراده ({includedLaborCount} من {laborRows.length})</b>
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
@@ -217,7 +217,7 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
                         {existingLaborAmps == null ? (
                           <span className="muted">...</span>
                         ) : existingLaborAmps.has(Number(l.system_amps)) ? (
-                          <span className="tag tag-update" title="راح يحدّث سعر نفس الحجم الموجود">تحديث</span>
+                          <span className="tag tag-update" title="سيُحدّث سعر الحجم الموجود نفسه">تحديث</span>
                         ) : (
                           <span className="tag tag-new">جديد</span>
                         )}

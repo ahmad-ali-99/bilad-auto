@@ -353,7 +353,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
           const proceed = confirm(
             `يوجد عرض محفوظ لهذا العميل مسبقاً:\n` +
             `العرض رقم ${dup.quote_number} بتاريخ ${dupDate} بمجموع ${Math.round(dup.total_price).toLocaleString('en-US')} دينار.\n\n` +
-            `تريد تكمل وتحفظ عرضاً جديداً؟`
+            `هل تريد المتابعة وحفظ عرض جديد؟`
           );
           if (!proceed) {
             setSaveMessage('تم إلغاء الحفظ — العرض موجود مسبقاً');
@@ -406,7 +406,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
         <button
           className="btn btn-secondary btn-sm"
           onClick={startNewQuote}
-          title="تصفير الشاشة كاملة لبدء عرض جديد — المسودة الحالية تنمسح"
+          title="تصفير الشاشة كاملة لبدء عرض جديد — تُمسح المسودة الحالية"
         >
           🆕 عرض جديد
         </button>
@@ -416,7 +416,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
         <div className="dup-overlay" onClick={dismissDup}>
           <div className="dup-popup" onClick={(e) => e.stopPropagation()}>
             <div style={{ fontSize: '2rem' }}>⚠️</div>
-            <h3 style={{ margin: '4px 0', color: 'var(--navy)' }}>سويت لهذا الشخص عرض من قبل!</h3>
+            <h3 style={{ margin: '4px 0', color: 'var(--navy)' }}>يوجد عرض سابق لهذا العميل!</h3>
             <p style={{ margin: '4px 0' }}>
               <b>{dupMatch.client_name || '-'}</b>
               {dupMatch.client_phone ? ` — ${dupMatch.client_phone}` : ''}
@@ -426,10 +426,10 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
             </p>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 10 }}>
               <button className="btn btn-primary" onClick={openDupForEdit}>
-                ✏ وديني عليه للتعديل
+                ✏ فتح العرض للتعديل
               </button>
               <button className="btn btn-secondary" onClick={dismissDup}>
-                تجاهل وكمل عرض جديد
+                تجاهل ومتابعة عرض جديد
               </button>
             </div>
           </div>
@@ -439,7 +439,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       {editingQuote && (
         <div className="alert alert-warning" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <b>✏ وضع التعديل — العرض رقم {editingQuote.quote_number}</b>
-          <span className="muted">عدل أي شي وبعدها احفظ التعديلات، أو احفظه كعرض جديد برقم جديد</span>
+          <span className="muted">عدّل ما تشاء ثم احفظ التعديلات، أو احفظه كعرض جديد برقم جديد</span>
           <button className="btn btn-secondary btn-sm" onClick={exitEditMode} style={{ marginInlineStart: 'auto' }}>
             إلغاء التعديل
           </button>
@@ -485,7 +485,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
               type="number"
               value={nightSupplyHours}
               onChange={(e) => setNightSupplyHours(e.target.value)}
-              placeholder="حددها بكل عرض"
+              placeholder="تُحدد في كل عرض"
             />
           </div>
         </div>
@@ -575,8 +575,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
             </div>
           </div>
           <p className="muted" style={{ margin: '4px 0 0', fontSize: '0.82rem' }}>
-            العلنية تظهر سطر «نسبة زيادة» بجدول العرض، والموزعة ترفع أسعار البنود نفسها بدون أي سطر إضافي.
-            الخصم يظهر دائماً سطر «خصم» وينطرح من المجموع النهائي.
+            العلنية تظهر كسطر «نسبة زيادة» في جدول العرض، والموزعة ترفع أسعار البنود نفسها دون أي سطر إضافي.
+            الخصم يظهر دائماً كسطر «خصم» ويُطرح من المجموع النهائي.
           </p>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontWeight: 700, color: 'var(--navy)', cursor: 'pointer' }}>
             <input type="checkbox" checked={installment} onChange={(e) => setInstallment(e.target.checked)} style={{ width: 18, height: 18 }} />
@@ -610,7 +610,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
                   </span>
                 );
               })}
-            {Object.keys(secondarySel).length === 0 && <span className="muted">ماكو مواد ثانوية محددة</span>}
+            {Object.keys(secondarySel).length === 0 && <span className="muted">لا توجد مواد ثانوية محددة</span>}
             <button className="btn btn-primary btn-sm" onClick={() => setPickerOpen(true)} style={{ marginInlineStart: 'auto' }}>
               ➕ إضافة / تعديل
             </button>
@@ -630,7 +630,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
 
       {!validInputs && (
         <div className="alert alert-info">
-          أدخل مساحة السطح والأمبير المطلوب (نهاراً و/أو ليلاً) — وإذا اكو حمل ليلي أدخل ساعات التجهيز الليلي (تتحكم بعدد البطاريات)
+          أدخل مساحة السطح والأمبير المطلوب (نهاراً و/أو ليلاً) — وعند وجود حمل ليلي أدخل ساعات التجهيز الليلي (تتحكم بعدد البطاريات)
         </div>
       )}
 
@@ -658,7 +658,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
             <div className="toolbar">
               <h3 style={{ margin: 0, color: 'var(--navy)' }}>معاينة العرض</h3>
               <span className="total-badge" style={calculating ? { opacity: 0.55 } : {}}>
-                {calculating ? '⏳ يحسب... ' : ''}المجموع الكلي: {fmt(draft.total)} دينار
+                {calculating ? '⏳ جارٍ الحساب... ' : ''}المجموع الكلي: {fmt(draft.total)} دينار
               </span>
             </div>
 
@@ -695,7 +695,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
                 {showPriceNotes && (
                   <div className="alert alert-warning" style={{ marginTop: 8, marginBottom: 0 }}>
                     <div className="muted" style={{ marginBottom: 6 }}>
-                      هاي ملاحظات داخلية إلك (مصدر السعر وتاريخه) — ما تنطبع بالعرض ولا يشوفها الزبون:
+                      ملاحظات داخلية للبائع (مصدر السعر وتاريخه) — لا تُطبع في العرض ولا يراها العميل:
                     </div>
                     {draft.internalNotes.map((n, i) => (
                       <div key={i}>
@@ -758,17 +758,17 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
                   })}
                   {(extraUnits.panel !== 0 || extraUnits.battery !== 0 || extraUnits.inverter !== 0) && (
                     <button type="button" className="btn btn-secondary btn-sm" onClick={() => setExtraUnits({ panel: 0, battery: 0, inverter: 0 })}>
-                      ↺ رجوع للحساب التلقائي
+                      ↺ العودة للحساب التلقائي
                     </button>
                   )}
                 </div>
                 {draft.capability && (draft.capability.nightHours != null || draft.capability.dayAmps != null) && (
                   <div style={{ marginTop: 8, fontSize: '0.88rem', color: '#1a5a9c', fontWeight: 700 }}>
                     {draft.capability.nightHours != null && (
-                      <span>🔋 البطاريات تجهز {ampNight} أمبير ليلي لمدة ≈{draft.capability.nightHours} ساعة</span>
+                      <span>🔋 البطاريات تُجهّز {ampNight} أمبير ليلياً لمدة ≈{draft.capability.nightHours} ساعة</span>
                     )}
                     {draft.capability.nightHours != null && draft.capability.dayAmps != null && ' — '}
-                    {draft.capability.dayAmps != null && <span>⚡ الانفيرترات تتحمل ≈{draft.capability.dayAmps} أمبير نهاري</span>}
+                    {draft.capability.dayAmps != null && <span>⚡ الانفيرترات تتحمل ≈{draft.capability.dayAmps} أمبير نهاراً</span>}
                   </div>
                 )}
               </div>

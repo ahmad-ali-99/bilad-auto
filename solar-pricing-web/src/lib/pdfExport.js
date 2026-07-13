@@ -94,11 +94,11 @@ function showDeliverDialog({ pdfFile, blob, fileName, allowShare }) {
       'position:fixed;inset:0;background:rgba(12,22,38,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
     const box = document.createElement('div');
     box.style.cssText =
-      'background:#fff;border-radius:16px;padding:22px 20px;max-width:340px;width:100%;text-align:center;direction:rtl;font-family:inherit;box-shadow:0 14px 44px rgba(0,0,0,.35);';
+      "background:#fff;border-radius:16px;padding:22px 20px;max-width:340px;width:100%;text-align:center;direction:rtl;font-family:'Cairo',sans-serif;box-shadow:0 14px 44px rgba(0,0,0,.35);";
     box.innerHTML =
       '<div style="font-size:2.2rem">📄</div>' +
       '<h3 style="margin:6px 0 2px;color:#1a3a5c;font-size:1.05rem">ملف العرض جاهز</h3>' +
-      '<p style="margin:2px 0 14px;color:#5a6b7d;font-size:.88rem">اختار شلون تريد تطلعه:</p>';
+      '<p style="margin:2px 0 14px;color:#5a6b7d;font-size:.88rem">اختر طريقة استلام الملف:</p>';
     const btn = (label, primary) => {
       const b = document.createElement('button');
       b.type = 'button';
@@ -126,7 +126,7 @@ function showDeliverDialog({ pdfFile, blob, fileName, allowShare }) {
       };
       box.appendChild(shareBtn);
     }
-    const dlBtn = btn('⬇ تنزيل الملف بالجهاز', !allowShare);
+    const dlBtn = btn('⬇ تنزيل الملف إلى الجهاز', !allowShare);
     dlBtn.onclick = () => {
       downloadBlob(blob, fileName);
       done({ canceled: false, shared: false });

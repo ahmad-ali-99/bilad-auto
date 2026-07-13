@@ -58,11 +58,11 @@ export default function Login({ onLoggedIn }) {
 
         <div className="field">
           <label>اسم المستخدم</label>
-          <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus placeholder="مثال: حيدر — أو رقمك مثل 2" />
+          <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} autoFocus placeholder="مثال: حيدر — أو رقمك (2 مثلاً)" />
         </div>
         <div className="field">
           <label>الرمز</label>
-          <input type="password" value={code} onChange={(e) => setCode(e.target.value)} placeholder="الرمز البسيط" />
+          <input type="password" value={code} onChange={(e) => setCode(e.target.value)} placeholder="رمز الدخول" />
         </div>
 
         {error && <div className="login-error">{error}</div>}

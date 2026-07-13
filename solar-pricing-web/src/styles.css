@@ -11,6 +11,9 @@
   font-family: 'Cairo', sans-serif;
 }
 
+/* توحيد الخط: أي زر/حقل/قائمة — حتى بلا كلاس — يرث خط Cairo */
+button, input, select, textarea { font-family: inherit; }
+
 * { box-sizing: border-box; }
 
 html, body, #root {

@@ -53,7 +53,7 @@ export default function Settings() {
     };
     for (const k of ['economy', 'standard', 'premium']) {
       if (!(vals[k] > 0.3 && vals[k] <= 1)) {
-        setBattMsg('كل معامل لازم يكون بين 0.3 و1 — مثلاً 0.9 يعني نحسب 90% من حاجة الليل');
+        setBattMsg('يجب أن يكون كل معامل بين 0.3 و1 — مثلاً 0.9 يعني احتساب 90% من حاجة الليل');
         return;
       }
     }
@@ -70,7 +70,7 @@ export default function Settings() {
       return;
     }
     await window.api.config.set('installment', { rate, months });
-    setInstMsg(`تم الحفظ ✔ كل عرض مؤشر عليه التقسيط راح يحسب: المجموع × ${rate} ÷ ${months} شهر`);
+    setInstMsg(`تم الحفظ ✔ كل عرض مؤشَّر عليه التقسيط سيُحسب: المجموع × ${rate} ÷ ${months} شهراً`);
   }
 
   useEffect(reload, []);
@@ -79,11 +79,11 @@ export default function Settings() {
     e.preventDefault();
     const { shared } = await setAgentKey(agentKey);
     if (!agentKey.trim()) {
-      setAgentMsg({ kind: 'info', text: 'انحذف المفتاح — المساعد رجع للوضع السريع المحلي' });
+      setAgentMsg({ kind: 'info', text: 'حُذف المفتاح — عاد المساعد إلى الوضع السريع المحلي' });
     } else if (shared) {
       setAgentMsg({ kind: 'info', text: 'تم الحفظ ✔ المفتاح مشترك لكل الموظفين — المساعد الذكي الكامل شغال' });
     } else {
-      setAgentMsg({ kind: 'warn', text: 'تم الحفظ على هذا الجهاز فقط ✔ حتى يصير مشتركاً لكل الموظفين، افتح لوحة Supabase ← SQL Editor والصق السطور أدناه واضغط Run، بعدها احفظ المفتاح مرة ثانية من هنا.' });
+      setAgentMsg({ kind: 'warn', text: 'تم الحفظ على هذا الجهاز فقط ✔ لكي يصبح مشتركاً لجميع الموظفين، افتح لوحة Supabase ← SQL Editor والصق الأسطر أدناه واضغط Run، ثم احفظ المفتاح مرة أخرى من هنا.' });
     }
   }
 
@@ -162,8 +162,8 @@ export default function Settings() {
       <form className="card" onSubmit={saveBattFactors}>
         <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>🔋 معاملات أمان البطاريات (لكل مستوى)</h3>
         <p className="muted" style={{ marginTop: 0 }}>
-          حاجة الليل تنضرب بالمعامل <b>قبل</b> حساب عدد البطاريات — معامل 0.9 يعني بطارية 16kWh وحدة
-          تغطي حاجة 17.7kWh بدل ما ننجبر على ثنتين. كل مستوى إله معامله، والتغيير يشمل كل الموظفين.
+          تُضرب حاجة الليل بالمعامل <b>قبل</b> حساب عدد البطاريات — معامل 0.9 يعني أن بطارية 16kWh واحدة
+          تغطي حاجة 17.7kWh بدل فرض بطاريتين. لكل مستوى معامله الخاص، والتغيير يشمل جميع الموظفين.
         </p>
         <div className="grid-3">
           {[
@@ -193,7 +193,7 @@ export default function Settings() {
       <form className="card" onSubmit={saveInstallment}>
         <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>🏦 التقسيط المصرفي</h3>
         <p className="muted" style={{ marginTop: 0 }}>
-          من تؤشر «التقسيط المصرفي» بأي عرض، يحسب تلقائياً: <b>المجموع الكلي × نسبة الفائدة ÷ عدد الأشهر</b>{' '}
+          عند تأشير «التقسيط المصرفي» في أي عرض، يُحسب تلقائياً: <b>المجموع الكلي × نسبة الفائدة ÷ عدد الأشهر</b>{' '}
           ويطلع بالعرض المجموع مع الفائدة والقسط الشهري. النسبة معامل ضرب مباشر (مثال: 1.35 يعني المجموع + 35%).
         </p>
         <div className="grid-2">
@@ -218,7 +218,7 @@ export default function Settings() {
           المساعد يشتغل على Google Gemini بالطبقة المجانية (بدون بطاقة). طريقة الحصول على المفتاح:
           <br />1. افتح <b>aistudio.google.com/apikey</b> وسجل بحساب Google
           <br />2. اضغط <b>Create API key</b> وانسخ المفتاح
-          <br />3. الصقه هنا واحفظ — يشتغل فوراً لكل الموظفين
+          <br />3. الصقه هنا واحفظ — يعمل فوراً لجميع الموظفين
         </p>
         <div className="field">
           <label>مفتاح Gemini API</label>

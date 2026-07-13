@@ -23,7 +23,7 @@ export default function SecondaryPickerModal({ secondary, selections, panelCount
     try {
       const ids = secondary.filter((m) => selections[m.id]).map((m) => m.id);
       await window.api.config.set('secondary_defaults', ids);
-      setDefaultsMsg(`تم ✔ صارت هاي الـ${ids.length} مواد افتراضية دائمة بكل عرض جديد ولكل الموظفين`);
+      setDefaultsMsg(`تم ✔ أصبحت هذه المواد (${ids.length}) افتراضية دائمة في كل عرض جديد ولجميع الموظفين`);
     } catch (err) {
       setDefaultsMsg('خطأ بالحفظ: ' + err.message);
     }
@@ -52,8 +52,8 @@ export default function SecondaryPickerModal({ secondary, selections, panelCount
         <button type="button" className="modal-zoom-btn" onClick={() => setMaxed((m) => !m)} title="تكبير / تصغير النافذة">{maxed ? "🗕" : "⛶"}</button>
         <h3>المواد الثانوية للعرض</h3>
         <p className="muted">
-          أشّر على المواد اللي تريدها بهذا العرض. الهيكل والصبات محددة تلقائياً (أساسية بكل عرض)، وتكدر تشيل أو
-          تضيف أي مادة. الكمية الفارغة = تلقائية حسب عدد الألواح، ومواد المتر تحتاج إدخال الأمتار.
+          أشّر على المواد المطلوبة في هذا العرض. الهيكل والصبات محددة تلقائياً (أساسية في كل عرض)، ويمكنك
+          إزالة أو إضافة أي مادة. الكمية الفارغة = تلقائية حسب عدد الألواح، ومواد المتر تحتاج إدخال الأمتار.
         </p>
 
         <div className="import-table-wrap">
@@ -94,7 +94,7 @@ export default function SecondaryPickerModal({ secondary, selections, panelCount
                         style={{ maxWidth: 130 }}
                       />
                       {included && m.unit === 'متر' && qty <= 0 && (
-                        <div className="issue-note">⚠ بدون أمتار ما تنضاف</div>
+                        <div className="issue-note">⚠ لن تُضاف بدون أمتار</div>
                       )}
                     </td>
                     <td>{fmt(m.price)}</td>
@@ -105,7 +105,7 @@ export default function SecondaryPickerModal({ secondary, selections, panelCount
               {secondary.length === 0 && (
                 <tr>
                   <td colSpan={6} className="muted" style={{ textAlign: 'center', padding: 20 }}>
-                    ما اكو مواد ثانوية بالمخزون
+                    لا توجد مواد ثانوية في المخزون
                   </td>
                 </tr>
               )}
@@ -117,7 +117,7 @@ export default function SecondaryPickerModal({ secondary, selections, panelCount
         <div className="toolbar" style={{ marginTop: 14, flexWrap: 'wrap', gap: 8 }}>
           <span className="total-badge">مجموع الثانوية المضافة: {fmt(includedTotal)} دينار</span>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-secondary" onClick={saveAsDefaults} title="التحديد الحالي يصير الافتراضي الدائم بكل عرض جديد ولكل الموظفين">
+            <button className="btn btn-secondary" onClick={saveAsDefaults} title="يصبح التحديد الحالي هو الافتراضي الدائم في كل عرض جديد ولجميع الموظفين">
               💾 اعتماد كافتراضي دائم للكل
             </button>
             <button className="btn btn-primary" onClick={onClose}>

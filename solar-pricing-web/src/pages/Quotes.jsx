@@ -56,13 +56,13 @@ export default function Quotes({ onEditQuote }) {
   }
 
   async function handleDelete(id) {
-    if (!confirm('العرض يروح لسلة المحذوفات ويكدر أي أحد يرجعه خلال أسبوع — بعدها ينحذف نهائياً. تريد تكمل؟')) return;
+    if (!confirm('سيُنقل العرض إلى سلة المحذوفات ويمكن استرداده خلال أسبوع — ثم يُحذف نهائياً. هل تريد المتابعة؟')) return;
     try {
       await window.api.quotes.remove(id);
-      setMessage('انحذف العرض — موجود بسلة المحذوفات أسبوعاً كاملاً');
+      setMessage('حُذف العرض — سيبقى في سلة المحذوفات أسبوعاً كاملاً');
       reload();
     } catch (err) {
-      setMessage('خطأ بالحذف: ' + err.message + ' — إذا الرسالة تذكر deleted_at، شغّل سطور SQL اللي دزيتها إلك');
+      setMessage('خطأ في الحذف: ' + err.message + ' — إذا ذكرت الرسالة deleted_at فنفّذ أسطر SQL المرسلة سابقاً');
     }
   }
 
@@ -110,19 +110,19 @@ export default function Quotes({ onEditQuote }) {
         r.readAsDataURL(file);
       });
       await window.api.quotes.setAttachment(quote.id, { name: file.name, data });
-      setMessage(`انرفق التصميم "${file.name}" بالعرض ${quote.quote_number} — راح يطلع بنهاية الـPDF عند التصدير ✔`);
+      setMessage(`أُرفق التصميم "${file.name}" بالعرض ${quote.quote_number} — سيظهر في نهاية ملف الـPDF عند التصدير ✔`);
       reload();
     } catch (err) {
-      setMessage('خطأ بالإرفاق: ' + err.message + ' — إذا الرسالة تذكر attachment، شغّل سطور SQL اللي دزيتها إلك');
+      setMessage('خطأ في الإرفاق: ' + err.message + ' — إذا ذكرت الرسالة attachment فنفّذ أسطر SQL المرسلة سابقاً');
     } finally {
       setBusyId(null);
     }
   }
 
   async function handleRemoveAttachment(quote) {
-    if (!confirm(`تشيل المرفق "${quote.attachment_name}" من العرض ${quote.quote_number}؟`)) return;
+    if (!confirm(`هل تريد إزالة المرفق "${quote.attachment_name}" من العرض ${quote.quote_number}؟`)) return;
     await window.api.quotes.removeAttachment(quote.id);
-    setMessage('انشال المرفق');
+    setMessage('أُزيلت المرفقات — تمت الإزالة');
     reload();
   }
 
@@ -135,7 +135,7 @@ export default function Quotes({ onEditQuote }) {
         <input
           type="text"
           className="search-input"
-          placeholder="🔍 دور بالاسم أو الرقم أو الموبايل أو الموقع..."
+          placeholder="🔍 ابحث بالاسم أو الرقم أو الهاتف أو الموقع..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{ flex: 1, minWidth: 220 }}
@@ -157,8 +157,8 @@ export default function Quotes({ onEditQuote }) {
                 <th>العدد</th>
                 <th>العميل</th>
                 <th>المجموع</th>
-                <th>منو حذفه</th>
-                <th>وكت الحذف</th>
+                <th>حُذف بواسطة</th>
+                <th>وقت الحذف</th>
                 <th></th>
               </tr>
             </thead>
@@ -246,7 +246,7 @@ export default function Quotes({ onEditQuote }) {
           {filtered.length === 0 && (
             <tr>
               <td colSpan={8} className="muted" style={{ textAlign: 'center', padding: 20 }}>
-                {quotes.length === 0 ? 'لا توجد عروض محفوظة بعد' : 'ماكو نتائج لهذا البحث'}
+                {quotes.length === 0 ? 'لا توجد عروض محفوظة بعد' : 'لا توجد نتائج لهذا البحث'}
               </td>
             </tr>
           )}
