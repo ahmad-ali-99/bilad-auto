@@ -15,10 +15,36 @@ export default function Login({ onLoggedIn }) {
       .catch(() => {});
   }, []);
 
+  // رسائل رجوع OAuth: نعرض أي خطأ يرجع من Google/Supabase بدل الفشل الصامت،
+  // ونبين مؤشر «جارٍ إتمام الدخول» إذا رجعنا برمز جلسة قيد المعالجة
+  const [oauthPending, setOauthPending] = useState(false);
+  useEffect(() => {
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const queryParams = new URLSearchParams(window.location.search);
+    const desc = hashParams.get('error_description') || queryParams.get('error_description');
+    const err = hashParams.get('error') || queryParams.get('error');
+    if (desc || err) {
+      setError('فشل الدخول بحساب Google: ' + decodeURIComponent(desc || err).replace(/\+/g, ' '));
+      window.history.replaceState(null, '', window.location.pathname);
+      return;
+    }
+    if (queryParams.get('code') || hashParams.get('access_token')) {
+      setOauthPending(true);
+      // إذا ما اكتمل تبادل الجلسة خلال 8 ثوانٍ نرجع للأزرار مع توضيح
+      const t = setTimeout(() => {
+        setOauthPending(false);
+        setError('لم يكتمل الدخول — أعد المحاولة، وإذا تكررت المشكلة أرسل لقطة شاشة');
+      }, 8000);
+      return () => clearTimeout(t);
+    }
+  }, []);
+
   // دخول الزبائن بحساب Google — يرجع لنفس رابط التطبيق بعد المصادقة
   async function loginWithGoogle() {
     setError('');
-    const redirectTo = window.location.origin + window.location.pathname;
+    // نطبع الرابط بدون index.html حتى يطابق قائمة الروابط المسموحة بالضبط
+    const cleanPath = window.location.pathname.replace(/index\.html$/, '');
+    const redirectTo = window.location.origin + cleanPath;
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo },
@@ -67,6 +93,11 @@ export default function Login({ onLoggedIn }) {
           </div>
         )}
 
+        {oauthPending && (
+          <div className="alert alert-info" style={{ textAlign: 'center' }}>
+            ⏳ جارٍ إتمام الدخول بحساب Google...
+          </div>
+        )}
         <button
           type="button"
           onClick={loginWithGoogle}
