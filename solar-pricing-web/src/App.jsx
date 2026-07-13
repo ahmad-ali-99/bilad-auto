@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Inventory from './pages/Inventory.jsx';
 import QuoteBuilder from './pages/QuoteBuilder.jsx';
 import Quotes from './pages/Quotes.jsx';
 import Settings from './pages/Settings.jsx';
 import Login from './pages/Login.jsx';
 import GlobalLoadingBar from './components/GlobalLoadingBar.jsx';
+import AssistantBar from './components/AssistantBar.jsx';
 import { supabase } from './lib/supabase.js';
 
 const PAGES = [
@@ -21,6 +22,9 @@ export default function App() {
   // تعبئة من المساعد: للعرض (حقول جاهزة) أو للمخزون (نص بحث) — nonce حتى تنطبق بكل أمر جديد
   const [quotePrefill, setQuotePrefill] = useState(null);
   const [inventorySearch, setInventorySearch] = useState(null);
+  // المساعد الذكي بنافذة عائمة متاحة من كل الصفحات — مسودة العرض الحالية تنرفع من QuoteBuilder
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const draftRef = useRef(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -99,14 +103,7 @@ export default function App() {
       </header>
       <main className="mobile-content">
         {page === 'quote' && (
-          <QuoteBuilder
-            prefill={quotePrefill}
-            onAssistantQuote={(fields) => setQuotePrefill({ ...fields, nonce: Date.now() })}
-            onAssistantInventory={(search) => {
-              setInventorySearch({ term: search, nonce: Date.now() });
-              setPage('inventory');
-            }}
-          />
+          <QuoteBuilder prefill={quotePrefill} onDraftChange={(d) => (draftRef.current = d)} />
         )}
         {page === 'quotes' && (
           <Quotes
@@ -127,6 +124,34 @@ export default function App() {
           </button>
         ))}
       </nav>
+
+      {/* المساعد الذكي: زر عائم يفتح نافذة محادثة فوق أي صفحة */}
+      <button
+        className="assistant-fab"
+        onClick={() => setAssistantOpen((o) => !o)}
+        title="المساعد الذكي"
+        aria-label="المساعد الذكي"
+      >
+        {assistantOpen ? '✕' : '🤖'}
+      </button>
+      {assistantOpen && (
+        <div className="assistant-drawer-overlay" onClick={() => setAssistantOpen(false)}>
+          <div className="assistant-drawer" onClick={(e) => e.stopPropagation()}>
+            <AssistantBar
+              fill
+              onQuote={(fields) => {
+                setQuotePrefill({ ...fields, nonce: Date.now() });
+                setPage('quote');
+              }}
+              onInventory={(search) => {
+                setInventorySearch({ term: search, nonce: Date.now() });
+                setPage('inventory');
+              }}
+              getDraft={() => draftRef.current}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

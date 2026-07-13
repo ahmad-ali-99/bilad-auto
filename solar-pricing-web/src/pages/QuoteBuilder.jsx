@@ -1,8 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import SecondaryPickerModal from '../components/SecondaryPickerModal.jsx';
-import AssistantBar from '../components/AssistantBar.jsx';
 import { buildEditPrefill } from '../lib/editPrefill.js';
 import { getIsAdmin } from '../lib/agent.js';
+
+// مسودة العرض الجارية تنحفظ محلياً — الرفرش أو التنقل بين الصفحات ما يمسح الشغل،
+// والأسعار تتحدث تلقائياً لأن المعاينة تعيد الجلب والحساب من القاعدة بكل مرة
+const DRAFT_KEY = 'quote_draft_v1';
+function readSavedDraft() {
+  try {
+    return JSON.parse(localStorage.getItem(DRAFT_KEY)) || null;
+  } catch {
+    return null;
+  }
+}
 
 const TIERS = [
   { key: 'economy', label: 'اقتصادي' },
@@ -25,34 +35,39 @@ function useDebouncedValue(value, delay) {
   return debounced;
 }
 
-export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInventory }) {
-  const [clientName, setClientName] = useState('');
-  const [clientPhone, setClientPhone] = useState('');
-  const [location, setLocation] = useState('');
-  const [roofAreaM2, setRoofAreaM2] = useState('');
-  const [ampDay, setAmpDay] = useState('');
-  const [ampNight, setAmpNight] = useState('');
-  const [nightSupplyHours, setNightSupplyHours] = useState('');
-  const [tier, setTier] = useState('economy');
+export default function QuoteBuilder({ prefill, onDraftChange }) {
+  // المسودة المحفوظة (إن وجدت) تسترد بأول تركيب — تتقدم على القيم الفارغة وتخضع للـprefill
+  const savedDraft = useRef(readSavedDraft()).current;
+  const [clientName, setClientName] = useState(savedDraft?.clientName ?? '');
+  const [clientPhone, setClientPhone] = useState(savedDraft?.clientPhone ?? '');
+  const [location, setLocation] = useState(savedDraft?.location ?? '');
+  const [roofAreaM2, setRoofAreaM2] = useState(savedDraft?.roofAreaM2 ?? '');
+  const [ampDay, setAmpDay] = useState(savedDraft?.ampDay ?? '');
+  const [ampNight, setAmpNight] = useState(savedDraft?.ampNight ?? '');
+  const [nightSupplyHours, setNightSupplyHours] = useState(savedDraft?.nightSupplyHours ?? '');
+  const [tier, setTier] = useState(savedDraft?.tier ?? 'economy');
   // نسبة الزيادة: علنية (سطر بالعرض) أو موزعة (تنضرب على أسعار البنود نفسها) + نسبة الخصم
-  const [markupPercent, setMarkupPercent] = useState('');
-  const [markupMode, setMarkupMode] = useState('visible');
-  const [discountPercent, setDiscountPercent] = useState('');
+  const [markupPercent, setMarkupPercent] = useState(savedDraft?.markupPercent ?? '');
+  const [markupMode, setMarkupMode] = useState(savedDraft?.markupMode ?? 'visible');
+  const [discountPercent, setDiscountPercent] = useState(savedDraft?.discountPercent ?? '');
   // التقسيط المصرفي: جيك بوينت — النسبة والأشهر من الإعدادات، والمعادلة: المجموع × النسبة ÷ الأشهر
-  const [installment, setInstallment] = useState(false);
+  const [installment, setInstallment] = useState(savedDraft?.installment ?? false);
   // زيادة/نقصان يدوي بالوحدات (لوح ±2، بطارية وانفيرتر ±1) — للمستخدمين الرئيسيين فقط
-  const [extraUnits, setExtraUnits] = useState({ panel: 0, battery: 0, inverter: 0 });
+  const [extraUnits, setExtraUnits] = useState(savedDraft?.extraUnits ?? { panel: 0, battery: 0, inverter: 0 });
+  // قسم الزيادة/الخصم/التقسيط مطوي افتراضياً حتى الشاشة تبقى مرتبة
+  const [pricingOpen, setPricingOpen] = useState(savedDraft?.pricingOpen ?? false);
   const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => {
     getIsAdmin().then(setIsAdmin).catch(() => setIsAdmin(false));
   }, []);
-  const [overrides, setOverrides] = useState({});
+  const [overrides, setOverrides] = useState(savedDraft?.overrides ?? {});
   // المواد الثانوية المختارة للعرض: { [materialId]: { qty } } — تبدأ بالأساسيات (هيكل + صبات)
-  const [secondarySel, setSecondarySel] = useState({});
+  const [secondarySel, setSecondarySel] = useState(savedDraft?.secondarySel ?? {});
   const [secondaryMaterials, setSecondaryMaterials] = useState([]);
+  const secondaryDefaultsRef = useRef({});
   const [pickerOpen, setPickerOpen] = useState(false);
   const [showPriceNotes, setShowPriceNotes] = useState(false);
-  const [notes, setNotes] = useState(null);
+  const [notes, setNotes] = useState(savedDraft?.notes ?? null);
   const [preview, setPreview] = useState(null);
   const [calculating, setCalculating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -66,14 +81,11 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
     Promise.all([window.api.materials.list(), window.api.config.get('secondary_defaults')]).then(([all, savedIds]) => {
       const secondary = (all || []).filter((m) => m.category === 'secondary');
       setSecondaryMaterials(secondary);
-      setSecondarySel((prev) => {
-        if (Object.keys(prev).length > 0) return prev;
-        const defaults = {};
-        if (Array.isArray(savedIds) && savedIds.length > 0) {
-          const existing = new Set(secondary.map((m) => m.id));
-          for (const id of savedIds) if (existing.has(id)) defaults[id] = { qty: '' };
-          return defaults;
-        }
+      const defaults = {};
+      if (Array.isArray(savedIds) && savedIds.length > 0) {
+        const existing = new Set(secondary.map((m) => m.id));
+        for (const id of savedIds) if (existing.has(id)) defaults[id] = { qty: '' };
+      } else {
         for (const m of secondary) {
           if (m.qty_per_panel && m.qty_per_panel > 0) defaults[m.id] = { qty: '' };
         }
@@ -84,13 +96,61 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
           return /DC/i.test(name) || /حماية/.test(name);
         });
         if (dcBoard) defaults[dcBoard.id] = { qty: '' };
-        return defaults;
-      });
+      }
+      secondaryDefaultsRef.current = defaults;
+      // الافتراضيات تنطبق فقط إذا ماكو مسودة محفوظة ولا اختيار قائم — حتى ما ندعس على شغل البياع
+      setSecondarySel((prev) => (Object.keys(prev).length > 0 || savedDraft?.secondarySel ? prev : defaults));
     });
   }, []);
 
   // وضع تعديل عرض محفوظ: {id, quote_number} — الحفظ يحدث نفس العرض
-  const [editingQuote, setEditingQuote] = useState(null);
+  const [editingQuote, setEditingQuote] = useState(savedDraft?.editingQuote ?? null);
+
+  // حفظ المسودة محلياً بكل تغيير (مؤجل نص ثانية) — الرفرش والتنقل ما يمسحون الشغل
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          DRAFT_KEY,
+          JSON.stringify({
+            clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours,
+            tier, overrides, secondarySel, markupPercent, markupMode, discountPercent,
+            installment, extraUnits, notes, editingQuote, pricingOpen,
+          })
+        );
+      } catch {
+        /* التخزين المحلي ممتلئ أو معطل — نكمل بدون حفظ */
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, extraUnits, notes, editingQuote, pricingOpen]);
+
+  // 🆕 عرض جديد: تصفير كامل + مسح المسودة المحفوظة + رجوع الثانوية لافتراضياتها
+  function startNewQuote() {
+    setEditingQuote(null);
+    setClientName('');
+    setClientPhone('');
+    setLocation('');
+    setRoofAreaM2('');
+    setAmpDay('');
+    setAmpNight('');
+    setNightSupplyHours('');
+    setTier('economy');
+    setOverrides({});
+    setMarkupPercent('');
+    setMarkupMode('visible');
+    setDiscountPercent('');
+    setInstallment(false);
+    setExtraUnits({ panel: 0, battery: 0, inverter: 0 });
+    setSecondarySel(secondaryDefaultsRef.current);
+    window.api.company.get().then((c) => setNotes(c.notes_default || [])).catch(() => {});
+    setSaveMessage('');
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      /* تجاهل */
+    }
+  }
   // الحقول المعبأة تلقائياً (من المساعد أو فتح عرض) تومض حتى ينتبهلها البياع
   const [flashFields, setFlashFields] = useState(new Set());
   const flashTimerRef = useRef(null);
@@ -326,9 +386,10 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
 
   const draft = preview?.draft;
   const hasBlockingErrors = draft && Object.keys(draft.errors).length > 0;
-  // مرجع حي للمسودة حتى يقدر الايجنت يقرأ نتيجة الحساب الحالية
-  const draftRef = useRef(null);
-  draftRef.current = draft || null;
+  // رفع المسودة الحية للتطبيق — حتى المساعد الذكي العائم يقرأ نتيجة الحساب الحالية
+  useEffect(() => {
+    if (onDraftChange) onDraftChange(draft || null);
+  }, [draft, onDraftChange]);
 
   // قوائم التبديل اليدوي: البطاريات والانفيرترات من options، الألواح من draft (تعتمد على البطارية المختارة)
   function tiersResultFor(cat) {
@@ -340,7 +401,16 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
 
   return (
     <div>
-      <h2 className="page-title">إنشاء عرض سعر</h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <h2 className="page-title" style={{ flex: 1, marginBottom: 0 }}>إنشاء عرض سعر</h2>
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={startNewQuote}
+          title="تصفير الشاشة كاملة لبدء عرض جديد — المسودة الحالية تنمسح"
+        >
+          🆕 عرض جديد
+        </button>
+      </div>
 
       {dupMatch && (
         <div className="dup-overlay" onClick={dismissDup}>
@@ -375,8 +445,6 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
           </button>
         </div>
       )}
-
-      <AssistantBar onQuote={onAssistantQuote} onInventory={onAssistantInventory} getDraft={() => draftRef.current} />
 
       <div className="card">
         <h3 className="card-heading">👤 معلومات الزبون</h3>
@@ -431,7 +499,36 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
         </div>
 
         <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed #d5dde6' }}>
-          <b style={{ color: 'var(--navy)' }}>💹 زيادة / خصم على العرض</b>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => setPricingOpen((o) => !o)}
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: 700, color: 'var(--navy)', fontSize: '1rem' }}
+            >
+              💹 زيادة / خصم / تقسيط {pricingOpen ? '▲' : '▼'}
+            </button>
+            {!pricingOpen && (Number(markupPercent) > 0 || Number(discountPercent) > 0 || installment) && (
+              <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
+                {Number(markupPercent) > 0 && (
+                  <span style={{ background: '#fdf0d5', color: '#8a5b00', borderRadius: 12, padding: '2px 10px', fontSize: '0.8rem', fontWeight: 700 }}>
+                    زيادة {markupPercent}% {markupMode === 'distributed' ? 'موزعة' : 'علنية'}
+                  </span>
+                )}
+                {Number(discountPercent) > 0 && (
+                  <span style={{ background: '#e3f2e6', color: '#1c6b2e', borderRadius: 12, padding: '2px 10px', fontSize: '0.8rem', fontWeight: 700 }}>
+                    خصم {discountPercent}%
+                  </span>
+                )}
+                {installment && (
+                  <span style={{ background: '#e6f0fb', color: '#1a5a9c', borderRadius: 12, padding: '2px 10px', fontSize: '0.8rem', fontWeight: 700 }}>
+                    🏦 تقسيط
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
+          {pricingOpen && (
+          <>
           <div className="grid-3" style={{ marginTop: 8 }}>
             <div className={fieldClass('markupPercent')}>
               <label>نسبة الزيادة %</label>
@@ -488,6 +585,8 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
               (المجموع × نسبة فائدة المصرف ÷ عدد الأشهر — النسبة والأشهر من الإعدادات)
             </span>
           </label>
+          </>
+          )}
         </div>
 
         {secondaryMaterials.length > 0 && (

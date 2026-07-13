@@ -6,7 +6,8 @@ import { getAgentKey, runAgent, getIsAdmin, getCurrentUsername, loadChat, saveCh
 // - إذا مفتاح Gemini المجاني مفعّل (الإعدادات) → ايجنت حقيقي بمحادثة كاملة وأدوات
 //   (يعبي العرض، يقرأ الأسعار، يعدل سعر بموافقتك، يفتح المخزون)
 // - بدون مفتاح → المحلل السريع المحلي (أوفلاين)
-export default function AssistantBar({ onQuote, onInventory, getDraft }) {
+// fill: وضع النافذة العائمة — يملأ ارتفاع الحاوية والمحادثة تاخذ المساحة المتبقية
+export default function AssistantBar({ onQuote, onInventory, getDraft, fill = false }) {
   const [text, setText] = useState('');
   const [apiKey, setApiKey] = useState(null); // null = جاري الفحص
   const [messages, setMessages] = useState([]); // {role:'user'|'agent', text}
@@ -114,7 +115,7 @@ export default function AssistantBar({ onQuote, onInventory, getDraft }) {
   }
 
   return (
-    <div className="card" style={{ marginBottom: 12 }}>
+    <div className={fill ? undefined : 'card'} style={fill ? { display: 'flex', flexDirection: 'column', height: '100%' } : { marginBottom: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <label style={{ fontWeight: 700, color: 'var(--navy)', flex: 1 }}>
           🤖 المساعد الذكي{isAdmin && ' — صلاحية تعديل ✏'}
@@ -127,11 +128,20 @@ export default function AssistantBar({ onQuote, onInventory, getDraft }) {
         )}
       </div>
 
-      {messages.length > 0 && (
+      {(messages.length > 0 || fill) && (
         <div
           ref={scrollRef}
-          style={{ maxHeight: 260, overflowY: 'auto', margin: '8px 0', display: 'flex', flexDirection: 'column', gap: 6 }}
+          style={
+            fill
+              ? { flex: 1, minHeight: 0, overflowY: 'auto', margin: '8px 0', display: 'flex', flexDirection: 'column', gap: 6 }
+              : { maxHeight: 260, overflowY: 'auto', margin: '8px 0', display: 'flex', flexDirection: 'column', gap: 6 }
+          }
         >
+          {messages.length === 0 && fill && (
+            <div className="muted" style={{ textAlign: 'center', marginTop: 24 }}>
+              اكتبلي شتريد: أعبيلك عرض، أجاوبك عن الأسعار من المخزون، وأشرحلك أي نتيجة 🤖
+            </div>
+          )}
           {messages.map((m, i) => (
             <div
               key={i}
