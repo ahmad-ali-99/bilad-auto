@@ -29,6 +29,8 @@ export default function Settings() {
   const [leads, setLeads] = useState(null);
   const [leadsMsg, setLeadsMsg] = useState('');
 
+  const [quoteRequests, setQuoteRequests] = useState(null);
+
   async function loadLeads() {
     setLeadsMsg('');
     try {
@@ -36,6 +38,11 @@ export default function Settings() {
     } catch (err) {
       setLeads([]);
       setLeadsMsg('تعذر جلب التسجيلات: ' + err.message + ' — إن لم يكن جدول leads منشأً بعد فنفّذ أسطر SQL المرسلة');
+    }
+    try {
+      setQuoteRequests(await window.api.quoteRequests.list());
+    } catch {
+      setQuoteRequests([]);
     }
   }
 
@@ -368,6 +375,50 @@ export default function Settings() {
                   <tr>
                     <td colSpan={4} className="muted" style={{ textAlign: 'center', padding: 14 }}>
                       لا توجد تسجيلات بعد
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <h4 style={{ color: 'var(--navy)', margin: '16px 0 6px' }}>
+            📨 طلبات العروض من الحاسبة العامة {quoteRequests ? `(${quoteRequests.length})` : ''}
+          </h4>
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>الاسم</th>
+                  <th>الهاتف</th>
+                  <th>نهاري/ليلي</th>
+                  <th>ساعات الليل</th>
+                  <th>المستوى</th>
+                  <th>المجموع (د.ع)</th>
+                  <th>تقسيط</th>
+                  <th>التاريخ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(quoteRequests || []).map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      {r.full_name || '-'}
+                      {r.email && <div className="muted" style={{ fontSize: '0.75rem' }} dir="ltr">{r.email}</div>}
+                    </td>
+                    <td dir="ltr">{r.phone || '-'}</td>
+                    <td>{r.amp_day} / {r.amp_night} أمبير</td>
+                    <td>{r.night_hours ?? '-'}</td>
+                    <td>{{ economy: 'اقتصادي', standard: 'متوسط', premium: 'ممتاز' }[r.tier] || r.tier}</td>
+                    <td>{Math.round(r.total_price || 0).toLocaleString('en-US')}</td>
+                    <td>{r.installment ? `✔ ${r.monthly ? Math.round(r.monthly).toLocaleString('en-US') + '/شهر' : ''}` : '-'}</td>
+                    <td>{r.created_at ? new Date(r.created_at).toLocaleDateString('en-GB') : '-'}</td>
+                  </tr>
+                ))}
+                {quoteRequests && quoteRequests.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="muted" style={{ textAlign: 'center', padding: 14 }}>
+                      لا توجد طلبات عروض بعد
                     </td>
                   </tr>
                 )}

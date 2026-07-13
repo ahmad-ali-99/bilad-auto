@@ -504,8 +504,11 @@ export const api = {
       const { data: company } = await supabase.from('company_profile').select('*').eq('id', 1).single();
       const defaultNotes = Array.isArray(company?.notes_default) ? company.notes_default : JSON.parse(company?.notes_default || '[]');
       const notes = [...(input.notes || defaultNotes), ...draft.warrantyNotes];
+      // رقم العرض التسلسلي للموظفين فقط — الزبون (Google) يطلع ملفه بدون رقم
+      const { data: { user: pdfUser } } = await supabase.auth.getUser();
+      const isStaffUser = String(pdfUser?.email || '').endsWith('@biladauto.local');
       const pseudoQuote = {
-        quote_number: await nextQuoteNumber(),
+        quote_number: isStaffUser ? await nextQuoteNumber() : '—',
         client_name: input.clientName,
         client_phone: input.clientPhone,
         location: input.location,
@@ -522,6 +525,20 @@ export const api = {
   leads: {
     async list() {
       const { data, error } = await supabase.from('leads').select('*').order('id', { ascending: false }).limit(500);
+      throwIf(error);
+      return data || [];
+    },
+  },
+
+  // طلبات عروض الزبائن من الحاسبة العامة — الزبون يضيف طلبه والموظفون يقرأون الكل
+  quoteRequests: {
+    async create(payload) {
+      const { error } = await supabase.from('quote_requests').insert(payload);
+      throwIf(error);
+      return { ok: true };
+    },
+    async list() {
+      const { data, error } = await supabase.from('quote_requests').select('*').order('id', { ascending: false }).limit(500);
       throwIf(error);
       return data || [];
     },

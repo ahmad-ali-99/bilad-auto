@@ -6,6 +6,7 @@ import Settings from './pages/Settings.jsx';
 import Login from './pages/Login.jsx';
 import GlobalLoadingBar from './components/GlobalLoadingBar.jsx';
 import AssistantBar from './components/AssistantBar.jsx';
+import CustomerView from './pages/CustomerView.jsx';
 import { supabase } from './lib/supabase.js';
 
 const PAGES = [
@@ -26,22 +27,12 @@ export default function App() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const draftRef = useRef(null);
 
-  // حارس الموظفين: التطبيق مخصص لحسابات الشركة فقط (@biladauto.local) —
-  // جلسة زائر Google قادمة من الموقع التسويقي (نفس النطاق) تُنهى فوراً
-  function staffOnly(s) {
-    if (s && !String(s.user?.email || '').endsWith('@biladauto.local')) {
-      supabase.auth.signOut({ scope: 'local' });
-      return null;
-    }
-    return s;
-  }
-
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      setSession(staffOnly(data.session));
+      setSession(data.session);
       setLoading(false);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(staffOnly(s)));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -58,6 +49,40 @@ export default function App() {
 
   if (!session) {
     return <Login onLoggedIn={() => {}} />;
+  }
+
+  // زبون (دخول Google): حاسبة تسعير مبسطة فقط — بلا تنقل ولا أدوات إدارية ولا مساعد
+  const isStaff = String(session.user?.email || '').endsWith('@biladauto.local');
+  if (!isStaff) {
+    return (
+      <div className="mobile-shell">
+        <GlobalLoadingBar />
+        <header className="mobile-topbar">
+          <span className="brand">
+            <span className="brand-logo">
+              <img src="logo-mark.png" alt="" />
+            </span>
+            <span className="brand-text">
+              <b>بلاد اوتو</b>
+              <small>حاسبة الطاقة الشمسية</small>
+            </span>
+          </span>
+          <button
+            className="topbar-chip"
+            onClick={async () => {
+              await Promise.race([supabase.auth.signOut({ scope: 'local' }), new Promise((r) => setTimeout(r, 1500))]);
+              setSession(null);
+            }}
+            title="تسجيل الخروج"
+          >
+            خروج ⏻
+          </button>
+        </header>
+        <main className="mobile-content" style={{ paddingBottom: 90 }}>
+          <CustomerView user={session.user} />
+        </main>
+      </div>
+    );
   }
 
   // حسابات الموظفين المرقمة تظهر بالرقم فقط (مستخدم2 ← 2)
