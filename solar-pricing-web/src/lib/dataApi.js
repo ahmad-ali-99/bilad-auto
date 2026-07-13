@@ -223,6 +223,7 @@ export const api = {
         cableMeters: input.cableMeters || {},
         secondarySelections: input.secondarySelections || null,
         adjustments: await this._adjustments(input),
+        extraUnits: input.extraUnits || null,
       });
       return {
         options: {
@@ -281,10 +282,12 @@ export const api = {
     },
     // نسبة الزيادة/الخصم تنحفظ لكل عرض بجدول app_config (مفتاح quote_adj_<id>)
     // حتى ترجع بوضع التعديل حتى لو كانت الزيادة موزعة (مخفية) بدون سطر ظاهر
-    async _saveAdjustments(quoteId, adjustments) {
+    async _saveAdjustments(quoteId, adjustments, extraUnits) {
       const a = adjustments || {};
+      const x = extraUnits || {};
+      const hasExtra = ['panel', 'battery', 'inverter'].some((k) => (Number(x[k]) || 0) !== 0);
       const active =
-        (Number(a.markupPercent) || 0) > 0 || (Number(a.discountPercent) || 0) > 0 || a.installment?.enabled;
+        (Number(a.markupPercent) || 0) > 0 || (Number(a.discountPercent) || 0) > 0 || a.installment?.enabled || hasExtra;
       try {
         await api.config.set(`quote_adj_${quoteId}`, active ? {
           markupPercent: Number(a.markupPercent) || 0,
@@ -293,6 +296,10 @@ export const api = {
           // لقطة نسبة الفائدة والأشهر وقت الحفظ — تغيير الإعدادات لاحقاً لا يغير العروض المحفوظة
           installment: a.installment?.enabled
             ? { enabled: true, rate: Number(a.installment.rate) || 1.35, months: Number(a.installment.months) || 60 }
+            : null,
+          // الزيادة/النقصان اليدوي بالوحدات — يرجع بوضع التعديل
+          extraUnits: hasExtra
+            ? { panel: Number(x.panel) || 0, battery: Number(x.battery) || 0, inverter: Number(x.inverter) || 0 }
             : null,
         } : null);
       } catch {
@@ -307,6 +314,7 @@ export const api = {
         cableMeters: input.cableMeters || {},
         secondarySelections: input.secondarySelections || null,
         adjustments: await this._adjustments(input),
+        extraUnits: input.extraUnits || null,
       });
       const { data: profile } = await supabase.from('company_profile').select('notes_default').eq('id', 1).single();
       const defaultNotes = Array.isArray(profile?.notes_default) ? profile.notes_default : JSON.parse(profile?.notes_default || '[]');
@@ -344,7 +352,7 @@ export const api = {
       const notesPayload = notes.map((note_text, idx) => ({ quote_id: quote.id, note_text, sort_order: idx }));
       if (notesPayload.length) throwIf((await supabase.from('quote_notes').insert(notesPayload)).error);
 
-      await this._saveAdjustments(quote.id, await this._adjustments(input));
+      await this._saveAdjustments(quote.id, await this._adjustments(input), input.extraUnits);
       return quote;
     },
     // تحديث عرض محفوظ بمدخلات جديدة: نفس الرقم وتاريخ الإنشاء والمرفق، وبنود وملاحظات جديدة
@@ -356,6 +364,7 @@ export const api = {
         cableMeters: input.cableMeters || {},
         secondarySelections: input.secondarySelections || null,
         adjustments: await this._adjustments(input),
+        extraUnits: input.extraUnits || null,
       });
       const notes = [...(input.notes || []), ...draft.warrantyNotes];
 
@@ -394,7 +403,7 @@ export const api = {
       const notesPayload = notes.map((note_text, idx) => ({ quote_id: id, note_text, sort_order: idx }));
       if (notesPayload.length) throwIf((await supabase.from('quote_notes').insert(notesPayload)).error);
 
-      await this._saveAdjustments(id, await this._adjustments(input));
+      await this._saveAdjustments(id, await this._adjustments(input), input.extraUnits);
       return quote;
     },
     async list() {
@@ -487,6 +496,7 @@ export const api = {
         cableMeters: input.cableMeters || {},
         secondarySelections: input.secondarySelections || null,
         adjustments: await this._adjustments(input),
+        extraUnits: input.extraUnits || null,
       });
       const { data: company } = await supabase.from('company_profile').select('*').eq('id', 1).single();
       const defaultNotes = Array.isArray(company?.notes_default) ? company.notes_default : JSON.parse(company?.notes_default || '[]');

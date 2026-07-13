@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import SecondaryPickerModal from '../components/SecondaryPickerModal.jsx';
 import AssistantBar from '../components/AssistantBar.jsx';
 import { buildEditPrefill } from '../lib/editPrefill.js';
+import { getIsAdmin } from '../lib/agent.js';
 
 const TIERS = [
   { key: 'economy', label: 'اقتصادي' },
@@ -39,6 +40,12 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
   const [discountPercent, setDiscountPercent] = useState('');
   // التقسيط المصرفي: جيك بوينت — النسبة والأشهر من الإعدادات، والمعادلة: المجموع × النسبة ÷ الأشهر
   const [installment, setInstallment] = useState(false);
+  // زيادة/نقصان يدوي بالوحدات (لوح ±2، بطارية وانفيرتر ±1) — للمستخدمين الرئيسيين فقط
+  const [extraUnits, setExtraUnits] = useState({ panel: 0, battery: 0, inverter: 0 });
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    getIsAdmin().then(setIsAdmin).catch(() => setIsAdmin(false));
+  }, []);
   const [overrides, setOverrides] = useState({});
   // المواد الثانوية المختارة للعرض: { [materialId]: { qty } } — تبدأ بالأساسيات (هيكل + صبات)
   const [secondarySel, setSecondarySel] = useState({});
@@ -117,6 +124,8 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
       setMarkupMode(a.markupMode === 'distributed' ? 'distributed' : 'visible');
       setDiscountPercent(Number(a.discountPercent) > 0 ? String(a.discountPercent) : '');
       setInstallment(!!a.installment?.enabled);
+      const x = p.extraUnits || a.extraUnits || {};
+      setExtraUnits({ panel: Number(x.panel) || 0, battery: Number(x.battery) || 0, inverter: Number(x.inverter) || 0 });
     }
     if (p.notes) setNotes(p.notes);
     setEditingQuote(p.editing || null);
@@ -187,6 +196,7 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
     setMarkupMode('visible');
     setDiscountPercent('');
     setInstallment(false);
+    setExtraUnits({ panel: 0, battery: 0, inverter: 0 });
     setSaveMessage('');
   }
 
@@ -206,8 +216,8 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
 
   // useMemo ضروري: بدونه الكائن يتجدد بكل رندر → المؤقت ينعاد → حلقة إعادة حساب لا نهائية
   const inputs = useMemo(
-    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment }),
-    [roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment]
+    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, extraUnits }),
+    [roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, extraUnits]
   );
   const debouncedInputs = useDebouncedValue(inputs, 300);
 
@@ -238,6 +248,7 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
           discountPercent: Number(debouncedInputs.discountPercent) || 0,
         },
         installment: debouncedInputs.installment,
+        extraUnits: debouncedInputs.extraUnits,
       })
       .then(setPreview)
       .finally(() => setCalculating(false));
@@ -265,6 +276,7 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
         discountPercent: Number(discountPercent) || 0,
       },
       installment,
+      extraUnits,
       notes: notes || [],
     };
   }
@@ -599,7 +611,68 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
             {draft.panelBreakdown && (
               <p className="muted" style={{ marginTop: 0 }}>
                 الألواح: {draft.panelBreakdown.feedPanels} للتغذية النهارية + {draft.panelBreakdown.chargePanels} لشحن البطاريات
+                {draft.panelBreakdown.extraPanels !== 0 &&
+                  ` ${draft.panelBreakdown.extraPanels > 0 ? '+' : '−'} ${Math.abs(draft.panelBreakdown.extraPanels)} يدوياً`}
               </p>
+            )}
+
+            {isAdmin && draft.counts && (
+              <div style={{ background: '#f2f6fb', border: '1px dashed #b9c9da', borderRadius: 12, padding: '10px 12px', marginBottom: 12 }}>
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <b style={{ color: 'var(--navy)' }}>🛠 زيادة / نقصان يدوي:</b>
+                  {[
+                    { cat: 'panel', label: 'لوح', step: 2, floor: 2 },
+                    { cat: 'battery', label: 'بطارية', step: 1, floor: 1 },
+                    { cat: 'inverter', label: 'انفيرتر', step: 1, floor: 1 },
+                  ].map(({ cat, label, step, floor }) => {
+                    const count = draft.counts[cat] || 0;
+                    const base = draft.baseCounts[cat] || 0;
+                    if (!base) return null;
+                    const setTo = (target) => setExtraUnits((x) => ({ ...x, [cat]: target - base }));
+                    return (
+                      <span key={cat} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', border: '1px solid #d5dde6', borderRadius: 20, padding: '4px 8px' }}>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{ borderRadius: '50%', width: 30, height: 30, padding: 0, fontWeight: 800 }}
+                          disabled={count <= floor}
+                          onClick={() => setTo(Math.max(floor, count - step))}
+                          title={`نقصان ${step} ${label}`}
+                        >
+                          −
+                        </button>
+                        <b style={{ minWidth: 58, textAlign: 'center', color: 'var(--navy)' }}>
+                          {label} ×{count}
+                          {count !== base && <small style={{ color: '#b8860b' }}> ({count > base ? '+' : ''}{count - base})</small>}
+                        </b>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{ borderRadius: '50%', width: 30, height: 30, padding: 0, fontWeight: 800 }}
+                          onClick={() => setTo(count + step)}
+                          title={`زيادة ${step} ${label}`}
+                        >
+                          +
+                        </button>
+                      </span>
+                    );
+                  })}
+                  {(extraUnits.panel !== 0 || extraUnits.battery !== 0 || extraUnits.inverter !== 0) && (
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => setExtraUnits({ panel: 0, battery: 0, inverter: 0 })}>
+                      ↺ رجوع للحساب التلقائي
+                    </button>
+                  )}
+                </div>
+                {draft.capability && (draft.capability.nightHours != null || draft.capability.dayAmps != null) && (
+                  <div style={{ marginTop: 8, fontSize: '0.88rem', color: '#1a5a9c', fontWeight: 700 }}>
+                    {draft.capability.nightHours != null && (
+                      <span>🔋 البطاريات تجهز {ampNight} أمبير ليلي لمدة ≈{draft.capability.nightHours} ساعة</span>
+                    )}
+                    {draft.capability.nightHours != null && draft.capability.dayAmps != null && ' — '}
+                    {draft.capability.dayAmps != null && <span>⚡ الانفيرترات تتحمل ≈{draft.capability.dayAmps} أمبير نهاري</span>}
+                  </div>
+                )}
+              </div>
             )}
 
             <div className="grid-3">

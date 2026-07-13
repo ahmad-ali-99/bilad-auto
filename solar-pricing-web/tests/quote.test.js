@@ -39,7 +39,7 @@ describe('المثال المرجعي بعد إلغاء المخزون (15 أم�
     const options = optionsFor({ roofAreaM2: 28, ampDay: 15, ampNight: 15, nightSupplyHours: 8 });
     const draft = buildQuoteDraft(options, { tier: 'economy', cableMeters: { 6: 143 } });
     expect(draft.errors).toEqual({});
-    expect(draft.panelBreakdown).toEqual({ feedPanels: 7, chargePanels: 3 });
+    expect(draft.panelBreakdown).toEqual({ feedPanels: 7, chargePanels: 3, extraPanels: 0 });
     expect(draft.items.find((i) => i.description.includes('ألواح شمسية')).quantity).toBe(10);
     expect(draft.items.find((i) => i.description.includes('بطاريات ليثيوم')).quantity).toBe(2);
     expect(draft.items.find((i) => i.description.includes('انفيرتر')).quantity).toBe(1);
@@ -166,5 +166,52 @@ describe('التقسيط المصرفي: المجموع × النسبة ÷ ال�
   it('بدون تأشير: لا يوجد تقسيط بالمسودة', () => {
     const draft = buildQuoteDraft(base(), { tier: 'economy', cableMeters: { 6: 143 } });
     expect(draft.installment).toBe(null);
+  });
+});
+
+describe('الزيادة/النقصان اليدوي بالوحدات (لوح ±2، بطارية/انفيرتر ±1)', () => {
+  const base = () => optionsFor({ roofAreaM2: 40, ampDay: 15, ampNight: 15, nightSupplyHours: 8 });
+
+  it('لوح +2: العدد والسعر يزيدان لوحين والعدد يبقى زوجي', () => {
+    const plain = buildQuoteDraft(base(), { tier: 'economy', cableMeters: {} });
+    const draft = buildQuoteDraft(base(), { tier: 'economy', cableMeters: {}, extraUnits: { panel: 2 } });
+    expect(draft.counts.panel).toBe(plain.counts.panel + 2);
+    expect(draft.counts.panel % 2).toBe(0);
+    expect(draft.panelBreakdown.extraPanels).toBe(2);
+    const panelItem = draft.items.find((i) => i.description.includes('ألواح'));
+    expect(panelItem.quantity).toBe(plain.counts.panel + 2);
+    expect(draft.total).toBe(plain.total + 2 * 185000 + 2 * 65000 + 2 * 5000); // لوحان + هيكلان + صبتان
+  });
+
+  it('بطارية +1 وانفيرتر +1: الأعداد والقدرة الفعلية تتحدث', () => {
+    const plain = buildQuoteDraft(base(), { tier: 'economy', cableMeters: {} });
+    const draft = buildQuoteDraft(base(), { tier: 'economy', cableMeters: {}, extraUnits: { battery: 1, inverter: 1 } });
+    expect(draft.counts.battery).toBe(plain.counts.battery + 1);
+    expect(draft.counts.inverter).toBe(plain.counts.inverter + 1);
+    // ساعات الليل ترتفع بنفس نسبة زيادة البنك، وأمبير النهار بنسبة الانفيرترات
+    expect(draft.capability.nightHours).toBeGreaterThan(plain.capability.nightHours);
+    expect(draft.capability.dayAmps).toBeGreaterThan(plain.capability.dayAmps);
+    // ساعات الليل = بنك×DOD×1000 ÷ (أمبير×فولت)
+    const expectedHours = Math.round(((draft.counts.battery * 16 * 0.9 * 1000) / (15 * 220)) * 10) / 10;
+    expect(draft.capability.nightHours).toBe(expectedHours);
+  });
+
+  it('النقصان لا ينزل تحت الحد الأدنى (بطارية 1، لوح 2)', () => {
+    const draft = buildQuoteDraft(base(), { tier: 'economy', cableMeters: {}, extraUnits: { battery: -99, panel: -99 } });
+    expect(draft.counts.battery).toBe(1);
+    expect(draft.counts.panel).toBe(2);
+  });
+
+  it('لوح فردي يتقرب لمضاعف 2 (لا أعداد فردية أبداً)', () => {
+    const plain = buildQuoteDraft(base(), { tier: 'economy', cableMeters: {} });
+    const draft = buildQuoteDraft(base(), { tier: 'economy', cableMeters: {}, extraUnits: { panel: 3 } });
+    expect(draft.counts.panel % 2).toBe(0);
+    expect(Math.abs(draft.counts.panel - plain.counts.panel)).toBeLessThanOrEqual(4);
+  });
+
+  it('زيادة الألواح تفعّل فحص المساحة الحاجب إذا ما تكفي', () => {
+    const tight = optionsFor({ roofAreaM2: 28, ampDay: 15, ampNight: 15, nightSupplyHours: 8 }); // تكفي بالضبط لـ10
+    const draft = buildQuoteDraft(tight, { tier: 'economy', cableMeters: {}, extraUnits: { panel: 4 } });
+    expect(draft.errors.roofArea).toBeTruthy();
   });
 });

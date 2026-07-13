@@ -34,6 +34,7 @@ export async function buildEditPrefill(quoteId) {
     overrides,
     secondarySelections,
     adjustments: adjustments || null,
+    extraUnits: adjustments?.extraUnits || null,
     notes: full.notes.map((n) => n.note_text),
   };
 }

@@ -161,27 +161,45 @@ function applyAdjustments(items, total, adjustments) {
   return { total, summary };
 }
 
+// تعديل يدوي لعدد وحدات التوليفة (زيادة/نقصان من أزرار الواجهة) مع حد أدنى وإعادة حساب السعر
+function adjustCombo(combo, delta, minUnits) {
+  if (!combo || !delta) return combo;
+  const units = Math.max(minUnits, combo.units + delta);
+  return { ...combo, units, totalPrice: units * combo.material.price };
+}
+
 // يبني مسودة العرض الكاملة لمستوى معين — بدون أي فحص لكمية المخزون (المواد مجرد خيارات)
 // secondarySelections (اختياري): { [materialId]: { qty } } — إذا مرّر، تنضاف فقط المواد الثانوية
 // المذكورة فيه؛ qty رقم = كمية يدوية، وqty فارغ/null = كمية تلقائية (حسب الألواح أو وحدة واحدة).
 // إذا لم يمرّر يبقى السلوك القديم: كل الثانوية "عدد/قطعي" تنضاف تلقائياً + أمتار من cableMeters.
 // adjustments (اختياري): نسبة الزيادة (علنية/موزعة) ونسبة الخصم — تنطبق بعد اكتمال البنود.
-function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, secondarySelections = null, adjustments = null }) {
+// extraUnits (اختياري): { panel, battery, inverter } — زيادة/نقصان يدوي بالوحدات؛ اللوح
+// بمضاعفات 2 دائماً (بلا أعداد فردية)، والفحوصات (المساحة/الشحن/التوازي) تحسب بالعدد النهائي.
+function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, secondarySelections = null, adjustments = null, extraUnits = null }) {
   const { settings, roofAreaM2, ampDay, ampNight, batteryTiers, panelMaterials, inverterMaterials, secondary, labor, systemAmps } = options;
 
   const errors = {};
   const warnings = {};
 
-  const batteryCombo = pickCombo(batteryTiers, tier, overrides, 'battery', errors);
+  const extra = {
+    panel: 2 * Math.round((Number(extraUnits?.panel) || 0) / 2),
+    battery: Math.round(Number(extraUnits?.battery) || 0),
+    inverter: Math.round(Number(extraUnits?.inverter) || 0),
+  };
+
+  const batteryComboBase = pickCombo(batteryTiers, tier, overrides, 'battery', errors);
+  const batteryCombo = adjustCombo(batteryComboBase, extra.battery, 1);
   const batteryCount = batteryCombo ? batteryCombo.units : 0;
 
   const panelTiers = calc.selectPanelTiers(panelMaterials, ampDay, batteryCount, settings);
-  const panelCombo = pickCombo(panelTiers, tier, overrides, 'panel', errors);
+  const panelComboBase = pickCombo(panelTiers, tier, overrides, 'panel', errors);
+  const panelCombo = adjustCombo(panelComboBase, extra.panel, 2);
 
   // الانفيرتر يُختار بعد الألواح: قدرته لازم تستوعب الحمل ومصفوفة الألواح كاملة (÷1.3)
   const panelArrayW = panelCombo ? panelCombo.units * panelCombo.material.watt_or_capacity : 0;
   const inverterTiers = calc.selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, panelArrayW);
-  const inverterCombo = pickCombo(inverterTiers, tier, overrides, 'inverter', errors);
+  const inverterComboBase = pickCombo(inverterTiers, tier, overrides, 'inverter', errors);
+  const inverterCombo = adjustCombo(inverterComboBase, extra.inverter, 1);
 
   if (!labor) {
     errors.labor = 'لا يوجد سعر عمل معرّف لهذا الحجم — أضف حجماً جديداً من المخزون';
@@ -289,7 +307,35 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
     items,
     total,
     systemAmps,
-    panelBreakdown: panelCombo ? { feedPanels: panelCombo.feedPanels, chargePanels: panelCombo.chargePanels } : null,
+    panelBreakdown: panelCombo
+      ? {
+          feedPanels: panelCombo.feedPanels,
+          chargePanels: panelCombo.chargePanels,
+          extraPanels: panelCombo.units - (panelCombo.feedPanels + panelCombo.chargePanels),
+        }
+      : null,
+    // الأعداد النهائية والأساسية (قبل الزيادة اليدوية) — لأزرار +/− بالواجهة
+    counts: {
+      panel: panelCombo ? panelCombo.units : 0,
+      battery: batteryCombo ? batteryCombo.units : 0,
+      inverter: inverterCombo ? inverterCombo.units : 0,
+    },
+    baseCounts: {
+      panel: panelComboBase ? panelComboBase.units : 0,
+      battery: batteryComboBase ? batteryComboBase.units : 0,
+      inverter: inverterComboBase ? inverterComboBase.units : 0,
+    },
+    // القدرة الفعلية للتوليفة الحالية — تتحدث فوراً مع كل زيادة/نقصان يدوي:
+    // ساعات الليل = سعة البنك × عمق التفريغ ÷ (أمبير الليل × الفولتية)، وأمبير النهار = قدرة الانفيرترات ÷ الفولتية
+    capability: {
+      nightHours:
+        batteryCombo && ampNight > 0
+          ? Math.round(((batteryCombo.units * batteryCombo.material.watt_or_capacity * settings.dod * 1000) / (ampNight * settings.systemVoltage)) * 10) / 10
+          : null,
+      dayAmps: inverterCombo
+        ? Math.floor((inverterCombo.units * inverterCombo.material.watt_or_capacity) / (settings.systemVoltage * (settings.inverterSafetyFactor || 1)))
+        : null,
+    },
     panelTiers,
     inverterTiers,
     internalNotes,
