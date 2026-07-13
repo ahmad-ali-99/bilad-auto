@@ -26,12 +26,22 @@ export default function App() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const draftRef = useRef(null);
 
+  // حارس الموظفين: التطبيق مخصص لحسابات الشركة فقط (@biladauto.local) —
+  // جلسة زائر Google قادمة من الموقع التسويقي (نفس النطاق) تُنهى فوراً
+  function staffOnly(s) {
+    if (s && !String(s.user?.email || '').endsWith('@biladauto.local')) {
+      supabase.auth.signOut({ scope: 'local' });
+      return null;
+    }
+    return s;
+  }
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
+      setSession(staffOnly(data.session));
       setLoading(false);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(staffOnly(s)));
     return () => sub.subscription.unsubscribe();
   }, []);
 

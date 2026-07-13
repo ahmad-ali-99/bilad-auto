@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getAgentKey, setAgentKey, SHARE_KEY_SQL } from '../lib/agent.js';
+import { getAgentKey, setAgentKey, SHARE_KEY_SQL, getIsAdmin } from '../lib/agent.js';
 
 const SETTINGS_FIELDS = [
   { key: 'system_voltage', label: 'فولتية النظام (لتحويل الأمبير لواط)' },
@@ -24,6 +24,20 @@ export default function Settings() {
   // معاملات أمان البطاريات لكل مستوى — تضرب حاجة الليل قبل حساب عدد البطاريات
   const [battFactors, setBattFactors] = useState({ economy: '0.9', standard: '0.85', premium: '0.8' });
   const [battMsg, setBattMsg] = useState('');
+  // جهات تواصل المبيعات (تسجيلات زوار الموقع) — تظهر للمستخدمين الرئيسيين فقط
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [leads, setLeads] = useState(null);
+  const [leadsMsg, setLeadsMsg] = useState('');
+
+  async function loadLeads() {
+    setLeadsMsg('');
+    try {
+      setLeads(await window.api.leads.list());
+    } catch (err) {
+      setLeads([]);
+      setLeadsMsg('تعذر جلب التسجيلات: ' + err.message + ' — إن لم يكن جدول leads منشأً بعد فنفّذ أسطر SQL المرسلة');
+    }
+  }
 
   function reload() {
     window.api.settings.get().then(setSettings);
@@ -74,6 +88,12 @@ export default function Settings() {
   }
 
   useEffect(reload, []);
+  useEffect(() => {
+    getIsAdmin().then((admin) => {
+      setIsAdmin(admin);
+      if (admin) loadLeads();
+    }).catch(() => {});
+  }, []);
 
   async function saveAgentKey(e) {
     e.preventDefault();
@@ -312,6 +332,50 @@ export default function Settings() {
           حفظ بيانات الشركة
         </button>
       </form>
+
+      {isAdmin && (
+        <div className="card">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <h3 style={{ color: 'var(--navy)', marginTop: 0, marginBottom: 0, flex: 1 }}>
+              📇 جهات تواصل المبيعات {leads ? `(${leads.length})` : ''}
+            </h3>
+            <button className="btn btn-secondary btn-sm" onClick={loadLeads}>🔄 تحديث</button>
+          </div>
+          <p className="muted" style={{ margin: '6px 0 10px' }}>
+            زوار الموقع المسجلون بحساب Google مع أرقام هواتفهم — قراءة فقط، وتظهر للمستخدمين الرئيسيين حصراً.
+          </p>
+          {leadsMsg && <div className="alert alert-warning">{leadsMsg}</div>}
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>الاسم</th>
+                  <th>البريد</th>
+                  <th>الهاتف</th>
+                  <th>تاريخ التسجيل</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(leads || []).map((l) => (
+                  <tr key={l.id}>
+                    <td>{l.full_name || '-'}</td>
+                    <td dir="ltr">{l.email || '-'}</td>
+                    <td dir="ltr">{l.phone || '-'}</td>
+                    <td>{l.created_at ? new Date(l.created_at).toLocaleDateString('en-GB') : '-'}</td>
+                  </tr>
+                ))}
+                {leads && leads.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="muted" style={{ textAlign: 'center', padding: 14 }}>
+                      لا توجد تسجيلات بعد
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>البيانات السحابية</h3>

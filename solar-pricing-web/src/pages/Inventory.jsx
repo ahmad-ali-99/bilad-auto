@@ -128,7 +128,7 @@ export default function Inventory({ initialSearch }) {
             <input
               className="search-input"
               type="text"
-              placeholder="بحث بالاسم أو الرقم أو القدرة..."
+              placeholder="بحث..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />

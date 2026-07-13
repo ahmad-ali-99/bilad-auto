@@ -135,7 +135,7 @@ export default function Quotes({ onEditQuote }) {
         <input
           type="text"
           className="search-input"
-          placeholder="🔍 ابحث بالاسم أو الرقم أو الهاتف أو الموقع..."
+          placeholder="🔍 بحث..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{ flex: 1, minWidth: 220 }}

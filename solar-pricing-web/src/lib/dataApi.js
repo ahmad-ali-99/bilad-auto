@@ -518,6 +518,15 @@ export const api = {
     },
   },
 
+  // جهات تواصل المبيعات — تسجيلات زوار الموقع (Google + هاتف)؛ القراءة للموظفين حسب RLS
+  leads: {
+    async list() {
+      const { data, error } = await supabase.from('leads').select('*').order('id', { ascending: false }).limit(500);
+      throwIf(error);
+      return data || [];
+    },
+  },
+
   // إعدادات مشتركة خفيفة (key/value بجدول app_config) — مثل الثانوية الافتراضية الدائمة
   config: {
     async get(key) {

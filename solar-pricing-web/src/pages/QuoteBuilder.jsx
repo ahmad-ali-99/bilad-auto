@@ -574,16 +574,9 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
               />
             </div>
           </div>
-          <p className="muted" style={{ margin: '4px 0 0', fontSize: '0.82rem' }}>
-            العلنية تظهر كسطر «نسبة زيادة» في جدول العرض، والموزعة ترفع أسعار البنود نفسها دون أي سطر إضافي.
-            الخصم يظهر دائماً كسطر «خصم» ويُطرح من المجموع النهائي.
-          </p>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontWeight: 700, color: 'var(--navy)', cursor: 'pointer' }}>
             <input type="checkbox" checked={installment} onChange={(e) => setInstallment(e.target.checked)} style={{ width: 18, height: 18 }} />
             🏦 إدراج التقسيط المصرفي بالعرض
-            <span className="muted" style={{ fontWeight: 400, fontSize: '0.82rem' }}>
-              (المجموع × نسبة فائدة المصرف ÷ عدد الأشهر — النسبة والأشهر من الإعدادات)
-            </span>
           </label>
           </>
           )}
