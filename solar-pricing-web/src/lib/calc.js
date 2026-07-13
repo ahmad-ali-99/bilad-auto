@@ -18,11 +18,13 @@ function panelAmpsFor(panelWatt) {
   return panelWatt * PANEL_AMPS_PER_WATT;
 }
 
-// عدد وحدات البطارية المطلوبة لتغطية الليل بساعات التجهيز المدخلة بالعرض
-function batteriesRequired(ampNight, nightSupplyHours, { systemVoltage, dod }, batteryKwh) {
+// عدد وحدات البطارية المطلوبة لتغطية الليل بساعات التجهيز المدخلة بالعرض.
+// factor = معامل أمان المستوى (من الإعدادات): الحاجة تنضرب به قبل القسمة على سعة
+// البطارية — 0.9 مثلاً يسمح لبطارية 16kWh وحدة تغطي حاجة 17.6kWh بدل ما نجبر ثنتين.
+function batteriesRequired(ampNight, nightSupplyHours, { systemVoltage, dod }, batteryKwh, factor = 1) {
   if (ampNight <= 0) return 0;
   const nightEnergyKwh = (ampNight * systemVoltage * nightSupplyHours) / 1000;
-  return Math.ceil(nightEnergyKwh / dod / batteryKwh);
+  return Math.max(1, Math.ceil((nightEnergyKwh * factor) / dod / batteryKwh));
 }
 
 // عدد الألواح النهائي = تغذية النهار + شحن البطاريات — ودائماً زوجي (التركيب أزواج على 2 MPPT)
@@ -116,12 +118,40 @@ function classifyTiers(combos) {
   return { economy, standard, premium, singleOption: false, insufficient: false, all: sorted };
 }
 
-// ===== دستور التسعير (الهندسة أولاً ثم السعر — معتمد من الشركة) =====
-// الهندسة ثابتة بكل المستويات: أقل عدد بطاريات وانفيرترات يغطي الأمبيرية المطلوبة.
-// economy: الأرخص ضمن مجموعة أقل عدد وحدات.
-// standard: الوسط سعراً ضمن نفس المجموعة.
-// premium: منظومة مرتاحة حتى لو زاد الحمل — الانفيرتر يتوزع على وحدتين بهامش ≥30%،
-// والبطاريات الأرقى ضمن أقل عدد + وحدة بطارية إضافية احتياط.
+// ===== دستور التسعير (الهندسة أولاً، الـIP قبل السعر — معتمد من الشركة) =====
+// الهندسة ثابتة بكل المستويات: أقل عدد بطاريات وانفيرترات يغطي الأمبيرية بدقة،
+// وعدد البطاريات يخضع لمعامل أمان لكل مستوى من الإعدادات (يضرب الحاجة قبل القسمة).
+// economy: أقل عدد ← الأرخص (أقل IP ممكن بسعر مناسب) — معامل بطاريات 0.90.
+// standard: أقل عدد ← أعلى حماية IP (مثل IP65) ← الأرخص عند التساوي — معامل 0.85.
+// premium ≤120 أمبير: هويمايلز حصراً (انفيرتر + بطارية) مع قواعد الراحة:
+//   الانفيرتر يتوزع على وحدتين بهامش ≥30% + بطارية إضافية احتياط — معامل 0.80.
+// premium >120 أمبير: نفس قواعد الراحة لكن بكل الماركات (هويمايلز ما تغطي الأحجام الكبيرة).
+
+// الحد الأعلى لحصر الممتاز بأجهزة هويمايلز — فوقه نرجع للقاعدة العامة
+const HOYMILES_MAX_AMPS = 120;
+
+// معاملات أمان البطاريات الافتراضية لكل مستوى (تتغير من الإعدادات — app_config)
+const DEFAULT_BATTERY_FACTORS = { economy: 0.9, standard: 0.85, premium: 0.8 };
+
+function materialText(material) {
+  return `${material.brand || ''} ${material.model || ''} ${material.full_description || ''}`;
+}
+
+// درجة الحماية IP من نصوص المادة (أعلى رقم مذكور) — 0 إذا غير مذكورة
+function ipRatingOf(material) {
+  const re = /IP\s*-?\s*(\d{2})/gi;
+  const text = materialText(material);
+  let best = 0;
+  let match;
+  while ((match = re.exec(text))) best = Math.max(best, Number(match[1]));
+  return best;
+}
+
+// هل المادة هويمايلز؟ بالاسم الصريح أو ببادئات موديلاتها (HIS/HYS/HIT/LB16D...)
+function isHoymiles(material) {
+  if (/hoymiles|هويمايلز/i.test(materialText(material))) return true;
+  return /^(HIS|HYS|HIT|LB\d+D)/i.test(String(material.model || '').trim());
+}
 
 // الوسط سعراً ضمن مجموعة (مرتبة تصاعدياً)
 function midByPrice(group) {
@@ -142,7 +172,18 @@ function pickFewestThenMid(combos) {
   return midByPrice(fewestUnitsGroup(combos));
 }
 
-function assignTiers(combos, premiumPick) {
+// المتوسط للانفيرترات: أقل عدد ← أعلى حماية IP ← الأرخص عند تساوي الـIP.
+// الـIP يُسقّف بـ65 للمقارنة: IP65 وIP66 كلاهما تصنيف خارجي كامل، فما نخلي جهازاً
+// أغلى بكثير (مثل هويمايلز IP66 المحجوزة للممتاز) يسحب المتوسط — السعر يفصل بعدها.
+const STANDARD_IP_CAP = 65;
+function pickFewestThenIp(combos) {
+  const group = fewestUnitsGroup(combos);
+  const effIp = (c) => Math.min(ipRatingOf(c.material), STANDARD_IP_CAP);
+  const maxIp = Math.max(...group.map(effIp));
+  return group.filter((c) => effIp(c) === maxIp).sort((a, b) => a.totalPrice - b.totalPrice)[0];
+}
+
+function assignTiers(combos, premiumPick, standardPick = pickFewestThenMid) {
   if (combos.length === 0) {
     return { economy: null, standard: null, premium: null, singleOption: false, insufficient: true, all: [] };
   }
@@ -152,12 +193,21 @@ function assignTiers(combos, premiumPick) {
   }
   return {
     economy: pickFewestThenCheapest(sorted),
-    standard: pickFewestThenMid(sorted),
+    standard: standardPick(sorted),
     premium: premiumPick(sorted),
     singleOption: false,
     insufficient: false,
     all: sorted,
   };
+}
+
+// حصر مرشحات الممتاز بهويمايلز إذا حجم المنظومة ≤120 أمبير واكو مرشح هويمايلز
+function premiumPool(combos, systemAmps) {
+  if (systemAmps > 0 && systemAmps <= HOYMILES_MAX_AMPS) {
+    const hoymiles = combos.filter((c) => isHoymiles(c.material));
+    if (hoymiles.length) return hoymiles;
+  }
+  return combos;
 }
 
 // premium بطاريات: الأغلى (الأرقى) ضمن أقل عدد + وحدة إضافية احتياط راحة
@@ -167,15 +217,36 @@ function pickBatteryPremium(combos) {
   return { material: best.material, units, totalPrice: units * best.material.price, extraUnit: true };
 }
 
-// توليفات البطاريات: لكل موديل بطارية عدد وحدات مطلوب حسب ساعات التجهيز الليلي
-function selectBatteryTiers(batteryMaterials, ampNight, nightSupplyHours, settings) {
-  const combos = [];
-  for (const material of batteryMaterials) {
-    const units = batteriesRequired(ampNight, nightSupplyHours, settings, material.watt_or_capacity);
-    if (units <= 0) continue;
-    combos.push({ material, units, totalPrice: units * material.price });
+// توليفات البطاريات: لكل موديل عدد وحدات حسب ساعات التجهيز الليلي — مضروب بمعامل
+// أمان المستوى، لذلك كل مستوى إله قائمة توليفات خاصة (allByTier) بأعداده الصحيحة.
+function selectBatteryTiers(batteryMaterials, ampNight, nightSupplyHours, settings, { factors = null, systemAmps = 0 } = {}) {
+  const f = { ...DEFAULT_BATTERY_FACTORS, ...(factors || {}) };
+  const combosFor = (factor) => {
+    const combos = [];
+    for (const material of batteryMaterials) {
+      const units = batteriesRequired(ampNight, nightSupplyHours, settings, material.watt_or_capacity, factor);
+      if (units <= 0) continue;
+      combos.push({ material, units, totalPrice: units * material.price });
+    }
+    return combos.sort((a, b) => a.totalPrice - b.totalPrice);
+  };
+  const allByTier = {
+    economy: combosFor(f.economy),
+    standard: combosFor(f.standard),
+    premium: combosFor(f.premium),
+  };
+  if (allByTier.standard.length === 0) {
+    return { economy: null, standard: null, premium: null, singleOption: false, insufficient: true, all: [], allByTier };
   }
-  return assignTiers(combos, pickBatteryPremium);
+  return {
+    economy: pickFewestThenCheapest(allByTier.economy),
+    standard: pickFewestThenMid(allByTier.standard),
+    premium: pickBatteryPremium(premiumPool(allByTier.premium, systemAmps)),
+    singleOption: allByTier.standard.length === 1,
+    insufficient: false,
+    all: allByTier.standard,
+    allByTier,
+  };
 }
 
 // توليفات الألواح: العدد يعتمد على أمبير النهار + عدد بطاريات التوليفة المرافقة
@@ -189,7 +260,7 @@ function selectPanelTiers(panelMaterials, ampDay, batteryCount, settings) {
   return classifyTiers(combos);
 }
 
-function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, panelArrayW = 0) {
+function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, panelArrayW = 0, systemAmps = 0) {
   const requiredW = inverterCapacityRequired(ampDay, ampNight, settings, panelArrayW);
   const combos = [];
   for (const material of inverterMaterials) {
@@ -198,10 +269,10 @@ function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, pane
     combos.push({ material, units, totalPrice: units * material.price });
   }
 
-  // premium: توزيع الحمل على وحدتين (على الأقل) بهامش ≥30% — كل جهاز محمل ≤~70% حتى
-  // المنظومة مرتاحة لو زاد الحمل، ونختار الأرخص المحقق للشرط
+  // premium: هويمايلز حصراً ≤120 أمبير (وإلا كل الماركات)، وتوزيع الحمل على وحدتين
+  // (على الأقل) بهامش ≥30% — كل جهاز محمل ≤~70% حتى المنظومة مرتاحة لو زاد الحمل
   function pickInverterPremium(all) {
-    const candidates = all.map((c) => {
+    const candidates = premiumPool(all, systemAmps).map((c) => {
       const units = Math.max(2, Math.ceil(requiredW / c.material.watt_or_capacity));
       return { material: c.material, units, totalPrice: units * c.material.price, splitLoad: true };
     });
@@ -210,13 +281,18 @@ function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, pane
     return pool.sort((a, b) => a.totalPrice - b.totalPrice)[0];
   }
 
-  return assignTiers(combos, pickInverterPremium);
+  // المتوسط بالـIP قبل السعر، والاقتصادي يبقى الأرخص ضمن أقل عدد
+  return assignTiers(combos, pickInverterPremium, pickFewestThenIp);
 }
 
 export {
   PANEL_AMPS_PER_WATT,
   PV_OVERSIZE_RATIO,
   IRAQ_SUN_HOURS,
+  HOYMILES_MAX_AMPS,
+  DEFAULT_BATTERY_FACTORS,
+  ipRatingOf,
+  isHoymiles,
   chargingCheck,
   panelAmpsFor,
   batteriesRequired,

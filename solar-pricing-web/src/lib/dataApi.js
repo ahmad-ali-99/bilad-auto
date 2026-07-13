@@ -200,10 +200,12 @@ export const api = {
       return { ...(input.adjustments || {}), installment: await this._installment(input) };
     },
     async _options(input) {
-      const [materials, { data: laborTiers }, { data: settingsRow }] = await Promise.all([
+      const [materials, { data: laborTiers }, { data: settingsRow }, batteryFactors] = await Promise.all([
         allMaterials(),
         supabase.from('labor_tiers').select('*'),
         supabase.from('settings').select('*').eq('id', 1).single(),
+        // معاملات أمان البطاريات لكل مستوى — من الإعدادات المشتركة (وإلا الافتراضي بالمحرك)
+        api.config.get('battery_factors'),
       ]);
       return quoteService.buildOptions({
         materials,
@@ -213,6 +215,7 @@ export const api = {
         ampDay: input.ampDay,
         ampNight: input.ampNight,
         nightSupplyHours: input.nightSupplyHours,
+        batteryFactors: batteryFactors || null,
       });
     },
     async preview(input) {

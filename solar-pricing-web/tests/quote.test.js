@@ -54,7 +54,8 @@ describe('إلغاء المخزون: المواد تُختار دائماً بل
     // ما فيه أي خطأ من نوع مخزون (بس ممكن خطأ أجور عمل للحجم 50 لأنه غير معرّف)
     const stockErrors = Object.keys(draft.errors).filter((k) => k.startsWith('secondary_'));
     expect(stockErrors).toEqual([]);
-    expect(draft.items.find((i) => i.description.includes('بطاريات')).quantity).toBe(4);
+    // معامل أمان الاقتصادي 0.9: 48.9×0.9=44 ← ceil(44/16)=3 بدل 4
+    expect(draft.items.find((i) => i.description.includes('بطاريات')).quantity).toBe(3);
   });
 });
 
@@ -213,5 +214,74 @@ describe('الزيادة/النقصان اليدوي بالوحدات (لوح ±
     const tight = optionsFor({ roofAreaM2: 28, ampDay: 15, ampNight: 15, nightSupplyHours: 8 }); // تكفي بالضبط لـ10
     const draft = buildQuoteDraft(tight, { tier: 'economy', cableMeters: {}, extraUnits: { panel: 4 } });
     expect(draft.errors.roofArea).toBeTruthy();
+  });
+});
+
+describe('دستور المستويات الجديد: IP قبل السعر + هويمايلز بالممتاز + معاملات البطاريات', () => {
+  // مخزون موسع: انفيرترات بنفس الحجم وIP مختلف + أجهزة هويمايلز + بطاريات حدية
+  const MATERIALS2 = [
+    { id: 1, category: 'panel', model: 'JINKO 650', full_description: 'ألواح شمسية 650 واط', unit: 'عدد', watt_or_capacity: 650, price: 185000, qty_per_panel: null },
+    { id: 10, category: 'inverter', brand: 'Felicity', model: 'Felicity 6kW', full_description: 'انفيرتر 6 كيلو IP21', unit: 'عدد', watt_or_capacity: 6000, price: 600000, qty_per_panel: null },
+    { id: 11, category: 'inverter', brand: 'Gospower', model: 'Gospower 6kW', full_description: 'انفيرتر 6 كيلو IP65', unit: 'عدد', watt_or_capacity: 6000, price: 700000, qty_per_panel: null },
+    { id: 12, category: 'inverter', brand: 'Growatt', model: 'Growatt 6kW', full_description: 'انفيرتر 6 كيلو IP65', unit: 'عدد', watt_or_capacity: 6000, price: 650000, qty_per_panel: null },
+    { id: 13, category: 'inverter', brand: 'hoymiles', model: 'HIS6L-G3S', full_description: 'انفيرتر هويمايلز 6 كيلو IP66', unit: 'عدد', watt_or_capacity: 6000, price: 1265000, qty_per_panel: null },
+    { id: 14, category: 'inverter', brand: 'Deye', model: 'Deye 50kW', full_description: 'انفيرتر 50 كيلو IP65', unit: 'عدد', watt_or_capacity: 50000, price: 6300000, qty_per_panel: null },
+    { id: 20, category: 'battery', brand: 'Felicity', model: 'Felicity 15kWh', full_description: 'بطارية 15kWh', unit: 'عدد', watt_or_capacity: 15, price: 2150000, qty_per_panel: null },
+    { id: 21, category: 'battery', brand: 'Deye', model: 'Deye 16kWh', full_description: 'بطارية 16kWh', unit: 'عدد', watt_or_capacity: 16, price: 2950000, qty_per_panel: null },
+    { id: 22, category: 'battery', brand: 'hoymiles', model: 'LB16D-G3', full_description: 'بطارية هويمايلز 16kWh', unit: 'عدد', watt_or_capacity: 16, price: 2898000, qty_per_panel: null },
+    { id: 30, category: 'secondary', model: 'هيكل', full_description: 'هيكل', unit: 'عدد', watt_or_capacity: null, price: 65000, qty_per_panel: 1 },
+  ];
+  const LABOR2 = [
+    { id: 1, system_amps: 30, price: 400000 },
+    { id: 2, system_amps: 200, price: 3000000 },
+  ];
+  const opts2 = (input) => buildOptions({ materials: MATERIALS2, laborTiers: LABOR2, settingsRow: SETTINGS_ROW, ...input });
+
+  // 18 أمبير ليلي × 4 ساعات × 220 فولت = 15.84kWh ← ÷0.9 dod = 17.6kWh مطلوبة
+  const borderline = { roofAreaM2: 60, ampDay: 18, ampNight: 18, nightSupplyHours: 4 };
+
+  it('معامل الاقتصادي 0.9 يقلب 2×15kWh إلى 1×16kWh بالحالة الحدية', () => {
+    const options = opts2(borderline);
+    // 17.6×0.9=15.84 ← 16kWh توليفة وحدة، و15kWh توليفتين ← أقل عدد يفوز
+    expect(options.batteryTiers.economy.units).toBe(1);
+    expect(options.batteryTiers.economy.material.watt_or_capacity).toBe(16);
+    // بمعامل 1.0 (بدون تسامح) نفس الحالة تطلع 2
+    const strict = buildOptions({ materials: MATERIALS2, laborTiers: LABOR2, settingsRow: SETTINGS_ROW, ...borderline, batteryFactors: { economy: 1, standard: 1, premium: 1 } });
+    expect(strict.batteryTiers.economy.units).toBe(2);
+  });
+
+  it('المتوسط يختار أعلى IP ثم الأرخص: Growatt IP65 (650) قبل Felicity IP21 (600) وقبل Gospower IP65 (700)', () => {
+    const options = opts2(borderline);
+    const draft = buildQuoteDraft(options, { tier: 'standard', cableMeters: {} });
+    expect(draft.inverterTiers.standard.material.model).toBe('Growatt 6kW');
+    // والاقتصادي يبقى الأرخص (Felicity IP21)
+    expect(draft.inverterTiers.economy.material.model).toBe('Felicity 6kW');
+  });
+
+  it('الممتاز ≤120 أمبير: انفيرتر وبطارية هويمايلز حتى لو أغلى + وحدة بطارية احتياط', () => {
+    const options = opts2(borderline);
+    const draft = buildQuoteDraft(options, { tier: 'premium', cableMeters: {} });
+    expect(draft.inverterTiers.premium.material.model).toBe('HIS6L-G3S');
+    expect(draft.inverterTiers.premium.units).toBeGreaterThanOrEqual(2); // توزيع الحمل
+    expect(options.batteryTiers.premium.material.model).toBe('LB16D-G3');
+    // معامل الممتاز 0.8: 17.6×0.8=14.08 ← وحدة + احتياط = 2
+    expect(options.batteryTiers.premium.units).toBe(2);
+    expect(options.batteryTiers.premium.extraUnit).toBe(true);
+  });
+
+  it('الممتاز فوق 120 أمبير يرجع للقاعدة العامة (مو مجبور هويمايلز)', () => {
+    const options = opts2({ roofAreaM2: 500, ampDay: 150, ampNight: 0, nightSupplyHours: null });
+    const draft = buildQuoteDraft(options, { tier: 'premium', cableMeters: {} });
+    // الحمل 150×220×1.25=41.25kW ← هويمايلز 6kW يحتاج 9 أجهزة بينما Deye 50kW وحدتين أرخص
+    expect(draft.inverterTiers.premium.material.model).toBe('Deye 50kW');
+  });
+
+  it('بدون أي هويمايلز بالمخزون الممتاز يشتغل عادي بالقاعدة الحالية', () => {
+    const noHoy = MATERIALS2.filter((m) => m.brand !== 'hoymiles');
+    const options = buildOptions({ materials: noHoy, laborTiers: LABOR2, settingsRow: SETTINGS_ROW, ...borderline });
+    const draft = buildQuoteDraft(options, { tier: 'premium', cableMeters: {} });
+    expect(draft.errors).toEqual({});
+    expect(draft.inverterTiers.premium).toBeTruthy();
+    expect(options.batteryTiers.premium.extraUnit).toBe(true);
   });
 });

@@ -21,6 +21,9 @@ export default function Settings() {
   const [instRate, setInstRate] = useState('1.35');
   const [instMonths, setInstMonths] = useState('60');
   const [instMsg, setInstMsg] = useState('');
+  // معاملات أمان البطاريات لكل مستوى — تضرب حاجة الليل قبل حساب عدد البطاريات
+  const [battFactors, setBattFactors] = useState({ economy: '0.9', standard: '0.85', premium: '0.8' });
+  const [battMsg, setBattMsg] = useState('');
 
   function reload() {
     window.api.settings.get().then(setSettings);
@@ -30,6 +33,32 @@ export default function Settings() {
       if (cfg?.rate > 0) setInstRate(String(cfg.rate));
       if (cfg?.months > 0) setInstMonths(String(cfg.months));
     }).catch(() => {});
+    window.api.config.get('battery_factors').then((cfg) => {
+      if (cfg) {
+        setBattFactors({
+          economy: String(cfg.economy > 0 ? cfg.economy : 0.9),
+          standard: String(cfg.standard > 0 ? cfg.standard : 0.85),
+          premium: String(cfg.premium > 0 ? cfg.premium : 0.8),
+        });
+      }
+    }).catch(() => {});
+  }
+
+  async function saveBattFactors(e) {
+    e.preventDefault();
+    const vals = {
+      economy: Number(battFactors.economy),
+      standard: Number(battFactors.standard),
+      premium: Number(battFactors.premium),
+    };
+    for (const k of ['economy', 'standard', 'premium']) {
+      if (!(vals[k] > 0.3 && vals[k] <= 1)) {
+        setBattMsg('كل معامل لازم يكون بين 0.3 و1 — مثلاً 0.9 يعني نحسب 90% من حاجة الليل');
+        return;
+      }
+    }
+    await window.api.config.set('battery_factors', vals);
+    setBattMsg(`تم الحفظ ✔ اقتصادي ×${vals.economy} — متوسط ×${vals.standard} — ممتاز ×${vals.premium}`);
   }
 
   async function saveInstallment(e) {
@@ -128,6 +157,37 @@ export default function Settings() {
         <button className="btn btn-primary" type="submit">
           حفظ ثوابت المعادلات
         </button>
+      </form>
+
+      <form className="card" onSubmit={saveBattFactors}>
+        <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>🔋 معاملات أمان البطاريات (لكل مستوى)</h3>
+        <p className="muted" style={{ marginTop: 0 }}>
+          حاجة الليل تنضرب بالمعامل <b>قبل</b> حساب عدد البطاريات — معامل 0.9 يعني بطارية 16kWh وحدة
+          تغطي حاجة 17.7kWh بدل ما ننجبر على ثنتين. كل مستوى إله معامله، والتغيير يشمل كل الموظفين.
+        </p>
+        <div className="grid-3">
+          {[
+            { key: 'economy', label: 'اقتصادي' },
+            { key: 'standard', label: 'متوسط' },
+            { key: 'premium', label: 'ممتاز' },
+          ].map((t) => (
+            <div className="field" key={t.key}>
+              <label>معامل {t.label}</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.3"
+                max="1"
+                value={battFactors[t.key]}
+                onChange={(e) => setBattFactors((v) => ({ ...v, [t.key]: e.target.value }))}
+              />
+            </div>
+          ))}
+        </div>
+        <button className="btn btn-primary" type="submit">
+          حفظ معاملات البطاريات
+        </button>
+        {battMsg && <div className="alert alert-info" style={{ marginTop: 10, marginBottom: 0 }}>{battMsg}</div>}
       </form>
 
       <form className="card" onSubmit={saveInstallment}>

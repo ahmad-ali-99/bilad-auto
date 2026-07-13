@@ -24,7 +24,7 @@ function mapSettings(row) {
 }
 
 // يبني كائن الخيارات من المصفوفات المجلوبة — بدل computeOptions القديمة المرتبطة بقاعدة بيانات
-function buildOptions({ materials, laborTiers, settingsRow, roofAreaM2, ampDay, ampNight, nightSupplyHours }) {
+function buildOptions({ materials, laborTiers, settingsRow, roofAreaM2, ampDay, ampNight, nightSupplyHours, batteryFactors = null }) {
   const settings = mapSettings(settingsRow);
   const supplyHours = nightSupplyHours != null && nightSupplyHours !== '' ? Number(nightSupplyHours) : settings.nightCoverageHours;
 
@@ -34,8 +34,8 @@ function buildOptions({ materials, laborTiers, settingsRow, roofAreaM2, ampDay, 
   const inverters = materials.filter((m) => m.category === 'inverter').sort(byPrice);
   const secondary = materials.filter((m) => m.category === 'secondary').sort((a, b) => a.id - b.id);
 
-  const batteryTiers = calc.selectBatteryTiers(batteries, ampNight, supplyHours, settings);
   const systemAmps = calc.systemAmpSize(ampDay, ampNight);
+  const batteryTiers = calc.selectBatteryTiers(batteries, ampNight, supplyHours, settings, { factors: batteryFactors, systemAmps });
   const labor = calc.pickLaborTier(laborTiers, systemAmps);
 
   return {
@@ -95,7 +95,9 @@ function pickCombo(tiersResult, tier, overrides, category, errors) {
   }
   const overrideId = overrides[category];
   if (overrideId != null) {
-    const found = tiersResult.all.find((c) => c.material.id === overrideId);
+    // البطاريات عندها قائمة لكل مستوى (معامل الأمان يغير الأعداد) — نبحث بقائمة المستوى الحالي
+    const list = (tiersResult.allByTier && tiersResult.allByTier[tier]) || tiersResult.all;
+    const found = list.find((c) => c.material.id === overrideId);
     if (found) return found;
   }
   return tiersResult[tier];
@@ -197,7 +199,7 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
 
   // الانفيرتر يُختار بعد الألواح: قدرته لازم تستوعب الحمل ومصفوفة الألواح كاملة (÷1.3)
   const panelArrayW = panelCombo ? panelCombo.units * panelCombo.material.watt_or_capacity : 0;
-  const inverterTiers = calc.selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, panelArrayW);
+  const inverterTiers = calc.selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, panelArrayW, systemAmps);
   const inverterComboBase = pickCombo(inverterTiers, tier, overrides, 'inverter', errors);
   const inverterCombo = adjustCombo(inverterComboBase, extra.inverter, 1);
 

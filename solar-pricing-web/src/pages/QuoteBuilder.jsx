@@ -680,11 +680,13 @@ export default function QuoteBuilder({ prefill, onAssistantQuote, onAssistantInv
                 const tiersResult = tiersResultFor(cat);
                 if (!tiersResult || tiersResult.insufficient) return null;
                 const chosenId = overrides[cat] ?? tiersResult[tier]?.material.id;
+                // البطاريات: الأعداد تختلف حسب معامل أمان المستوى — ناخذ قائمة المستوى الحالي
+                const optionsList = (tiersResult.allByTier && tiersResult.allByTier[tier]) || tiersResult.all;
                 return (
                   <div className="field" key={cat}>
                     <label>تبديل {CATEGORY_LABELS[cat]} يدوياً</label>
                     <select value={chosenId || ''} onChange={(e) => setOverride(cat, e.target.value)}>
-                      {tiersResult.all.map((c) => (
+                      {optionsList.map((c) => (
                         <option key={c.material.id} value={c.material.id}>
                           {c.material.brand} {c.material.model} — {fmt(c.totalPrice)} د.ع
                         </option>
