@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase.js';
+import { computeSecondaryDefaults } from '../lib/secondaryDefaults.js';
+
+// ملاحظة ثابتة بعرض الزبون: المواد الإضافية تتحدد بالكشف الميداني
+const SURVEY_NOTE = 'قد يحتاج المنزل مواد إضافية (كيبلات، بوردات، تأريض...) تُحدد عند الكشف الميداني وتُضاف للعرض بموافقة الزبون.';
 
 // واجهة الزبون (دخول Google): حاسبة تسعير مبسطة — نفس محرك الشركة بالدستور المعتمد،
 // بدون أي أدوات إدارية. بوابة الهاتف أولاً (تبني قاعدة تواصل المبيعات) ثم الحاسبة.
@@ -60,6 +64,19 @@ export default function CustomerView({ user }) {
     setPhone(p);
   }
 
+  // المواد الثانوية الأساسية فقط (نفس افتراضيات شاشة الموظفين) + ملاحظات الشركة للـPDF
+  const [secondarySel, setSecondarySel] = useState(null);
+  const [companyNotes, setCompanyNotes] = useState([]);
+  useEffect(() => {
+    Promise.all([window.api.materials.list(), window.api.config.get('secondary_defaults')])
+      .then(([all, savedIds]) => {
+        const secondary = (all || []).filter((m) => m.category === 'secondary');
+        setSecondarySel(computeSecondaryDefaults(secondary, savedIds));
+      })
+      .catch(() => setSecondarySel({}));
+    window.api.company.get().then((c) => setCompanyNotes(c.notes_default || [])).catch(() => setCompanyNotes([]));
+  }, []);
+
   // مدخلات الحاسبة
   const [roofAreaM2, setRoofAreaM2] = useState('');
   const [ampDay, setAmpDay] = useState('');
@@ -73,8 +90,8 @@ export default function CustomerView({ user }) {
   const [message, setMessage] = useState('');
 
   const inputs = useMemo(
-    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, installment }),
-    [roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, installment]
+    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, installment, secondarySel }),
+    [roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, installment, secondarySel]
   );
   const debounced = useDebouncedValue(inputs, 350);
 
@@ -99,6 +116,8 @@ export default function CustomerView({ user }) {
         nightSupplyHours: debounced.nightSupplyHours === '' ? null : Number(debounced.nightSupplyHours),
         tier: debounced.tier,
         installment: debounced.installment,
+        // الأساسيات فقط — بدون تمريرها المحرك يضيف كل الثانوية تلقائياً
+        secondarySelections: debounced.secondarySel || {},
       })
       .then(setPreview)
       .catch(() => setPreview(null))
@@ -118,6 +137,8 @@ export default function CustomerView({ user }) {
       nightSupplyHours: nightSupplyHours === '' ? null : Number(nightSupplyHours),
       tier,
       installment,
+      secondarySelections: secondarySel || {},
+      notes: [...companyNotes, SURVEY_NOTE],
     };
   }
 
@@ -285,6 +306,10 @@ export default function CustomerView({ user }) {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            <div className="alert alert-warning" style={{ marginTop: 10, marginBottom: 0 }}>
+              📋 {SURVEY_NOTE}
             </div>
           </div>
 

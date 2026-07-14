@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import SecondaryPickerModal from '../components/SecondaryPickerModal.jsx';
 import { buildEditPrefill } from '../lib/editPrefill.js';
 import { getIsAdmin } from '../lib/agent.js';
+import { computeSecondaryDefaults } from '../lib/secondaryDefaults.js';
 
 // مسودة العرض الجارية تنحفظ محلياً — الرفرش أو التنقل بين الصفحات ما يمسح الشغل،
 // والأسعار تتحدث تلقائياً لأن المعاينة تعيد الجلب والحساب من القاعدة بكل مرة
@@ -81,22 +82,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
     Promise.all([window.api.materials.list(), window.api.config.get('secondary_defaults')]).then(([all, savedIds]) => {
       const secondary = (all || []).filter((m) => m.category === 'secondary');
       setSecondaryMaterials(secondary);
-      const defaults = {};
-      if (Array.isArray(savedIds) && savedIds.length > 0) {
-        const existing = new Set(secondary.map((m) => m.id));
-        for (const id of savedIds) if (existing.has(id)) defaults[id] = { qty: '' };
-      } else {
-        for (const m of secondary) {
-          if (m.qty_per_panel && m.qty_per_panel > 0) defaults[m.id] = { qty: '' };
-        }
-        const dcBoard = secondary.find((m) => {
-          const name = `${m.model || ''} ${m.brand || ''}`;
-          if (!/بورد/.test(name)) return false;
-          if (/AC|نضائد|رئيسي|Main/i.test(name)) return false;
-          return /DC/i.test(name) || /حماية/.test(name);
-        });
-        if (dcBoard) defaults[dcBoard.id] = { qty: '' };
-      }
+      const defaults = computeSecondaryDefaults(secondary, savedIds);
       secondaryDefaultsRef.current = defaults;
       // الافتراضيات تنطبق فقط إذا ماكو مسودة محفوظة ولا اختيار قائم — حتى ما ندعس على شغل البياع
       setSecondarySel((prev) => (Object.keys(prev).length > 0 || savedDraft?.secondarySel ? prev : defaults));

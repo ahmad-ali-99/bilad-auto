@@ -123,9 +123,10 @@ function classifyTiers(combos) {
 // وعدد البطاريات يخضع لمعامل أمان لكل مستوى من الإعدادات (يضرب الحاجة قبل القسمة).
 // economy: أقل عدد ← الأرخص (أقل IP ممكن بسعر مناسب) — معامل بطاريات 0.90.
 // standard: أقل عدد ← أعلى حماية IP (مثل IP65) ← الأرخص عند التساوي — معامل 0.85.
-// premium ≤120 أمبير: هويمايلز حصراً (انفيرتر + بطارية) مع قواعد الراحة:
-//   الانفيرتر يتوزع على وحدتين بهامش ≥30% + بطارية إضافية احتياط — معامل 0.80.
-// premium >120 أمبير: نفس قواعد الراحة لكن بكل الماركات (هويمايلز ما تغطي الأحجام الكبيرة).
+// premium ≤120 أمبير: هويمايلز حصراً (انفيرتر + بطارية) — معامل بطاريات 0.80.
+//   قاعدة الراحة: القدرة الكلية ≥ الطلب ×1.3 بتكبير حجم الجهاز بأقل عدد وحدات
+//   (بلا توزيع إجباري ولا بطارية احتياط) — التعديد يصير طبيعياً بالأحجام الكبيرة فقط.
+// premium >120 أمبير: نفس القاعدة لكن بكل الماركات (هويمايلز ما تغطي الأحجام الكبيرة).
 
 // الحد الأعلى لحصر الممتاز بأجهزة هويمايلز — فوقه نرجع للقاعدة العامة
 const HOYMILES_MAX_AMPS = 120;
@@ -210,11 +211,12 @@ function premiumPool(combos, systemAmps) {
   return combos;
 }
 
-// premium بطاريات: الأغلى (الأرقى) ضمن أقل عدد + وحدة إضافية احتياط راحة
+// premium بطاريات: تكبير الحجم لا تعديد الوحدات — ضمن أقل عدد وحدات ناخذ الأكبر سعة
+// (وعند التساوي الأرقى سعراً) بلا وحدة احتياط إضافية؛ الوحدات الزائدة تجي فقط من كبر الطلب
 function pickBatteryPremium(combos) {
-  const best = fewestUnitsGroup(combos).sort((a, b) => b.totalPrice - a.totalPrice)[0];
-  const units = best.units + 1;
-  return { material: best.material, units, totalPrice: units * best.material.price, extraUnit: true };
+  return fewestUnitsGroup(combos).sort(
+    (a, b) => (b.material.watt_or_capacity - a.material.watt_or_capacity) || (b.totalPrice - a.totalPrice)
+  )[0];
 }
 
 // توليفات البطاريات: لكل موديل عدد وحدات حسب ساعات التجهيز الليلي — مضروب بمعامل
@@ -269,16 +271,15 @@ function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, pane
     combos.push({ material, units, totalPrice: units * material.price });
   }
 
-  // premium: هويمايلز حصراً ≤120 أمبير (وإلا كل الماركات)، وتوزيع الحمل على وحدتين
-  // (على الأقل) بهامش ≥30% — كل جهاز محمل ≤~70% حتى المنظومة مرتاحة لو زاد الحمل
+  // premium: هويمايلز حصراً ≤120 أمبير (وإلا كل الماركات)، والقدرة الكلية ≥ الطلب ×1.3 —
+  // تتحقق بتكبير حجم الجهاز أولاً (أقل عدد وحدات)، والتعديد يصير طبيعياً بالأحجام الكبيرة فقط
   function pickInverterPremium(all) {
     const candidates = premiumPool(all, systemAmps).map((c) => {
-      const units = Math.max(2, Math.ceil(requiredW / c.material.watt_or_capacity));
-      return { material: c.material, units, totalPrice: units * c.material.price, splitLoad: true };
+      const units = Math.max(1, Math.ceil((requiredW * 1.3) / c.material.watt_or_capacity));
+      return { material: c.material, units, totalPrice: units * c.material.price };
     });
-    const withMargin = candidates.filter((c) => c.units * c.material.watt_or_capacity >= requiredW * 1.3);
-    const pool = withMargin.length ? withMargin : candidates;
-    return pool.sort((a, b) => a.totalPrice - b.totalPrice)[0];
+    const minUnits = Math.min(...candidates.map((c) => c.units));
+    return candidates.filter((c) => c.units === minUnits).sort((a, b) => a.totalPrice - b.totalPrice)[0];
   }
 
   // المتوسط بالـIP قبل السعر، والاقتصادي يبقى الأرخص ضمن أقل عدد

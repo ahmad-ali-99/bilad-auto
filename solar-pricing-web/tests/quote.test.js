@@ -225,6 +225,7 @@ describe('دستور المستويات الجديد: IP قبل السعر + ه�
     { id: 11, category: 'inverter', brand: 'Gospower', model: 'Gospower 6kW', full_description: 'انفيرتر 6 كيلو IP65', unit: 'عدد', watt_or_capacity: 6000, price: 700000, qty_per_panel: null },
     { id: 12, category: 'inverter', brand: 'Growatt', model: 'Growatt 6kW', full_description: 'انفيرتر 6 كيلو IP65', unit: 'عدد', watt_or_capacity: 6000, price: 650000, qty_per_panel: null },
     { id: 13, category: 'inverter', brand: 'hoymiles', model: 'HIS6L-G3S', full_description: 'انفيرتر هويمايلز 6 كيلو IP66', unit: 'عدد', watt_or_capacity: 6000, price: 1265000, qty_per_panel: null },
+    { id: 15, category: 'inverter', brand: 'hoymiles', model: 'HYS-12.0LV-EUG2', full_description: 'انفيرتر هويمايلز 12 كيلو IP65', unit: 'عدد', watt_or_capacity: 12000, price: 2553000, qty_per_panel: null },
     { id: 14, category: 'inverter', brand: 'Deye', model: 'Deye 50kW', full_description: 'انفيرتر 50 كيلو IP65', unit: 'عدد', watt_or_capacity: 50000, price: 6300000, qty_per_panel: null },
     { id: 20, category: 'battery', brand: 'Felicity', model: 'Felicity 15kWh', full_description: 'بطارية 15kWh', unit: 'عدد', watt_or_capacity: 15, price: 2150000, qty_per_panel: null },
     { id: 21, category: 'battery', brand: 'Deye', model: 'Deye 16kWh', full_description: 'بطارية 16kWh', unit: 'عدد', watt_or_capacity: 16, price: 2950000, qty_per_panel: null },
@@ -258,15 +259,18 @@ describe('دستور المستويات الجديد: IP قبل السعر + ه�
     expect(draft.inverterTiers.economy.material.model).toBe('Felicity 6kW');
   });
 
-  it('الممتاز ≤120 أمبير: انفيرتر وبطارية هويمايلز حتى لو أغلى + وحدة بطارية احتياط', () => {
+  it('الممتاز ≤120 أمبير: هويمايلز بتكبير الحجم لا التعديد — هامش ≥30% وبلا بطارية احتياط', () => {
     const options = opts2(borderline);
     const draft = buildQuoteDraft(options, { tier: 'premium', cableMeters: {} });
-    expect(draft.inverterTiers.premium.material.model).toBe('HIS6L-G3S');
-    expect(draft.inverterTiers.premium.units).toBeGreaterThanOrEqual(2); // توزيع الحمل
+    // المطلوب ~6000W ← ×1.3 = 7800 ← هويمايلز 12kW وحدة وحدة (مو 6kW ×2)
+    expect(draft.inverterTiers.premium.material.model).toBe('HYS-12.0LV-EUG2');
+    expect(draft.inverterTiers.premium.units).toBe(1);
+    expect(draft.inverterTiers.premium.units * draft.inverterTiers.premium.material.watt_or_capacity)
+      .toBeGreaterThanOrEqual(6000 * 1.3);
+    // البطارية: الأكبر سعة (هويمايلز 16kWh) بوحدة وحدة — بلا احتياط إضافي
     expect(options.batteryTiers.premium.material.model).toBe('LB16D-G3');
-    // معامل الممتاز 0.8: 17.6×0.8=14.08 ← وحدة + احتياط = 2
-    expect(options.batteryTiers.premium.units).toBe(2);
-    expect(options.batteryTiers.premium.extraUnit).toBe(true);
+    expect(options.batteryTiers.premium.units).toBe(1);
+    expect(options.batteryTiers.premium.extraUnit).toBeUndefined();
   });
 
   it('الممتاز فوق 120 أمبير يرجع للقاعدة العامة (مو مجبور هويمايلز)', () => {
@@ -282,6 +286,38 @@ describe('دستور المستويات الجديد: IP قبل السعر + ه�
     const draft = buildQuoteDraft(options, { tier: 'premium', cableMeters: {} });
     expect(draft.errors).toEqual({});
     expect(draft.inverterTiers.premium).toBeTruthy();
-    expect(options.batteryTiers.premium.extraUnit).toBe(true);
+    expect(options.batteryTiers.premium.extraUnit).toBeUndefined();
+    expect(options.batteryTiers.premium.units).toBe(1);
+  });
+});
+
+describe('حاسبة الزبون: الثانوية الافتراضية فقط (لا كل المخزون)', () => {
+  it('تمرير secondarySelections بالافتراضيات يحصر البنود الثانوية بها', async () => {
+    const { computeSecondaryDefaults } = await import('../src/lib/secondaryDefaults.js');
+    const secondary = [
+      { id: 30, category: 'secondary', model: 'هيكل', unit: 'عدد', price: 65000, qty_per_panel: 1 },
+      { id: 31, category: 'secondary', model: 'صبات', unit: 'عدد', price: 5000, qty_per_panel: 1 },
+      { id: 32, category: 'secondary', model: 'بوردة حماية DC', unit: 'عدد', price: 150000, qty_per_panel: 0 },
+      { id: 33, category: 'secondary', model: 'منظومة تأريض', unit: 'عدد', price: 750000, qty_per_panel: 0 },
+      { id: 34, category: 'secondary', model: 'طفاية حريق', unit: 'عدد', price: 75000, qty_per_panel: 0 },
+      { id: 35, category: 'secondary', model: 'كيبل 6مم', unit: 'متر', price: 2000, qty_per_panel: null },
+    ];
+    const defaults = computeSecondaryDefaults(secondary, null);
+    // الافتراضيات: هيكل + صبات (لكل لوح) + بوردة DC فقط
+    expect(Object.keys(defaults).map(Number).sort()).toEqual([30, 31, 32]);
+
+    const materials = [
+      { id: 1, category: 'panel', model: 'JINKO 650', full_description: 'ألواح 650', unit: 'عدد', watt_or_capacity: 650, price: 185000, qty_per_panel: null },
+      { id: 2, category: 'inverter', model: 'INV 6kW', full_description: 'انفيرتر IP65', unit: 'عدد', watt_or_capacity: 6000, price: 650000, qty_per_panel: null },
+      { id: 3, category: 'battery', model: 'BAT 16', full_description: 'بطارية 16kWh', unit: 'عدد', watt_or_capacity: 16, price: 2750000, qty_per_panel: null },
+      ...secondary,
+    ];
+    const options = buildOptions({ materials, laborTiers: [{ id: 1, system_amps: 30, price: 400000 }], settingsRow: SETTINGS_ROW, roofAreaM2: 40, ampDay: 10, ampNight: 10, nightSupplyHours: 4 });
+    const draft = buildQuoteDraft(options, { tier: 'economy', secondarySelections: defaults });
+    const secondaryItems = draft.items.filter((i) => [30, 31, 32, 33, 34, 35].includes(i.material_id));
+    expect(secondaryItems.map((i) => i.material_id).sort()).toEqual([30, 31, 32]);
+    // ومن دون التمرير: كل مواد العدد تنضاف (السلوك القديم للموظفين قبل الاختيار)
+    const draftAll = buildQuoteDraft(options, { tier: 'economy' });
+    expect(draftAll.items.filter((i) => [33, 34].includes(i.material_id)).length).toBe(2);
   });
 });
