@@ -56,9 +56,14 @@ function normalizeName(s) {
   return String(s || '').trim().replace(/[أإآ]/g, 'ا');
 }
 
-async function getIsAdmin() {
-  const u = normalizeName(await getCurrentUsername());
+// فحص متزامن باسم معروف مسبقاً (من metadata الجلسة) — لإظهار تبويبات المشرفين
+function isAdminName(username) {
+  const u = normalizeName(username);
   return ADMIN_USERS.some((a) => normalizeName(a) === u);
+}
+
+async function getIsAdmin() {
+  return isAdminName(await getCurrentUsername());
 }
 
 // ===== حفظ محادثة المساعد لكل مستخدم (تبقى بعد التنقل والتحديث، ومشتركة عبر أجهزته) =====
@@ -522,4 +527,4 @@ async function runAgent({ apiKey, history, userText, executor, onStatus, isAdmin
   return { text: 'الطلب طول أكثر من اللازم — جزئه وجرب مرة ثانية.', history: contents };
 }
 
-export { getAgentKey, setAgentKey, runAgent, getIsAdmin, getCurrentUsername, loadChat, saveChat, clearChat, SHARE_KEY_SQL };
+export { getAgentKey, setAgentKey, runAgent, getIsAdmin, isAdminName, getCurrentUsername, loadChat, saveChat, clearChat, SHARE_KEY_SQL };

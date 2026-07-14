@@ -528,19 +528,32 @@ export const api = {
       throwIf(error);
       return data || [];
     },
-  },
-
-  // طلبات عروض الزبائن من الحاسبة العامة — الزبون يضيف طلبه والموظفون يقرأون الكل
-  quoteRequests: {
-    async create(payload) {
-      const { error } = await supabase.from('quote_requests').insert(payload);
+    async remove(id) {
+      const { error } = await supabase.from('leads').delete().eq('id', id);
       throwIf(error);
       return { ok: true };
+    },
+  },
+
+  // طلبات عروض الزبائن من الحاسبة العامة — طلب واحد لكل حساب (الجديد يحدّث القديم)،
+  // والموظفون يقرأون الكل والمشرفون يحذفون
+  quoteRequests: {
+    async create(payload) {
+      const { data: existing } = await supabase.from('quote_requests').select('id').eq('user_id', payload.user_id).limit(1);
+      const updated = existing && existing.length > 0;
+      const { error } = await supabase.from('quote_requests').upsert(payload, { onConflict: 'user_id' });
+      throwIf(error);
+      return { ok: true, updated };
     },
     async list() {
       const { data, error } = await supabase.from('quote_requests').select('*').order('id', { ascending: false }).limit(500);
       throwIf(error);
       return data || [];
+    },
+    async remove(id) {
+      const { error } = await supabase.from('quote_requests').delete().eq('id', id);
+      throwIf(error);
+      return { ok: true };
     },
   },
 

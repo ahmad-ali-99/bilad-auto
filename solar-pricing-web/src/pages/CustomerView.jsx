@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase.js';
 import { computeSecondaryDefaults } from '../lib/secondaryDefaults.js';
+import { parseRequest } from '../lib/assistant.js';
 
 // ملاحظة ثابتة بعرض الزبون: المواد الإضافية تتحدد بالكشف الميداني
 const SURVEY_NOTE = 'قد يحتاج المنزل مواد إضافية (كيبلات، بوردات، تأريض...) تُحدد عند الكشف الميداني وتُضاف للعرض بموافقة الزبون.';
@@ -35,15 +36,32 @@ export default function CustomerView({ user }) {
   const fullName = user?.user_metadata?.full_name || user?.user_metadata?.name || '';
 
   useEffect(() => {
-    // صمام أمان: إذا تأخر الجلب لأي سبب نعرض بوابة الهاتف بدل تعليق شاشة التحميل
-    const failsafe = setTimeout(() => setPhone((p) => (p === null ? '' : p)), 7000);
+    const metaPhone = String(user?.user_metadata?.phone || '').trim();
+    const metaPhoneOk = metaPhone.replace(/\D/g, '').length >= 10;
+    // صمام أمان: إذا تأخر الجلب لأي سبب نكمل بهاتف التسجيل إن وجد وإلا نعرض البوابة
+    const failsafe = setTimeout(() => setPhone((p) => (p === null ? (metaPhoneOk ? metaPhone : '') : p)), 7000);
     supabase
       .from('leads')
       .select('phone')
       .eq('user_id', user.id)
       .maybeSingle()
-      .then(({ data }) => setPhone(data?.phone || ''))
-      .catch(() => setPhone(''));
+      .then(async ({ data }) => {
+        if (data?.phone) {
+          setPhone(data.phone);
+          return;
+        }
+        // المسجل بالإيميل أدخل هاتفه بالتسجيل — ننشئ سجله تلقائياً بلا بوابة
+        if (metaPhoneOk) {
+          await supabase.from('leads').upsert(
+            { user_id: user.id, full_name: fullName || null, email: user.email, phone: metaPhone, source: 'app' },
+            { onConflict: 'user_id' }
+          );
+          setPhone(metaPhone);
+          return;
+        }
+        setPhone('');
+      })
+      .catch(() => setPhone(metaPhoneOk ? metaPhone : ''));
     return () => clearTimeout(failsafe);
   }, [user.id]);
 
@@ -88,6 +106,10 @@ export default function CustomerView({ user }) {
   const [calculating, setCalculating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  // المساعد المحلي السريع (بدون Gemini)
+  const [aOpen, setAOpen] = useState(false);
+  const [aText, setAText] = useState('');
+  const [aReply, setAReply] = useState('');
 
   const inputs = useMemo(
     () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, installment, secondarySel }),
@@ -159,7 +181,7 @@ export default function CustomerView({ user }) {
     setBusy(true);
     setMessage('');
     try {
-      await window.api.quoteRequests.create({
+      const result = await window.api.quoteRequests.create({
         user_id: user.id,
         full_name: fullName || null,
         email: user.email,
@@ -173,7 +195,11 @@ export default function CustomerView({ user }) {
         installment,
         monthly: draft.installment ? draft.installment.monthly : null,
       });
-      setMessage('✅ وصل طلبك — سيتواصل معك فريق المبيعات قريباً');
+      setMessage(
+        result.updated
+          ? '✅ تم تحديث طلبك السابق بالأرقام الجديدة — فريق المبيعات سيتواصل معك'
+          : '✅ وصل طلبك — سيتواصل معك فريق المبيعات قريباً'
+      );
     } catch (err) {
       setMessage('تعذر إرسال الطلب: ' + err.message);
     } finally {
@@ -210,12 +236,36 @@ export default function CustomerView({ user }) {
     );
   }
 
+  // المساعد المحلي السريع: يفهم الطلب المكتوب ويعبي الحاسبة — بدون أي مفاتيح خارجية
+  function askAssistant() {
+    const text = aText.trim();
+    if (!text) return;
+    const result = parseRequest(text);
+    if (result.intent === 'quote') {
+      const f = result.fields || {};
+      if (f.roofAreaM2 != null) setRoofAreaM2(String(f.roofAreaM2));
+      if (f.ampDay != null) setAmpDay(String(f.ampDay));
+      if (f.ampNight != null) setAmpNight(String(f.ampNight));
+      if (f.nightSupplyHours != null) setNightSupplyHours(String(f.nightSupplyHours));
+      if (f.tier) setTier(f.tier);
+      setAReply(
+        (result.summary || 'عبّيت الحاسبة') +
+          (result.missing?.length ? ` — باقي تكملي: ${result.missing.join('، ')}` : ' ✔ شوف العرض تحت')
+      );
+    } else {
+      setAReply('اكتبلي احتياجك بجملة وحدة، مثل: «أريد منظومة 20 أمبير نهاري و10 ليلي 4 ساعات بمساحة 40 متر»');
+    }
+    setAText('');
+  }
+
   return (
     <div>
-      <h2 className="page-title">احسب سعر منظومتك الشمسية</h2>
-      <p className="muted" style={{ marginTop: -6 }}>
-        أدخل احتياجك وسيظهر لك عرض السعر فوراً بأسعارنا الفعلية — وبإمكانك طلب العرض ليتواصل معك فريق المبيعات
-      </p>
+      <div className="customer-hero">
+        <h2 className="page-title" style={{ marginBottom: 2 }}>أهلاً {fullName ? fullName.split(' ')[0] : 'بك'} 👋</h2>
+        <p className="muted" style={{ margin: 0 }}>
+          احسب سعر منظومتك الشمسية فوراً بأسعارنا الفعلية — وبضغطة وحدة يوصلك فريق المبيعات
+        </p>
+      </div>
 
       <div className="card">
         <h3 className="card-heading">⚡ متطلبات المنظومة</h3>
@@ -328,6 +378,35 @@ export default function CustomerView({ user }) {
             </div>
           </div>
         </>
+      )}
+
+      {/* المساعد السريع: يفهم طلبك المكتوب ويعبي الحاسبة */}
+      <button className="assistant-fab" onClick={() => setAOpen((o) => !o)} title="المساعد" aria-label="المساعد">
+        {aOpen ? '✕' : '🤖'}
+      </button>
+      {aOpen && (
+        <div className="assistant-drawer-overlay" onClick={() => setAOpen(false)}>
+          <div className="assistant-drawer" style={{ height: 'auto', maxHeight: '60vh' }} onClick={(e) => e.stopPropagation()}>
+            <b style={{ color: 'var(--navy)' }}>🤖 المساعد السريع</b>
+            <p className="muted" style={{ margin: '6px 0' }}>
+              اكتب احتياجك بجملة وحدة وأعبيلك الحاسبة فوراً
+            </p>
+            {aReply && <div className="alert alert-info">{aReply}</div>}
+            <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                value={aText}
+                onChange={(e) => setAText(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && askAssistant()}
+                placeholder="مثال: أريد منظومة 20 أمبير نهاري و10 ليلي 4 ساعات بمساحة 40 متر"
+                style={{ flex: 1, minWidth: 200 }}
+              />
+              <button className="btn btn-primary" onClick={askAssistant}>
+                دز 🪄
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

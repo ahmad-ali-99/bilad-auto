@@ -7,7 +7,9 @@ import Login from './pages/Login.jsx';
 import GlobalLoadingBar from './components/GlobalLoadingBar.jsx';
 import AssistantBar from './components/AssistantBar.jsx';
 import CustomerView from './pages/CustomerView.jsx';
+import Requests from './pages/Requests.jsx';
 import { supabase } from './lib/supabase.js';
+import { isAdminName } from './lib/agent.js';
 
 const PAGES = [
   { key: 'quote', label: 'عرض سعر', icon: '🧮' },
@@ -15,6 +17,55 @@ const PAGES = [
   { key: 'inventory', label: 'المخزون', icon: '📦' },
   { key: 'settings', label: 'الإعدادات', icon: '⚙' },
 ];
+
+// صفحة الطلبات (جهات التواصل + طلبات العروض) للمشرفين الثلاثة فقط
+const ADMIN_PAGES = [{ key: 'requests', label: 'الطلبات', icon: '📨' }];
+
+// شاشة تعيين كلمة مرور جديدة — تظهر عند فتح رابط الاستعادة من الإيميل
+function ResetPasswordScreen({ onDone }) {
+  const [pw1, setPw1] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function save(e) {
+    e.preventDefault();
+    if (pw1.length < 6) return setMsg('كلمة المرور 6 أحرف على الأقل');
+    if (pw1 !== pw2) return setMsg('الكلمتان غير متطابقتين');
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: pw1 });
+      if (error) {
+        setMsg('تعذر الحفظ: ' + error.message);
+        return;
+      }
+      onDone();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="splash-overlay login-scene">
+      <form className="login-card login-card-v2" onSubmit={save}>
+        <div style={{ fontSize: '2.2rem', textAlign: 'center' }}>🔑</div>
+        <h1 className="login-title">تعيين كلمة مرور جديدة</h1>
+        {msg && <div className="login-error">{msg}</div>}
+        <div className="field">
+          <label>كلمة المرور الجديدة</label>
+          <input type="password" dir="ltr" value={pw1} onChange={(e) => setPw1(e.target.value)} autoFocus />
+        </div>
+        <div className="field">
+          <label>تأكيد كلمة المرور</label>
+          <input type="password" dir="ltr" value={pw2} onChange={(e) => setPw2(e.target.value)} />
+        </div>
+        <button className="btn btn-primary login-btn" type="submit" disabled={busy}>
+          {busy ? 'جاري الحفظ...' : 'حفظ والدخول'}
+        </button>
+      </form>
+    </div>
+  );
+}
 
 export default function App() {
   const [page, setPage] = useState('quote');
@@ -27,6 +78,9 @@ export default function App() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const draftRef = useRef(null);
 
+  // وضع استعادة كلمة المرور: يتفعل عند فتح رابط الاستعادة المرسل بالإيميل
+  const [recovery, setRecovery] = useState(false);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
@@ -34,7 +88,8 @@ export default function App() {
     });
     // صمام أمان: مهما صار ما تبقى شاشة التحميل معلقة — بعد 6 ثوانٍ نعرض الدخول
     const failsafe = setTimeout(() => setLoading(false), 6000);
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      if (event === 'PASSWORD_RECOVERY') setRecovery(true);
       setSession(s);
       setLoading(false);
     });
@@ -57,6 +112,10 @@ export default function App() {
 
   if (!session) {
     return <Login onLoggedIn={() => {}} />;
+  }
+
+  if (recovery) {
+    return <ResetPasswordScreen onDone={() => setRecovery(false)} />;
   }
 
   // زبون (دخول Google): حاسبة تسعير مبسطة فقط — بلا تنقل ولا أدوات إدارية ولا مساعد
@@ -95,6 +154,9 @@ export default function App() {
 
   // حسابات الموظفين المرقمة تظهر بالرقم فقط (مستخدم2 ← 2)
   const currentUser = (session.user?.user_metadata?.username || '').replace(/^مستخدم(?=[0-9])/, '');
+  // تبويب الطلبات للمشرفين الثلاثة فقط
+  const isAdmin = isAdminName(session.user?.user_metadata?.username || '');
+  const navPages = isAdmin ? [...PAGES.slice(0, 2), ...ADMIN_PAGES, ...PAGES.slice(2)] : PAGES;
 
   // خروج فوري: نمسح الجلسة محلياً بدون انتظار السيرفر (كان يعلق إذا الشبكة بطيئة)
   async function logout() {
@@ -157,10 +219,11 @@ export default function App() {
           />
         )}
         {page === 'inventory' && <Inventory initialSearch={inventorySearch} />}
+        {page === 'requests' && isAdmin && <Requests />}
         {page === 'settings' && <Settings />}
       </main>
       <nav className="mobile-bottomnav">
-        {PAGES.map((p) => (
+        {navPages.map((p) => (
           <button key={p.key} className={page === p.key ? 'active' : ''} onClick={() => setPage(p.key)}>
             <span className="nav-icon">{p.icon}</span>
             <span>{p.label}</span>

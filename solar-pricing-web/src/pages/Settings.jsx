@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getAgentKey, setAgentKey, SHARE_KEY_SQL, getIsAdmin } from '../lib/agent.js';
+import { getAgentKey, setAgentKey, SHARE_KEY_SQL } from '../lib/agent.js';
 
 const SETTINGS_FIELDS = [
   { key: 'system_voltage', label: 'فولتية النظام (لتحويل الأمبير لواط)' },
@@ -24,28 +24,6 @@ export default function Settings() {
   // معاملات أمان البطاريات لكل مستوى — تضرب حاجة الليل قبل حساب عدد البطاريات
   const [battFactors, setBattFactors] = useState({ economy: '0.9', standard: '0.85', premium: '0.8' });
   const [battMsg, setBattMsg] = useState('');
-  // جهات تواصل المبيعات (تسجيلات زوار الموقع) — تظهر للمستخدمين الرئيسيين فقط
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [leads, setLeads] = useState(null);
-  const [leadsMsg, setLeadsMsg] = useState('');
-
-  const [quoteRequests, setQuoteRequests] = useState(null);
-
-  async function loadLeads() {
-    setLeadsMsg('');
-    try {
-      setLeads(await window.api.leads.list());
-    } catch (err) {
-      setLeads([]);
-      setLeadsMsg('تعذر جلب التسجيلات: ' + err.message + ' — إن لم يكن جدول leads منشأً بعد فنفّذ أسطر SQL المرسلة');
-    }
-    try {
-      setQuoteRequests(await window.api.quoteRequests.list());
-    } catch {
-      setQuoteRequests([]);
-    }
-  }
-
   function reload() {
     window.api.settings.get().then(setSettings);
     window.api.company.get().then(setCompany);
@@ -95,12 +73,6 @@ export default function Settings() {
   }
 
   useEffect(reload, []);
-  useEffect(() => {
-    getIsAdmin().then((admin) => {
-      setIsAdmin(admin);
-      if (admin) loadLeads();
-    }).catch(() => {});
-  }, []);
 
   async function saveAgentKey(e) {
     e.preventDefault();
@@ -339,94 +311,6 @@ export default function Settings() {
           حفظ بيانات الشركة
         </button>
       </form>
-
-      {isAdmin && (
-        <div className="card">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <h3 style={{ color: 'var(--navy)', marginTop: 0, marginBottom: 0, flex: 1 }}>
-              📇 جهات تواصل المبيعات {leads ? `(${leads.length})` : ''}
-            </h3>
-            <button className="btn btn-secondary btn-sm" onClick={loadLeads}>🔄 تحديث</button>
-          </div>
-          <p className="muted" style={{ margin: '6px 0 10px' }}>
-            زوار الموقع المسجلون بحساب Google مع أرقام هواتفهم — قراءة فقط، وتظهر للمستخدمين الرئيسيين حصراً.
-          </p>
-          {leadsMsg && <div className="alert alert-warning">{leadsMsg}</div>}
-          <div className="table-scroll">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>الاسم</th>
-                  <th>البريد</th>
-                  <th>الهاتف</th>
-                  <th>تاريخ التسجيل</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(leads || []).map((l) => (
-                  <tr key={l.id}>
-                    <td>{l.full_name || '-'}</td>
-                    <td dir="ltr">{l.email || '-'}</td>
-                    <td dir="ltr">{l.phone || '-'}</td>
-                    <td>{l.created_at ? new Date(l.created_at).toLocaleDateString('en-GB') : '-'}</td>
-                  </tr>
-                ))}
-                {leads && leads.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="muted" style={{ textAlign: 'center', padding: 14 }}>
-                      لا توجد تسجيلات بعد
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <h4 style={{ color: 'var(--navy)', margin: '16px 0 6px' }}>
-            📨 طلبات العروض من الحاسبة العامة {quoteRequests ? `(${quoteRequests.length})` : ''}
-          </h4>
-          <div className="table-scroll">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>الاسم</th>
-                  <th>الهاتف</th>
-                  <th>نهاري/ليلي</th>
-                  <th>ساعات الليل</th>
-                  <th>المستوى</th>
-                  <th>المجموع (د.ع)</th>
-                  <th>تقسيط</th>
-                  <th>التاريخ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(quoteRequests || []).map((r) => (
-                  <tr key={r.id}>
-                    <td>
-                      {r.full_name || '-'}
-                      {r.email && <div className="muted" style={{ fontSize: '0.75rem' }} dir="ltr">{r.email}</div>}
-                    </td>
-                    <td dir="ltr">{r.phone || '-'}</td>
-                    <td>{r.amp_day} / {r.amp_night} أمبير</td>
-                    <td>{r.night_hours ?? '-'}</td>
-                    <td>{{ economy: 'اقتصادي', standard: 'متوسط', premium: 'ممتاز' }[r.tier] || r.tier}</td>
-                    <td>{Math.round(r.total_price || 0).toLocaleString('en-US')}</td>
-                    <td>{r.installment ? `✔ ${r.monthly ? Math.round(r.monthly).toLocaleString('en-US') + '/شهر' : ''}` : '-'}</td>
-                    <td>{r.created_at ? new Date(r.created_at).toLocaleDateString('en-GB') : '-'}</td>
-                  </tr>
-                ))}
-                {quoteRequests && quoteRequests.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="muted" style={{ textAlign: 'center', padding: 14 }}>
-                      لا توجد طلبات عروض بعد
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
       <div className="card">
         <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>البيانات السحابية</h3>
