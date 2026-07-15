@@ -527,4 +527,4 @@ async function runAgent({ apiKey, history, userText, executor, onStatus, isAdmin
   return { text: 'الطلب طول أكثر من اللازم — جزئه وجرب مرة ثانية.', history: contents };
 }
 
-export { getAgentKey, setAgentKey, runAgent, getIsAdmin, isAdminName, getCurrentUsername, loadChat, saveChat, clearChat, SHARE_KEY_SQL };
+export { getAgentKey, setAgentKey, runAgent, getIsAdmin, isAdminName, getCurrentUsername, loadChat, saveChat, clearChat, SHARE_KEY_SQL, ADMIN_USERS };

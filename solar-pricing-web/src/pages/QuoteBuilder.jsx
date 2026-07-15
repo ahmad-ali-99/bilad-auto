@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import SecondaryPickerModal from '../components/SecondaryPickerModal.jsx';
 import { buildEditPrefill } from '../lib/editPrefill.js';
-import { getIsAdmin } from '../lib/agent.js';
+import { getIsAdmin, getCurrentUsername, ADMIN_USERS } from '../lib/agent.js';
 import { computeSecondaryDefaults } from '../lib/secondaryDefaults.js';
 
 // مسودة العرض الجارية تنحفظ محلياً — الرفرش أو التنقل بين الصفحات ما يمسح الشغل،
@@ -58,9 +58,24 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   // قسم الزيادة/الخصم/التقسيط مطوي افتراضياً حتى الشاشة تبقى مرتبة
   const [pricingOpen, setPricingOpen] = useState(savedDraft?.pricingOpen ?? false);
   const [isAdmin, setIsAdmin] = useState(false);
+  // «العرض من طرف»: المشرف يسند العرض لموظف آخر — '' تعني حساب المشرف نفسه (أو إبقاء المنشئ عند التعديل)
+  const [createdBy, setCreatedBy] = useState(savedDraft?.createdBy ?? '');
+  const [myName, setMyName] = useState('');
+  const [pastCreators, setPastCreators] = useState([]);
   useEffect(() => {
-    getIsAdmin().then(setIsAdmin).catch(() => setIsAdmin(false));
+    getIsAdmin()
+      .then((admin) => {
+        setIsAdmin(admin);
+        if (!admin) return;
+        getCurrentUsername().then(setMyName).catch(() => {});
+        window.api.quotes.creators().then(setPastCreators).catch(() => {});
+      })
+      .catch(() => setIsAdmin(false));
   }, []);
+  // قائمة الأسماء: المشرفون الثلاثة + كل من سبق وأنشأ عرضاً (بدون تكرار)
+  const creatorOptions = useMemo(() => [...new Set([...ADMIN_USERS, ...pastCreators])], [pastCreators]);
+  // الحسابات المرقمة تظهر بالرقم فقط — نفس تنسيق عمود «أنشأه» بصفحة العروض
+  const displayCreator = (n) => (n || '').replace(/^مستخدم(?=[0-9])/, '');
   const [overrides, setOverrides] = useState(savedDraft?.overrides ?? {});
   // المواد الثانوية المختارة للعرض: { [materialId]: { qty } } — تبدأ بالأساسيات (هيكل + صبات)
   const [secondarySel, setSecondarySel] = useState(savedDraft?.secondarySel ?? {});
@@ -101,7 +116,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
           JSON.stringify({
             clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours,
             tier, overrides, secondarySel, markupPercent, markupMode, discountPercent,
-            installment, extraUnits, notes, editingQuote, pricingOpen,
+            installment, extraUnits, notes, editingQuote, pricingOpen, createdBy,
           })
         );
       } catch {
@@ -109,7 +124,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       }
     }, 500);
     return () => clearTimeout(t);
-  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, extraUnits, notes, editingQuote, pricingOpen]);
+  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, extraUnits, notes, editingQuote, pricingOpen, createdBy]);
 
   // 🆕 عرض جديد: تصفير كامل + مسح المسودة المحفوظة + رجوع الثانوية لافتراضياتها
   function startNewQuote() {
@@ -128,6 +143,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
     setDiscountPercent('');
     setInstallment(false);
     setExtraUnits({ panel: 0, battery: 0, inverter: 0 });
+    setCreatedBy('');
     setSecondarySel(secondaryDefaultsRef.current);
     window.api.company.get().then((c) => setNotes(c.notes_default || [])).catch(() => {});
     setSaveMessage('');
@@ -174,6 +190,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       setExtraUnits({ panel: Number(x.panel) || 0, battery: Number(x.battery) || 0, inverter: Number(x.inverter) || 0 });
     }
     if (p.notes) setNotes(p.notes);
+    // فتح عرض للتعديل يرجّع منشئه الحالي بحقل «العرض من طرف»
+    if (p.createdBy != null) setCreatedBy(p.createdBy);
     setEditingQuote(p.editing || null);
     setSaveMessage('');
     setFlashFields(flashed);
@@ -243,6 +261,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
     setDiscountPercent('');
     setInstallment(false);
     setExtraUnits({ panel: 0, battery: 0, inverter: 0 });
+    setCreatedBy('');
     setSaveMessage('');
   }
 
@@ -323,6 +342,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       },
       installment,
       extraUnits,
+      // الإسناد للمشرفين فقط — null = الحساب الحالي عند الحفظ، وإبقاء المنشئ الأصلي عند التعديل
+      createdBy: (isAdmin && createdBy) || null,
       notes: notes || [],
     };
   }
@@ -447,6 +468,22 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
             <label>الموقع</label>
             <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} />
           </div>
+          {isAdmin && (
+            <div className="field">
+              <label>العرض من طرف</label>
+              <select value={createdBy} onChange={(e) => setCreatedBy(e.target.value)}>
+                <option value="">
+                  {editingQuote ? 'المنشئ الحالي (بدون تغيير)' : `حسابي${myName ? ` (${displayCreator(myName)})` : ''}`}
+                </option>
+                {creatorOptions.map((n) => (
+                  <option key={n} value={n}>{displayCreator(n)}</option>
+                ))}
+                {createdBy && !creatorOptions.includes(createdBy) && (
+                  <option value={createdBy}>{displayCreator(createdBy)}</option>
+                )}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 

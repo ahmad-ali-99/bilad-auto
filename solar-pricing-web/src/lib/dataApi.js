@@ -240,6 +240,12 @@ export const api = {
         draft,
       };
     },
+    // أسماء كل من سبق وأنشأ عرضاً — تغذي قائمة «العرض من طرف» تلقائياً بدون قائمة ثابتة
+    async creators() {
+      const { data, error } = await supabase.from('quotes').select('created_by');
+      throwIf(error);
+      return [...new Set((data || []).map((r) => r.created_by).filter(Boolean))];
+    },
     // كشف تكرار العرض: هل يوجد عرض محفوظ بنفس اسم العميل ورقم الموبايل؟
     // فحص حي أثناء الكتابة: هل اكو عرض سابق لنفس الاسم أو نفس رقم الهاتف؟
     // المطابقة محلية ومرنة: الأرقام تقارن كأرقام فقط (نتجاهل المسافات والرموز ونحول
@@ -336,7 +342,8 @@ export const api = {
         night_supply_hours: options.nightSupplyHours,
         selected_tier: input.tier,
         total_price: draft.total,
-        created_by: user?.user_metadata?.username || user?.email || null,
+        // «العرض من طرف»: المشرف يكدر يسند العرض لموظف آخر — وإلا اسم الحساب الحافظ
+        created_by: input.createdBy || user?.user_metadata?.username || user?.email || null,
       }).select().single();
       throwIf(error);
 
@@ -383,6 +390,8 @@ export const api = {
           night_supply_hours: options.nightSupplyHours,
           selected_tier: input.tier,
           total_price: draft.total,
+          // تغيير الإسناد فقط إذا انطى اسم صريح — وإلا يبقى المنشئ الأصلي بلا مساس
+          ...(input.createdBy ? { created_by: input.createdBy } : {}),
         })
         .eq('id', id)
         .select()

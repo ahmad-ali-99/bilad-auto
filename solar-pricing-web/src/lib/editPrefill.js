@@ -23,6 +23,7 @@ export async function buildEditPrefill(quoteId) {
   }
   return {
     editing: { id: full.quote.id, quote_number: full.quote.quote_number },
+    createdBy: full.quote.created_by || '',
     clientName: full.quote.client_name || '',
     clientPhone: full.quote.client_phone || '',
     location: full.quote.location || '',
