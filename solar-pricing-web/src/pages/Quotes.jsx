@@ -13,6 +13,11 @@ function fmtDate(iso) {
   return d.toLocaleDateString('en-GB');
 }
 
+// اسم منشئ العرض: الحسابات المرقمة تظهر بالرقم فقط (مستخدم2 ← 2)
+function creatorName(createdBy) {
+  return (createdBy || '').replace(/^مستخدم(?=[0-9])/, '') || '-';
+}
+
 function fmtDateTime(iso) {
   const d = new Date(iso);
   return d.toLocaleDateString('en-GB') + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -42,7 +47,8 @@ export default function Quotes({ onEditQuote }) {
       String(x.quote_number).includes(q) ||
       (x.client_name || '').toLowerCase().includes(q) ||
       (x.client_phone || '').includes(q) ||
-      (x.location || '').toLowerCase().includes(q)
+      (x.location || '').toLowerCase().includes(q) ||
+      creatorName(x.created_by).toLowerCase().includes(q)
   );
 
   async function handleExport(id, quoteNumber) {
@@ -156,6 +162,7 @@ export default function Quotes({ onEditQuote }) {
               <tr>
                 <th>العدد</th>
                 <th>العميل</th>
+                <th>أنشأه</th>
                 <th>المجموع</th>
                 <th>حُذف بواسطة</th>
                 <th>وقت الحذف</th>
@@ -167,6 +174,7 @@ export default function Quotes({ onEditQuote }) {
                 <tr key={d.id}>
                   <td>{d.quote_number}</td>
                   <td>{d.client_name || '-'}</td>
+                  <td>{creatorName(d.created_by)}</td>
                   <td>{fmt(d.total_price)}</td>
                   <td style={{ fontWeight: 700 }}>{d.deleted_by || '-'}</td>
                   <td>{fmtDateTime(d.deleted_at)}</td>
@@ -179,7 +187,7 @@ export default function Quotes({ onEditQuote }) {
               ))}
               {deleted.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="muted" style={{ textAlign: 'center', padding: 14 }}>
+                  <td colSpan={7} className="muted" style={{ textAlign: 'center', padding: 14 }}>
                     السلة فارغة
                   </td>
                 </tr>
@@ -198,6 +206,7 @@ export default function Quotes({ onEditQuote }) {
             <th>العميل</th>
             <th>الموقع</th>
             <th>النوع</th>
+            <th>أنشأه</th>
             <th>التاريخ</th>
             <th>المجموع (د.ع)</th>
             <th>التصميم</th>
@@ -214,6 +223,7 @@ export default function Quotes({ onEditQuote }) {
               </td>
               <td>{qt.location || '-'}</td>
               <td>{TIER_LABELS[qt.selected_tier] || qt.selected_tier}</td>
+              <td style={{ fontWeight: 700, color: 'var(--navy)' }}>{creatorName(qt.created_by)}</td>
               <td>{fmtDate(qt.created_at)}</td>
               <td>{fmt(qt.total_price)}</td>
               <td>
@@ -245,7 +255,7 @@ export default function Quotes({ onEditQuote }) {
           ))}
           {filtered.length === 0 && (
             <tr>
-              <td colSpan={8} className="muted" style={{ textAlign: 'center', padding: 20 }}>
+              <td colSpan={9} className="muted" style={{ textAlign: 'center', padding: 20 }}>
                 {quotes.length === 0 ? 'لا توجد عروض محفوظة بعد' : 'لا توجد نتائج لهذا البحث'}
               </td>
             </tr>
