@@ -240,6 +240,26 @@ export const api = {
         draft,
       };
     },
+    // حالات العروض (عادي/متابعة/مستعجل/مكتمل + ملاحظات) — مفتاح quote_status_<id> بجدول app_config
+    async statuses() {
+      const { data, error } = await supabase.from('app_config').select('key,value').like('key', 'quote_status_%');
+      throwIf(error);
+      const map = {};
+      for (const row of data || []) {
+        const id = Number(row.key.slice('quote_status_'.length));
+        if (!id) continue;
+        try {
+          const v = JSON.parse(row.value);
+          if (v && v.level) map[id] = { level: v.level, note: v.note || '' };
+        } catch {
+          /* قيمة تالفة — نتجاهلها ويبقى العرض بالحالة الافتراضية */
+        }
+      }
+      return map;
+    },
+    async setStatus(id, status) {
+      return api.config.set(`quote_status_${id}`, { level: status.level, note: status.note || '' });
+    },
     // أسماء كل من سبق وأنشأ عرضاً — تغذي قائمة «العرض من طرف» تلقائياً بدون قائمة ثابتة
     async creators() {
       const { data, error } = await supabase.from('quotes').select('created_by');

@@ -4,6 +4,15 @@ import { buildEditPrefill } from '../lib/editPrefill.js';
 const TIER_LABELS = { economy: 'اقتصادي', standard: 'متوسط', premium: 'ممتاز' };
 const MAX_ATTACH_MB = 8;
 
+// حالات العرض: chip ملوّن بالجدول + ملاحظات تظهر عند مرور الماوس
+const STATUS_LEVELS = [
+  { key: 'normal', label: 'عادي' },
+  { key: 'follow', label: 'قيد المتابعة' },
+  { key: 'urgent', label: 'مستعجل' },
+  { key: 'done', label: 'مكتمل' },
+];
+const STATUS_LABELS = Object.fromEntries(STATUS_LEVELS.map((l) => [l.key, l.label]));
+
 function fmt(n) {
   return Math.round(n || 0).toLocaleString('en-US');
 }
@@ -30,12 +39,16 @@ export default function Quotes({ onEditQuote }) {
   const [search, setSearch] = useState('');
   const [message, setMessage] = useState('');
   const [busyId, setBusyId] = useState(null);
+  // حالات العروض: { [quoteId]: {level, note} } + محرر الحالة المفتوح حالياً
+  const [statuses, setStatuses] = useState({});
+  const [statusEdit, setStatusEdit] = useState(null);
   const fileRef = useRef(null);
   const attachTargetRef = useRef(null);
 
   function reload() {
     window.api.quotes.list().then(setQuotes);
     window.api.quotes.listDeleted().then(setDeleted).catch(() => setDeleted([]));
+    window.api.quotes.statuses().then(setStatuses).catch(() => {});
   }
 
   useEffect(reload, []);
@@ -125,6 +138,14 @@ export default function Quotes({ onEditQuote }) {
     }
   }
 
+  // حفظ حالة العرض تفاؤلياً: الواجهة تتحدث فوراً والتخزين بالخلفية
+  function saveStatus() {
+    const { id, level, note } = statusEdit;
+    setStatuses((prev) => ({ ...prev, [id]: { level, note } }));
+    setStatusEdit(null);
+    window.api.quotes.setStatus(id, { level, note }).catch((err) => setMessage('تعذر حفظ الحالة: ' + err.message));
+  }
+
   async function handleRemoveAttachment(quote) {
     if (!confirm(`هل تريد إزالة المرفق "${quote.attachment_name}" من العرض ${quote.quote_number}؟`)) return;
     await window.api.quotes.removeAttachment(quote.id);
@@ -207,6 +228,7 @@ export default function Quotes({ onEditQuote }) {
             <th>الموقع</th>
             <th>النوع</th>
             <th>أنشأه</th>
+            <th>الحالة</th>
             <th>التاريخ</th>
             <th>المجموع (د.ع)</th>
             <th>التصميم</th>
@@ -214,7 +236,7 @@ export default function Quotes({ onEditQuote }) {
           </tr>
         </thead>
         <tbody>
-          {filtered.map((qt) => (
+          {filtered.map((qt, rowIdx) => (
             <tr key={qt.id}>
               <td>{qt.quote_number}</td>
               <td>
@@ -224,6 +246,62 @@ export default function Quotes({ onEditQuote }) {
               <td>{qt.location || '-'}</td>
               <td>{TIER_LABELS[qt.selected_tier] || qt.selected_tier}</td>
               <td style={{ fontWeight: 700, color: 'var(--navy)' }}>{creatorName(qt.created_by)}</td>
+              <td>
+                {(() => {
+                  const st = statuses[qt.id] || { level: 'normal', note: '' };
+                  const editing = statusEdit?.id === qt.id;
+                  // بالصفوف الأخيرة النافذة تفتح فوق الـchip حتى ما ينقصها الجدول من الأسفل
+                  const tipUp = filtered.length > 4 && rowIdx >= filtered.length - 2;
+                  return (
+                    <span className={`status-cell${tipUp ? ' up' : ''}`}>
+                      <button
+                        type="button"
+                        className={`status-chip status-${st.level}`}
+                        onClick={() => setStatusEdit(editing ? null : { id: qt.id, level: st.level, note: st.note })}
+                        title=""
+                      >
+                        {STATUS_LABELS[st.level] || st.level}
+                      </button>
+                      {!editing && (
+                        <span className="status-tip" role="tooltip">
+                          <b>ملاحظات الحالة</b>
+                          {st.note || 'لا توجد ملاحظات — اضغط للتحرير'}
+                        </span>
+                      )}
+                      {editing && (
+                        <span className="status-editor" onClick={(e) => e.stopPropagation()}>
+                          <span className="status-editor-levels">
+                            {STATUS_LEVELS.map((l) => (
+                              <button
+                                key={l.key}
+                                type="button"
+                                className={`status-chip status-${l.key}${statusEdit.level === l.key ? ' selected' : ''}`}
+                                onClick={() => setStatusEdit((s) => ({ ...s, level: l.key }))}
+                              >
+                                {l.label}
+                              </button>
+                            ))}
+                          </span>
+                          <textarea
+                            rows={3}
+                            placeholder="ملاحظات مهمة عن حالة العرض..."
+                            value={statusEdit.note}
+                            onChange={(e) => setStatusEdit((s) => ({ ...s, note: e.target.value }))}
+                          />
+                          <span style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setStatusEdit(null)}>
+                              إغلاق
+                            </button>
+                            <button type="button" className="btn btn-primary btn-sm" onClick={saveStatus}>
+                              حفظ
+                            </button>
+                          </span>
+                        </span>
+                      )}
+                    </span>
+                  );
+                })()}
+              </td>
               <td>{fmtDate(qt.created_at)}</td>
               <td>{fmt(qt.total_price)}</td>
               <td>
@@ -255,7 +333,7 @@ export default function Quotes({ onEditQuote }) {
           ))}
           {filtered.length === 0 && (
             <tr>
-              <td colSpan={9} className="muted" style={{ textAlign: 'center', padding: 20 }}>
+              <td colSpan={10} className="muted" style={{ textAlign: 'center', padding: 20 }}>
                 {quotes.length === 0 ? 'لا توجد عروض محفوظة بعد' : 'لا توجد نتائج لهذا البحث'}
               </td>
             </tr>
