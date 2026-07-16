@@ -212,9 +212,18 @@ function premiumPool(combos, systemAmps) {
 }
 
 // premium بطاريات: تكبير الحجم لا تعديد الوحدات — ضمن أقل عدد وحدات ناخذ الأكبر سعة
-// (وعند التساوي الأرقى سعراً) بلا وحدة احتياط إضافية؛ الوحدات الزائدة تجي فقط من كبر الطلب
-function pickBatteryPremium(combos) {
-  return fewestUnitsGroup(combos).sort(
+// (وعند التساوي الأرقى سعراً) بلا وحدة احتياط إضافية؛ الوحدات الزائدة تجي فقط من كبر الطلب.
+// سقف التكبير: السعة الكلية ما تتجاوز 3× الحاجة — حتى كابينة 215kWh ما تنخطف
+// لعرض بيت صغير؛ إذا كل الخيارات فوق السقف ناخذ الأقرب للحاجة (الأصغر سعة كلية).
+const PREMIUM_OVERSIZE_CAP = 3;
+function pickBatteryPremium(combos, neededKwh = 0) {
+  let group = fewestUnitsGroup(combos);
+  if (neededKwh > 0) {
+    const bankKwh = (c) => c.units * c.material.watt_or_capacity;
+    const withinCap = group.filter((c) => bankKwh(c) <= neededKwh * PREMIUM_OVERSIZE_CAP);
+    group = withinCap.length ? withinCap : [...group].sort((a, b) => bankKwh(a) - bankKwh(b)).slice(0, 1);
+  }
+  return group.sort(
     (a, b) => (b.material.watt_or_capacity - a.material.watt_or_capacity) || (b.totalPrice - a.totalPrice)
   )[0];
 }
@@ -252,10 +261,12 @@ function selectBatteryTiers(batteryMaterials, ampNight, nightSupplyHours, settin
   if (allByTier.standard.length === 0) {
     return { economy: null, standard: null, premium: null, singleOption: false, insufficient: true, all: [], allByTier };
   }
+  // حاجة الممتاز الفعلية بالكيلو واط ساعة (بعد معامل الأمان وعمق التفريغ) — لسقف التكبير
+  const premiumNeededKwh = ((ampNight * settings.systemVoltage * nightSupplyHours) / 1000) * f.premium / settings.dod;
   return {
     economy: pickFewestThenCheapest(allByTier.economy),
     standard: pickFewestThenMid(allByTier.standard),
-    premium: pickBatteryPremium(premiumPool(allByTier.premium, systemAmps)),
+    premium: pickBatteryPremium(premiumPool(allByTier.premium, systemAmps), premiumNeededKwh),
     singleOption: allByTier.standard.length === 1,
     insufficient: false,
     all: allByTier.standard,

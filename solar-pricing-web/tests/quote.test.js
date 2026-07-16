@@ -381,3 +381,47 @@ describe('منظومات بلا بطاريات (نهارية) وبلا ألوا�
     expect(board.quantity).toBe(2);
   });
 });
+
+describe('كابينة HoyUltra 215kWh: سقف التكبير بالممتاز (3× الحاجة)', () => {
+  const CABINET = {
+    id: 60, category: 'battery', brand: 'hoymiles', model: 'hoymiles HoyUltra 215kWh Cabinet',
+    full_description: 'كابينة خزن طاقة متكاملة 100kW/215kWh — IP65', unit: 'عدد', watt_or_capacity: 215, price: 70000000, qty_per_panel: null,
+  };
+  const LB16D = {
+    id: 61, category: 'battery', brand: 'hoymiles', model: 'LB16D-G3 16kWh',
+    full_description: 'بطارية هويمايلز ليثيوم 16kWh IP65', unit: 'عدد', watt_or_capacity: 16, price: 2898000, qty_per_panel: null,
+  };
+  const bigLabor = [...LABOR, { id: 9, system_amps: 150, price: 3000000 }];
+  const materialsWith = (extra) => [...MATERIALS.filter((m) => m.category !== 'battery'), LB16D, ...extra];
+
+  it('منظومة صغيرة (18A×4h): الممتاز يبقى 1×16kWh — الكابينة ما تنخطف', () => {
+    const options = buildOptions({
+      materials: materialsWith([CABINET]), laborTiers: bigLabor, settingsRow: SETTINGS_ROW,
+      roofAreaM2: 100, ampDay: 18, ampNight: 18, nightSupplyHours: 4,
+    });
+    const premium = options.batteryTiers.premium;
+    expect(premium.material.id).toBe(61);
+    expect(premium.units).toBe(1);
+  });
+
+  it('حمل ليلي كبير (150A×8h): الممتاز يختار الكابينة بأقل عدد وحدات', () => {
+    const options = buildOptions({
+      materials: materialsWith([CABINET]), laborTiers: bigLabor, settingsRow: SETTINGS_ROW,
+      roofAreaM2: 500, ampDay: 150, ampNight: 150, nightSupplyHours: 8,
+    });
+    // الحاجة: 150×220×8/1000 = 264kWh ×0.8 ÷0.9 ≈ 234.7 → كابينتان (430) ضمن 3× الحاجة، مقابل 15 بطارية 16kWh
+    const premium = options.batteryTiers.premium;
+    expect(premium.material.id).toBe(60);
+    expect(premium.units).toBe(2);
+  });
+
+  it('إذا كل الخيارات فوق السقف: الأقرب للحاجة بدل الأكبر', () => {
+    const options = buildOptions({
+      materials: materialsWith([CABINET]).filter((m) => m.category !== 'battery' || m.id === 60),
+      laborTiers: bigLabor, settingsRow: SETTINGS_ROW,
+      roofAreaM2: 100, ampDay: 10, ampNight: 10, nightSupplyHours: 2,
+    });
+    // البطارية الوحيدة هي الكابينة — تُختار رغم تجاوز السقف (ما اكو بديل)
+    expect(options.batteryTiers.premium.material.id).toBe(60);
+  });
+});
