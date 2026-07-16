@@ -1,6 +1,7 @@
 // منطق بناء العرض — دوال نقية تعمل على مصفوفات مجلوبة مسبقاً (لا اتصال بقاعدة بيانات)
 // طبقة البيانات السحابية (dataApi.js) تجلب الصفوف من Supabase ثم تنادي هذه الدوال.
 import * as calc from './calc.js';
+import { isDcProtectionBoard } from './secondaryDefaults.js';
 
 const CATEGORY_LABELS_AR = {
   panel: 'الألواح',
@@ -89,6 +90,8 @@ function secondaryUnitQuantity(material, panelCount) {
 }
 
 function pickCombo(tiersResult, tier, overrides, category, errors) {
+  // الفئة غير مطلوبة بهذا العرض (نهاري بلا بطاريات، أو بلا ألواح) — بلا خطأ
+  if (tiersResult.none) return null;
   if (tiersResult.insufficient) {
     errors[category] = `لا توجد مادة بفئة ${CATEGORY_LABELS_AR[category]} — أضف مادة من المخزون`;
     return null;
@@ -277,6 +280,8 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
       } else if (material.unit === 'متر') {
         continue; // مادة متر بدون أمتار محددة => ما تنضاف
       } else {
+        // عرض بلا ألواح: بوردة الحماية DC (جهة الألواح) ما تنضاف تلقائياً — الكمية اليدوية تبقى محترمة
+        if (!panelCombo && isDcProtectionBoard(material)) continue;
         quantity = secondaryUnitQuantity(material, panelCount);
       }
       if (quantity <= 0) continue;
@@ -284,6 +289,7 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
       quantity = Number(cableMeters[material.id]) || 0;
       if (quantity <= 0) continue;
     } else {
+      if (!panelCombo && isDcProtectionBoard(material)) continue;
       quantity = secondaryUnitQuantity(material, panelCount);
       if (quantity <= 0) continue;
     }

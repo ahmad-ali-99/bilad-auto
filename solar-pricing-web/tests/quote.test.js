@@ -321,3 +321,63 @@ describe('حاسبة الزبون: الثانوية الافتراضية فقط 
     expect(draftAll.items.filter((i) => [33, 34].includes(i.material_id)).length).toBe(2);
   });
 });
+
+describe('منظومات بلا بطاريات (نهارية) وبلا ألواح (انفيرتر + بطارية فقط)', () => {
+  it('أمبير ليلي صفر: بلا بطاريات وبلا خطأ — ألواح تغذية فقط', () => {
+    const options = optionsFor({ roofAreaM2: 28, ampDay: 15, ampNight: 0, nightSupplyHours: null });
+    const draft = buildQuoteDraft(options, { tier: 'economy', cableMeters: {} });
+    expect(draft.errors).toEqual({});
+    expect(draft.items.some((i) => i.description.includes('بطاريات'))).toBe(false);
+    expect(draft.counts.battery).toBe(0);
+    expect(draft.panelBreakdown.chargePanels).toBe(0);
+    expect(draft.panelBreakdown.feedPanels).toBeGreaterThan(0);
+    expect(draft.items.some((i) => i.description.includes('انفيرتر'))).toBe(true);
+    expect(draft.capability.nightHours).toBe(null);
+  });
+
+  it('أمبير نهاري صفر: انفيرتر وبطارية فقط — بلا ألواح وبلا شرط مساحة وبلا بورد DC تلقائي', () => {
+    const secondary = [
+      { id: 40, category: 'secondary', model: 'هيكل', unit: 'عدد', price: 65000, qty_per_panel: 1 },
+      { id: 41, category: 'secondary', model: 'بورد حماية DC', unit: 'عدد', price: 150000, qty_per_panel: 0 },
+    ];
+    const options = buildOptions({
+      materials: [...MATERIALS.filter((m) => m.category !== 'secondary'), ...secondary],
+      laborTiers: LABOR,
+      settingsRow: SETTINGS_ROW,
+      roofAreaM2: 0,
+      ampDay: 0,
+      ampNight: 20,
+      nightSupplyHours: 4,
+    });
+    const draft = buildQuoteDraft(options, { tier: 'economy', cableMeters: {} });
+    expect(draft.errors).toEqual({});
+    expect(draft.items.some((i) => i.description.includes('ألواح'))).toBe(false);
+    expect(draft.panelBreakdown).toBe(null);
+    expect(draft.counts.panel).toBe(0);
+    // البطارية والانفيرتر موجودان وأجور عمل حجم 20 أمبير
+    expect(draft.items.some((i) => i.description.includes('بطاريات'))).toBe(true);
+    expect(draft.items.some((i) => i.description.includes('انفيرتر'))).toBe(true);
+    expect(draft.items.find((i) => i.description.includes('أجور')).unit_price).toBe(700000);
+    // الهيكل (لكل لوح) صفر تلقائياً، وبورد DC مستثنى لأن ما اكو ألواح
+    expect(draft.items.some((i) => i.material_id === 40)).toBe(false);
+    expect(draft.items.some((i) => i.material_id === 41)).toBe(false);
+    expect(draft.capability.nightHours).toBeGreaterThan(0);
+  });
+
+  it('بورد DC بكمية يدوية يبقى محترماً حتى بلا ألواح', () => {
+    const secondary = [{ id: 41, category: 'secondary', model: 'بورد حماية DC', unit: 'عدد', price: 150000, qty_per_panel: 0 }];
+    const options = buildOptions({
+      materials: [...MATERIALS.filter((m) => m.category !== 'secondary'), ...secondary],
+      laborTiers: LABOR,
+      settingsRow: SETTINGS_ROW,
+      roofAreaM2: 0,
+      ampDay: 0,
+      ampNight: 15,
+      nightSupplyHours: 4,
+    });
+    const draft = buildQuoteDraft(options, { tier: 'economy', secondarySelections: { 41: { qty: 2 } } });
+    const board = draft.items.find((i) => i.material_id === 41);
+    expect(board).toBeTruthy();
+    expect(board.quantity).toBe(2);
+  });
+});

@@ -1,6 +1,14 @@
 // الافتراضيات المشتركة للمواد الثانوية — تستخدمها شاشة الموظفين وحاسبة الزبون:
 // القائمة الدائمة المحفوظة بالإعدادات (secondary_defaults) إن وجدت، وإلا الأساسيات
 // المرتبطة بالألواح (هيكل + صبات) + بوردة الحماية DC.
+// بوردة الحماية DC (جهة الألواح) — تُستثنى تلقائياً من العروض بلا ألواح
+export function isDcProtectionBoard(m) {
+  const name = `${m.model || ''} ${m.brand || ''}`;
+  if (!/بورد/.test(name)) return false;
+  if (/AC|نضائد|رئيسي|Main/i.test(name)) return false;
+  return /DC/i.test(name) || /حماية/.test(name);
+}
+
 export function computeSecondaryDefaults(secondaryMaterials, savedIds) {
   const defaults = {};
   if (Array.isArray(savedIds) && savedIds.length > 0) {
@@ -11,12 +19,7 @@ export function computeSecondaryDefaults(secondaryMaterials, savedIds) {
   for (const m of secondaryMaterials) {
     if (m.qty_per_panel && m.qty_per_panel > 0) defaults[m.id] = { qty: '' };
   }
-  const dcBoard = secondaryMaterials.find((m) => {
-    const name = `${m.model || ''} ${m.brand || ''}`;
-    if (!/بورد/.test(name)) return false;
-    if (/AC|نضائد|رئيسي|Main/i.test(name)) return false;
-    return /DC/i.test(name) || /حماية/.test(name);
-  });
+  const dcBoard = secondaryMaterials.find(isDcProtectionBoard);
   if (dcBoard) defaults[dcBoard.id] = { qty: '' };
   return defaults;
 }

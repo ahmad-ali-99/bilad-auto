@@ -287,8 +287,10 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   const debouncedInputs = useDebouncedValue(inputs, 300);
 
   const validInputs =
-    Number(debouncedInputs.roofAreaM2) > 0 && Number(debouncedInputs.ampDay) >= 0 && Number(debouncedInputs.ampNight) >= 0 &&
+    Number(debouncedInputs.ampDay) >= 0 && Number(debouncedInputs.ampNight) >= 0 &&
     (Number(debouncedInputs.ampDay) > 0 || Number(debouncedInputs.ampNight) > 0) &&
+    // المساحة مطلوبة فقط إذا اكو حمل نهاري (ألواح) — عرض بلا ألواح ما يحتاج سطح
+    (Number(debouncedInputs.ampDay) === 0 || Number(debouncedInputs.roofAreaM2) > 0) &&
     // إذا اكو حمل ليلي لازم تحديد ساعات التجهيز — ما ننطي عدد بطاريات بدون ما يحددها البياع
     (Number(debouncedInputs.ampNight) === 0 || Number(debouncedInputs.nightSupplyHours) > 0);
 
@@ -646,7 +648,11 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
 
       {!validInputs && (
         <div className="alert alert-info">
-          أدخل مساحة السطح والأمبير المطلوب (نهاراً و/أو ليلاً) — وعند وجود حمل ليلي أدخل ساعات التجهيز الليلي (تتحكم بعدد البطاريات)
+          أدخل الأمبير المطلوب (نهاراً و/أو ليلاً) — مع الحمل النهاري أدخل مساحة السطح، ومع الحمل الليلي أدخل ساعات التجهيز.
+          <br />
+          <small className="muted">
+            أمبير الليل صفر = منظومة نهارية بلا بطاريات (زراعية...) • أمبير النهار صفر = انفيرتر وبطارية فقط بلا ألواح (بلا حاجة لمساحة سطح)
+          </small>
         </div>
       )}
 
@@ -793,7 +799,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
             <div className="grid-3">
               {['panel', 'battery', 'inverter'].map((cat) => {
                 const tiersResult = tiersResultFor(cat);
-                if (!tiersResult || tiersResult.insufficient) return null;
+                if (!tiersResult || tiersResult.insufficient || tiersResult.none) return null;
                 const chosenId = overrides[cat] ?? tiersResult[tier]?.material.id;
                 // البطاريات: الأعداد تختلف حسب معامل أمان المستوى — ناخذ قائمة المستوى الحالي
                 const optionsList = (tiersResult.allByTier && tiersResult.allByTier[tier]) || tiersResult.all;

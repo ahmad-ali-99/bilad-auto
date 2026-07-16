@@ -219,9 +219,21 @@ function pickBatteryPremium(combos) {
   )[0];
 }
 
+// نتيجة «الفئة غير مطلوبة بهذا العرض» — منظومة نهارية بلا بطاريات أو بلا ألواح:
+// ليست insufficient (ما ينقص شي بالمخزون)، فقط ما ننتخب منها شي
+function noneResult() {
+  return {
+    economy: null, standard: null, premium: null,
+    none: true, singleOption: false, insufficient: false,
+    all: [], allByTier: { economy: [], standard: [], premium: [] },
+  };
+}
+
 // توليفات البطاريات: لكل موديل عدد وحدات حسب ساعات التجهيز الليلي — مضروب بمعامل
 // أمان المستوى، لذلك كل مستوى إله قائمة توليفات خاصة (allByTier) بأعداده الصحيحة.
+// بلا أمبير ليلي => بلا بطاريات نهائياً (منظومات نهارية/زراعية).
 function selectBatteryTiers(batteryMaterials, ampNight, nightSupplyHours, settings, { factors = null, systemAmps = 0 } = {}) {
+  if (!(ampNight > 0)) return noneResult();
   const f = { ...DEFAULT_BATTERY_FACTORS, ...(factors || {}) };
   const combosFor = (factor) => {
     const combos = [];
@@ -251,8 +263,11 @@ function selectBatteryTiers(batteryMaterials, ampNight, nightSupplyHours, settin
   };
 }
 
-// توليفات الألواح: العدد يعتمد على أمبير النهار + عدد بطاريات التوليفة المرافقة
+// توليفات الألواح: العدد يعتمد على أمبير النهار + عدد بطاريات التوليفة المرافقة.
+// بلا أمبير نهاري => بلا ألواح إطلاقاً حتى ألواح الشحن (انفيرتر + بطارية فقط —
+// الشحن من الشبكة/المولدة، مثل تجهيز الوحدات العسكرية).
 function selectPanelTiers(panelMaterials, ampDay, batteryCount, settings) {
+  if (!(ampDay > 0)) return noneResult();
   const combos = [];
   for (const material of panelMaterials) {
     const { feedPanels, chargePanels, total } = panelsRequired(ampDay, batteryCount, settings, material.watt_or_capacity);

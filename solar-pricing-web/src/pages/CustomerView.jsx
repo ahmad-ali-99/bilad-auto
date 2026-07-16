@@ -118,10 +118,11 @@ export default function CustomerView({ user }) {
   const debounced = useDebouncedValue(inputs, 350);
 
   const validInputs =
-    Number(debounced.roofAreaM2) > 0 &&
     Number(debounced.ampDay) >= 0 &&
     Number(debounced.ampNight) >= 0 &&
     (Number(debounced.ampDay) > 0 || Number(debounced.ampNight) > 0) &&
+    // المساحة مطلوبة فقط مع حمل نهاري (ألواح) — منظومة بلا ألواح ما تحتاج سطح
+    (Number(debounced.ampDay) === 0 || Number(debounced.roofAreaM2) > 0) &&
     (Number(debounced.ampNight) === 0 || Number(debounced.nightSupplyHours) > 0);
 
   useEffect(() => {
@@ -304,7 +305,9 @@ export default function CustomerView({ user }) {
 
       {!validInputs && (
         <div className="alert alert-info">
-          أدخل مساحة السطح والأمبير المطلوب (نهاراً و/أو ليلاً) — وعند وجود حمل ليلي أدخل ساعات التجهيز الليلي
+          أدخل الأمبير المطلوب (نهاراً و/أو ليلاً) — مع الحمل النهاري أدخل مساحة السطح، ومع الحمل الليلي أدخل ساعات التجهيز.
+          <br />
+          <small>ليل صفر = منظومة نهارية بلا بطاريات • نهار صفر = انفيرتر وبطارية فقط بلا ألواح</small>
         </div>
       )}
 
