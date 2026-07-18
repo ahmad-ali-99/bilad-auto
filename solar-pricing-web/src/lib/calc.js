@@ -271,12 +271,20 @@ function selectBatteryTiers(batteryMaterials, ampNight, nightSupplyHours, settin
   if (allByTier.standard.length === 0) {
     return { economy: null, standard: null, premium: null, singleOption: false, insufficient: true, all: [], allByTier };
   }
-  // حاجة الممتاز الفعلية بالكيلو واط ساعة (بعد معامل الأمان وعمق التفريغ) — لسقف التكبير
-  const premiumNeededKwh = ((ampNight * settings.systemVoltage * nightSupplyHours) / 1000) * f.premium / settings.dod;
+  // سقف التكبير لكل المستويات: التوليفات التي سعتها الكلية فوق 3× الحاجة تُستبعد من
+  // الاختيار التلقائي (حتى كابينة 215kWh ما تنخطف بأي مستوى لعرض صغير لمجرد أنها
+  // وحدة واحدة)، وتبقى متاحة بقوائم التبديل اليدوي allByTier كما هي
+  const neededKwhFor = (factor) => (((ampNight * settings.systemVoltage * nightSupplyHours) / 1000) * factor) / settings.dod;
+  const autoPool = (combos, factor) => {
+    const needed = neededKwhFor(factor);
+    if (!(needed > 0)) return combos;
+    const within = combos.filter((c) => c.units * c.material.watt_or_capacity <= needed * PREMIUM_OVERSIZE_CAP);
+    return within.length ? within : combos;
+  };
   return {
-    economy: pickFewestThenCheapest(allByTier.economy),
-    standard: pickFewestThenMid(allByTier.standard),
-    premium: pickBatteryPremium(premiumPool(allByTier.premium, systemAmps), premiumNeededKwh),
+    economy: pickFewestThenCheapest(autoPool(allByTier.economy, f.economy)),
+    standard: pickFewestThenMid(autoPool(allByTier.standard, f.standard)),
+    premium: pickBatteryPremium(premiumPool(autoPool(allByTier.premium, f.premium), systemAmps), neededKwhFor(f.premium)),
     singleOption: allByTier.standard.length === 1,
     insufficient: false,
     all: allByTier.standard,

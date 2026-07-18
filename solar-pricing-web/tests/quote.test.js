@@ -458,3 +458,28 @@ describe('الاقتصادي انفيرترات: أدنى فئة IP (تبدأ م
     expect(tiers.economy.material.id).toBe(2);
   });
 });
+
+describe('سقف الكابينة 215kWh على كل المستويات (لا الاقتصادي ولا المتوسط ينخطفان)', () => {
+  const CAB = { id: 70, category: 'battery', brand: 'hoymiles', model: 'hoymiles HoyUltra 215kWh Cabinet', full_description: 'كابينة 215kWh', unit: 'عدد', watt_or_capacity: 215, price: 70000000, qty_per_panel: null };
+  const B16 = { id: 71, category: 'battery', brand: 'COSPOWER', model: 'COSPOWER 16kWh', full_description: 'بطارية 16kWh', unit: 'عدد', watt_or_capacity: 16, price: 2750000, qty_per_panel: null };
+  const bigLabor = [...LABOR, { id: 9, system_amps: 150, price: 3000000 }];
+  const opts = (ampNight, hours) => buildOptions({
+    materials: [...MATERIALS.filter((m) => m.category !== 'battery'), B16, CAB],
+    laborTiers: bigLabor, settingsRow: SETTINGS_ROW,
+    roofAreaM2: 200, ampDay: ampNight, ampNight, nightSupplyHours: hours,
+  });
+
+  it('30A×4h: الكابينة وحدة واحدة (أقل عدد) لكن الاقتصادي والمتوسط ياخذان 16kWh', () => {
+    const t = opts(30, 4).batteryTiers;
+    expect(t.economy.material.id).toBe(71);
+    expect(t.standard.material.id).toBe(71);
+    expect(t.premium.material.id).toBe(71);
+    // وتبقى الكابينة متاحة بقائمة التبديل اليدوي
+    expect(t.allByTier.economy.some((c) => c.material.id === 70)).toBe(true);
+  });
+
+  it('150A×8h (مشروع كبير): الكابينة تُختار طبيعياً', () => {
+    const t = opts(150, 8).batteryTiers;
+    expect(t.premium.material.id).toBe(70);
+  });
+});

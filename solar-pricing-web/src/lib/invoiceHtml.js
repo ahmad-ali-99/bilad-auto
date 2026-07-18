@@ -52,7 +52,8 @@ export function buildInvoiceInnerHtml({ quote, items, notes, company, installmen
     )
     .join('');
 
-  const notesHtml = notes.map((n) => `<li>${escapeHtml(n)}</li>`).join('');
+  // ترقيم يدوي بنفس السطر — قوائم ol بـhtml2canvas ترسم الأرقام على اليسار بالعربي
+  const notesHtml = notes.map((n, i) => `<div class="note-line">${i + 1}. ${escapeHtml(n)}</div>`).join('');
 
   return `
 <style>
@@ -90,9 +91,8 @@ export function buildInvoiceInnerHtml({ quote, items, notes, company, installmen
 .inv-sheet .total-row td { background: #1a3a5c !important; color: #fff; font-weight: 700; font-size: 1.05em; padding: ${cellPad + 2}px 6px; }
 .inv-sheet .inst-row td { background: #f5a623 !important; color: #1a2a4a; font-weight: 700; font-size: 1em; padding: ${cellPad + 1}px 6px; }
 .inv-sheet .inst-monthly td { background: #ffd88a !important; }
-.inv-sheet .notes-section h3 { color: #1a3a5c; font-size: 0.95em; margin: 6px 0 2px; }
-.inv-sheet .notes-section ol { margin: 0; padding-right: 18px; }
-.inv-sheet .notes-section li { font-size: 0.85em; line-height: 1.35; }
+.inv-sheet .notes-section h3 { color: #1a3a5c; font-size: 0.9em; margin: 6px 0 2px; }
+.inv-sheet .notes-section .note-line { font-size: 0.78em; line-height: 1.45; text-align: right; }
 .inv-sheet .footer { display: flex; justify-content: space-between; margin-top: 16px; font-size: 0.88em; }
 .inv-sheet .footer .block { text-align: center; }
 .inv-sheet .footer .role { font-weight: 700; color: #1a3a5c; margin-bottom: 16px; }
@@ -138,7 +138,7 @@ export function buildInvoiceInnerHtml({ quote, items, notes, company, installmen
       <tr class="inst-row inst-monthly"><td colspan="5">القسط الشهري لمدة ${formatNumber(installment.months)} شهر</td><td>${formatNumber(installment.monthly)}</td></tr>` : ''}
     </tbody>
   </table>
-  <div class="notes-section"><h3>ملاحظات:</h3><ol>${notesHtml}</ol></div>
+  <div class="notes-section"><h3>ملاحظات:</h3>${notesHtml}</div>
   <div class="footer">
     <div class="block"><div class="role">المدير المفوض</div><div>${escapeHtml(company.manager_name || '')}</div></div>
     <div class="block"><div class="role">توقيع وختم الشركة</div><div>&nbsp;</div></div>
