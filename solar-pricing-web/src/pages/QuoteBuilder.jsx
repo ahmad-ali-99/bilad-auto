@@ -159,6 +159,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   // تنبيه التكرار الحي: عرض سابق لنفس الاسم/الرقم
   const [dupMatch, setDupMatch] = useState(null);
   const dupDismissedRef = useRef(new Set());
+  // العروض التي ظهر تنبيهها الحي أصلاً — ما نعيد إزعاج البياع بنافذة تأكيد عند الحفظ
+  const dupSeenRef = useRef(new Set());
 
   // تطبيق تعبئة (من المساعد أو تعديل عرض أو تنبيه التكرار) مع وميض الحقول المتغيرة
   function applyPrefill(p) {
@@ -215,6 +217,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       try {
         const match = await window.api.quotes.findClientMatch({ clientName: name, clientPhone: phone });
         if (match && match.id !== editingQuote?.id && !dupDismissedRef.current.has(match.id)) {
+          dupSeenRef.current.add(match.id);
           setDupMatch(match);
         } else {
           setDupMatch(null);
@@ -354,10 +357,11 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
     setSaving(true);
     setSaveMessage('');
     try {
-      // كشف تكرار: هل يوجد عرض محفوظ لنفس العميل ورقمه؟
-      if (clientName || clientPhone) {
+      // كشف تكرار: نافذة التأكيد تظهر مرة واحدة فقط — إذا التنبيه الحي ظهر أثناء كتابة
+      // الاسم أو كان البياع بوضع تعديل عرض (يعرف شيسوي) فما نعيد إزعاجه عند الحفظ
+      if ((clientName || clientPhone) && !editingQuote) {
         const dup = await window.api.quotes.findDuplicate({ clientName, clientPhone });
-        if (dup) {
+        if (dup && !dupSeenRef.current.has(dup.id) && !dupDismissedRef.current.has(dup.id)) {
           const dupDate = new Date(dup.created_at).toLocaleDateString('en-GB');
           const proceed = confirm(
             `يوجد عرض محفوظ لهذا العميل مسبقاً:\n` +

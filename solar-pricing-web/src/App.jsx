@@ -99,6 +99,96 @@ export default function App() {
     };
   }, []);
 
+  // كلك أيمن نسخ/لصق: أغلفة سطح المكتب (Electron) والموبايل (Capacitor) ما عندها
+  // قائمة سياق أصلاً — نبني قائمة صغيرة تشتغل بحقول الإدخال وبأي نص محدد.
+  // بالمتصفح العادي نترك قائمة المتصفح الأصلية مثل ما هي.
+  useEffect(() => {
+    const isShell = /Electron/i.test(navigator.userAgent) || !!window.Capacitor;
+    if (!isShell) return;
+
+    const menu = document.createElement('div');
+    menu.className = 'ctx-menu';
+    menu.style.display = 'none';
+    document.body.appendChild(menu);
+    const hide = () => (menu.style.display = 'none');
+
+    // تعديل قيمة حقل بطريقة يلتقطها React (setter الأصلي + حدث input)
+    const setNativeValue = (el, value) => {
+      const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, value);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+
+    const mkBtn = (label, fn) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      b.onmousedown = (ev) => ev.preventDefault();
+      b.onclick = async () => {
+        try {
+          await fn();
+        } catch {
+          /* الحافظة مرفوضة — ما نكسر شي */
+        }
+        hide();
+      };
+      return b;
+    };
+
+    const onCtx = (e) => {
+      const editable = e.target.closest('input, textarea');
+      const isTextField = editable && !/checkbox|radio|file|button/.test(editable.type || 'text');
+      const selText = String(window.getSelection());
+      if (!isTextField && !selText) return hide();
+      e.preventDefault();
+      menu.innerHTML = '';
+
+      const editSel = () => (isTextField ? editable.value.slice(editable.selectionStart ?? 0, editable.selectionEnd ?? 0) : '');
+      const copyText = isTextField ? editSel() || editable.value : selText;
+
+      if (copyText) menu.appendChild(mkBtn('📋 نسخ', () => navigator.clipboard.writeText(copyText)));
+      if (isTextField && (editSel() || editable.value)) {
+        menu.appendChild(
+          mkBtn('✂ قص', async () => {
+            const hasSel = editSel().length > 0;
+            const start = hasSel ? editable.selectionStart : 0;
+            const end = hasSel ? editable.selectionEnd : editable.value.length;
+            await navigator.clipboard.writeText(editable.value.slice(start, end));
+            setNativeValue(editable, editable.value.slice(0, start) + editable.value.slice(end));
+          })
+        );
+      }
+      if (isTextField) {
+        menu.appendChild(
+          mkBtn('📥 لصق', async () => {
+            const text = await navigator.clipboard.readText();
+            if (!text) return;
+            const start = editable.selectionStart ?? editable.value.length;
+            const end = editable.selectionEnd ?? editable.value.length;
+            setNativeValue(editable, editable.value.slice(0, start) + text + editable.value.slice(end));
+          })
+        );
+        menu.appendChild(mkBtn('☑ تحديد الكل', () => editable.select()));
+      }
+      if (!menu.childElementCount) return hide();
+
+      menu.style.display = 'block';
+      const mw = 160;
+      menu.style.left = Math.min(e.clientX, window.innerWidth - mw - 8) + 'px';
+      menu.style.top = Math.min(e.clientY, window.innerHeight - menu.childElementCount * 40 - 12) + 'px';
+    };
+
+    document.addEventListener('contextmenu', onCtx);
+    document.addEventListener('click', hide);
+    window.addEventListener('scroll', hide, true);
+    return () => {
+      document.removeEventListener('contextmenu', onCtx);
+      document.removeEventListener('click', hide);
+      window.removeEventListener('scroll', hide, true);
+      menu.remove();
+    };
+  }, []);
+
   if (loading) {
     return (
       <div className="splash-overlay">

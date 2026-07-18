@@ -262,10 +262,10 @@ export default function Quotes({ onEditQuote }) {
                       >
                         {STATUS_LABELS[st.level] || st.level}
                       </button>
-                      {!editing && (
+                      {!editing && st.note && (
                         <span className="status-tip" role="tooltip">
                           <b>ملاحظات الحالة</b>
-                          {st.note || 'لا توجد ملاحظات — اضغط للتحرير'}
+                          {st.note}
                         </span>
                       )}
                       {editing && (
