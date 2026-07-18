@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildOptions, buildQuoteDraft } from '../src/lib/quoteService.js';
+import * as calcModule from '../src/lib/calc.js';
 
 // بيانات تجريبية مطابقة للمثال المرجعي (بدون عمود كمية مخزون)
 const SETTINGS_ROW = {
@@ -423,5 +424,37 @@ describe('كابينة HoyUltra 215kWh: سقف التكبير بالممتاز (
     });
     // البطارية الوحيدة هي الكابينة — تُختار رغم تجاوز السقف (ما اكو بديل)
     expect(options.batteryTiers.premium.material.id).toBe(60);
+  });
+});
+
+describe('الاقتصادي انفيرترات: أدنى فئة IP (تبدأ من IP21) ثم الأرخص', () => {
+  const { selectInverterTiers } = calcModule;
+  const S = { systemVoltage: 220, inverterSafetyFactor: 1.25 };
+
+  it('IP66 أرخص قليلاً من محلي بلا IP → الاقتصادي ياخذ البلا IP', () => {
+    const inverters = [
+      { id: 1, category: 'inverter', model: 'hoymiles HYS-12kW', full_description: 'انفيرتر هويمايلز IP66', watt_or_capacity: 12000, price: 2553000 },
+      { id: 2, category: 'inverter', model: 'Hybrid 12kW LV', full_description: 'انفيرتر هجين 12 كيلو واط', watt_or_capacity: 12000, price: 2600000 },
+    ];
+    const tiers = selectInverterTiers(inverters, 40, 40, S, 0, 40);
+    expect(tiers.economy.material.id).toBe(2);
+  });
+
+  it('IP21 صريح موجود وIP65 أرخص → الاقتصادي ياخذ IP21', () => {
+    const inverters = [
+      { id: 1, category: 'inverter', model: 'A 6kW', full_description: 'انفيرتر IP65', watt_or_capacity: 6000, price: 600000 },
+      { id: 2, category: 'inverter', model: 'B 6kW', full_description: 'انفيرتر IP21', watt_or_capacity: 6000, price: 650000 },
+    ];
+    const tiers = selectInverterTiers(inverters, 15, 15, S, 0, 15);
+    expect(tiers.economy.material.id).toBe(2);
+  });
+
+  it('الحجم ما بيه إلا IP65 وIP66 → الأرخص بينهما (الفئتان وحدة بالسقف 65)', () => {
+    const inverters = [
+      { id: 1, category: 'inverter', model: 'A 6kW', full_description: 'انفيرتر IP65', watt_or_capacity: 6000, price: 1600000 },
+      { id: 2, category: 'inverter', model: 'B 6kW', full_description: 'انفيرتر IP66', watt_or_capacity: 6000, price: 1265000 },
+    ];
+    const tiers = selectInverterTiers(inverters, 15, 15, S, 0, 15);
+    expect(tiers.economy.material.id).toBe(2);
   });
 });

@@ -121,7 +121,7 @@ function classifyTiers(combos) {
 // ===== دستور التسعير (الهندسة أولاً، الـIP قبل السعر — معتمد من الشركة) =====
 // الهندسة ثابتة بكل المستويات: أقل عدد بطاريات وانفيرترات يغطي الأمبيرية بدقة،
 // وعدد البطاريات يخضع لمعامل أمان لكل مستوى من الإعدادات (يضرب الحاجة قبل القسمة).
-// economy: أقل عدد ← الأرخص (أقل IP ممكن بسعر مناسب) — معامل بطاريات 0.90.
+// economy (انفيرترات): أقل عدد ← أدنى فئة IP متوفرة (غير المذكور = IP21، سقف 65) ← الأرخص — معامل بطاريات 0.90.
 // standard: أقل عدد ← أعلى حماية IP (مثل IP65) ← الأرخص عند التساوي — معامل 0.85.
 // premium ≤120 أمبير: هويمايلز حصراً (انفيرتر + بطارية) — معامل بطاريات 0.80.
 //   قاعدة الراحة: القدرة الكلية ≥ الطلب ×1.3 بتكبير حجم الجهاز بأقل عدد وحدات
@@ -169,6 +169,16 @@ function pickFewestThenCheapest(combos) {
   return fewestUnitsGroup(combos).sort((a, b) => a.totalPrice - b.totalPrice)[0];
 }
 
+// الاقتصادي (انفيرترات): أقل عدد ← أدنى فئة IP متوفرة ← الأرخص داخل الفئة.
+// غير المذكور IP بوصفه يُعد IP21 (الفئة الأساسية الداخلية)، وما فوق 65 يُسقّف بـ65
+// حتى ما يسحب جهاز IP66 أرخص قليلاً العرضَ الاقتصادي (مثل هويمايلز مقابل المحلي).
+function pickFewestThenLowestIp(combos) {
+  const group = fewestUnitsGroup(combos);
+  const effIp = (c) => Math.min(ipRatingOf(c.material) || 21, STANDARD_IP_CAP);
+  const minIp = Math.min(...group.map(effIp));
+  return group.filter((c) => effIp(c) === minIp).sort((a, b) => a.totalPrice - b.totalPrice)[0];
+}
+
 function pickFewestThenMid(combos) {
   return midByPrice(fewestUnitsGroup(combos));
 }
@@ -184,7 +194,7 @@ function pickFewestThenIp(combos) {
   return group.filter((c) => effIp(c) === maxIp).sort((a, b) => a.totalPrice - b.totalPrice)[0];
 }
 
-function assignTiers(combos, premiumPick, standardPick = pickFewestThenMid) {
+function assignTiers(combos, premiumPick, standardPick = pickFewestThenMid, economyPick = pickFewestThenCheapest) {
   if (combos.length === 0) {
     return { economy: null, standard: null, premium: null, singleOption: false, insufficient: true, all: [] };
   }
@@ -193,7 +203,7 @@ function assignTiers(combos, premiumPick, standardPick = pickFewestThenMid) {
     return { economy: sorted[0], standard: sorted[0], premium: premiumPick ? premiumPick(sorted) : sorted[0], singleOption: true, insufficient: false, all: sorted };
   }
   return {
-    economy: pickFewestThenCheapest(sorted),
+    economy: economyPick(sorted),
     standard: standardPick(sorted),
     premium: premiumPick(sorted),
     singleOption: false,
@@ -308,8 +318,8 @@ function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, pane
     return candidates.filter((c) => c.units === minUnits).sort((a, b) => a.totalPrice - b.totalPrice)[0];
   }
 
-  // المتوسط بالـIP قبل السعر، والاقتصادي يبقى الأرخص ضمن أقل عدد
-  return assignTiers(combos, pickInverterPremium, pickFewestThenIp);
+  // المتوسط بالـIP الأعلى قبل السعر، والاقتصادي بأدنى فئة IP (يبدأ من IP21) ثم الأرخص
+  return assignTiers(combos, pickInverterPremium, pickFewestThenIp, pickFewestThenLowestIp);
 }
 
 export {
