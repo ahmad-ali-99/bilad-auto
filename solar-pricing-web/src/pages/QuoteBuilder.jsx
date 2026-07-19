@@ -74,6 +74,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   }, []);
   // قائمة الأسماء: المشرفون الثلاثة + كل من سبق وأنشأ عرضاً (بدون تكرار)
   const creatorOptions = useMemo(() => [...new Set([...ADMIN_USERS, ...pastCreators])], [pastCreators]);
+  // إسناد العرض لموظف آخر: صلاحية حصرية لحساب أحمد فقط (مو كل المشرفين)
+  const canAttribute = isAdmin && (myName || '').replace(/[أإآ]/g, 'ا').trim() === 'احمد';
   // الحسابات المرقمة تظهر بالرقم فقط — نفس تنسيق عمود «أنشأه» بصفحة العروض
   const displayCreator = (n) => (n || '').replace(/^مستخدم(?=[0-9])/, '');
   const [overrides, setOverrides] = useState(savedDraft?.overrides ?? {});
@@ -347,8 +349,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       },
       installment,
       extraUnits,
-      // الإسناد للمشرفين فقط — null = الحساب الحالي عند الحفظ، وإبقاء المنشئ الأصلي عند التعديل
-      createdBy: (isAdmin && createdBy) || null,
+      // الإسناد لحساب أحمد فقط — null = الحساب الحالي عند الحفظ، وإبقاء المنشئ الأصلي عند التعديل
+      createdBy: (canAttribute && createdBy) || null,
       notes: notes || [],
     };
   }
@@ -474,7 +476,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
             <label>الموقع</label>
             <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} />
           </div>
-          {isAdmin && (
+          {canAttribute && (
             <div className="field">
               <label>العرض من طرف</label>
               <select value={createdBy} onChange={(e) => setCreatedBy(e.target.value)}>
