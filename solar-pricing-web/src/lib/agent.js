@@ -118,12 +118,36 @@ async function clearChat(username) {
   }
 }
 
+// يحول وسيطات fill_quote من الموديل لصيغة التعبئة بشاشة العرض:
+// panelId/inverterId/batteryId ← overrides، وsecondary [{id,qty}] ← secondarySelections
+// (qty صفر أو فارغة = كمية تلقائية حسب عدد الألواح)
+function mapFillQuoteArgs(args) {
+  const fields = { ...args };
+  const overrides = {};
+  if (Number(args.panelId) > 0) overrides.panel = Number(args.panelId);
+  if (Number(args.inverterId) > 0) overrides.inverter = Number(args.inverterId);
+  if (Number(args.batteryId) > 0) overrides.battery = Number(args.batteryId);
+  if (Object.keys(overrides).length) fields.overrides = overrides;
+  if (Array.isArray(args.secondary) && args.secondary.length) {
+    fields.secondarySelections = {};
+    for (const s of args.secondary) {
+      if (!s || !(Number(s.id) > 0)) continue;
+      fields.secondarySelections[Number(s.id)] = { qty: Number(s.qty) > 0 ? Number(s.qty) : '' };
+    }
+  }
+  delete fields.panelId;
+  delete fields.inverterId;
+  delete fields.batteryId;
+  delete fields.secondary;
+  return fields;
+}
+
 // ===== تعريف الأدوات للموديل =====
 const TOOL_DECLARATIONS = [
   {
     name: 'fill_quote',
     description:
-      'يعبي حقول عرض السعر بالبرنامج ويحسب المنظومة فوراً. مرر فقط الحقول المعروفة من طلب الزبون. ساعات التجهيز الليلي إجبارية إذا اكو أمبير ليلي.',
+      'يعبي حقول عرض السعر بالبرنامج ويحسب المنظومة فوراً. مرر فقط الحقول المعروفة من طلب الزبون. ساعات التجهيز الليلي إجبارية إذا اكو أمبير ليلي. أمبير ليلي 0 = بلا بطاريات نهائياً، وأمبير نهاري 0 = انفيرتر وبطارية فقط بلا ألواح. تكدر تحدد مواد معينة بالضبط (panelId/inverterId/batteryId من get_materials) والمواد الثانوية بكمياتها.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -132,9 +156,23 @@ const TOOL_DECLARATIONS = [
         location: { type: 'STRING', description: 'الموقع/المنطقة' },
         roofAreaM2: { type: 'NUMBER', description: 'مساحة السطح بالمتر المربع' },
         ampDay: { type: 'NUMBER', description: 'الأمبير المطلوب نهاراً' },
-        ampNight: { type: 'NUMBER', description: 'الأمبير المطلوب ليلاً' },
+        ampNight: { type: 'NUMBER', description: 'الأمبير المطلوب ليلاً (0 = بلا بطاريات)' },
         nightSupplyHours: { type: 'NUMBER', description: 'ساعات التجهيز الليلي (تتحكم بعدد البطاريات)' },
         tier: { type: 'STRING', description: 'المستوى: economy أو standard أو premium' },
+        panelId: { type: 'NUMBER', description: 'id لوح معين من get_materials — البرنامج يحسب العدد تلقائياً' },
+        inverterId: { type: 'NUMBER', description: 'id انفيرتر معين من get_materials — البرنامج يحسب العدد تلقائياً' },
+        batteryId: { type: 'NUMBER', description: 'id بطارية معينة من get_materials — البرنامج يحسب العدد تلقائياً' },
+        secondary: {
+          type: 'ARRAY',
+          description: 'المواد الثانوية المطلوبة بالعرض: [{id, qty}] — qty=0 تعني كمية تلقائية (الهيكل والصبات حسب عدد الألواح)، ومواد المتر لازم كمية صريحة بالأمتار',
+          items: {
+            type: 'OBJECT',
+            properties: {
+              id: { type: 'NUMBER', description: 'id المادة الثانوية من get_materials' },
+              qty: { type: 'NUMBER', description: 'الكمية — 0 = تلقائي' },
+            },
+          },
+        },
       },
     },
   },
@@ -302,7 +340,14 @@ const SYSTEM_PROMPT = `انت المهندس الاستشاري والمساعد
 4. الأسعار حصراً من get_materials وget_labor_tiers — ممنوع تخترع سعر.
 5. التعديل المباشر (إذا أدواته متاحة لك): get_materials أولاً للتأكد من المادة بالضبط، نفذ، واذكر القديم والجديد. تشابه؟ اعرض الخيارات واسأل. الحذف فقط بطلب صريح. إذا ما عندك أدوات تعديل فالمستخدم غير مخول — وجهه أن التعديل لحسابات المدراء.
 6. تطوير آلية العمل: إذا انسألت رأيك أو "شلون نطور" — حلل بالأرقام (مثلاً: قيمة معامل الأمان، جدوى IP65، أثر تغيير DoD على العدد والسعر، مقارنة توليفة بطاريات كبيرة مقابل صغيرة من ناحية التوصيلات ونقاط العطل) واقترح بوضوح مع الأثر المتوقع بالدينار، بس لا تعدل أي إعداد إلا بطلب صريح.
-7. ردود مركزة: أرقام بالدينار العراقي، جداول قصيرة إذا تفيد، بدون حشو.`;
+7. ردود مركزة: أرقام بالدينار العراقي، جداول قصيرة إذا تفيد، بدون حشو.
+8. تحليل المناقصات وجداول الكميات (BOQ): إذا لصق البياع مواصفات مناقصة أو جدول كميات (عربي أو إنكليزي أو الاثنين):
+   أ. استخرج المتطلبات الفنية: القدرة الكلية للألواح بالواط (Wp)، واطية اللوح ونوعه (N-type/Mono...)، الانفيرتر (كيلوواط، طور، نوع — مضخة VFD أو هجين)، البطاريات إن طُلبت، الهيكل، الكيبلات، التأريض، مانعة الصواعق.
+   ب. استدعِ get_materials وقارن كل بند بالمواد المتوفرة: رشح أقرب مطابقة واذكر الفروقات بصراحة (واطية اللوح، نوع الخلية، IP، الطور، مدى الفولتية) — لا تدّعي مطابقة غير موجودة.
+   ج. حوّل قدرة الألواح المطلوبة لأمبيرية بقاعدة الشركة: ampDay = القدرة الكلية Wp × 2.18 ÷ 650 (قرّب للأعلى). منظومة مضخات/زراعية/نهارية بلا بطاريات → ampNight = 0 وبلا ساعات تجهيز. وإذا المواصفة تطلب خزن، حدد ampNight والساعات منها.
+   د. roofAreaM2 = عدد الألواح المتوقع × مساحة اللوح (من get_settings) + هامش ~10%.
+   هـ. استدعِ fill_quote مع panelId وinverterId (وbatteryId إن وجدت) للمواد الأقرب للمواصفة — البرنامج يحسب الأعداد — وsecondary بالثانوية المناسبة: الهيكل والصبات بكمية تلقائية (qty=0)، الكيبلات بالأمتار المطلوبة بالمواصفة، البوردات بعددها.
+   و. بعدها get_quote_preview ولخّص للبياع: جدول (بند المناقصة ← المادة المختارة ← مطابق/فرق)، والبنود غير المتوفرة بالمخزون (مثل التأريض أو مانعة الصواعق ESE أو أعمال خرسانية) اذكرها صراحة «غير متوفرة — تُسعّر يدوياً وتُضاف من المواد الثانوية أو بند مخصص» ولا تخترع مواد أو أسعار.`;
 
 // ===== تنفيذ الأدوات محلياً =====
 const ADMIN_TOOL_NAMES = new Set(ADMIN_TOOL_DECLARATIONS.map((t) => t.name));
@@ -374,7 +419,7 @@ async function executeTool(name, args, executor, isAdmin) {
       return { ok: true, message: `تعدل ${args.field} من ${before} إلى ${args.value}` };
     }
     if (name === 'fill_quote') {
-      executor.fillQuote(args);
+      executor.fillQuote(mapFillQuoteArgs(args));
       return { ok: true, message: 'انعبت الحقول وقاعد يحسب — استدعي get_quote_preview للنتيجة' };
     }
     if (name === 'get_quote_preview') {
@@ -527,4 +572,4 @@ async function runAgent({ apiKey, history, userText, executor, onStatus, isAdmin
   return { text: 'الطلب طول أكثر من اللازم — جزئه وجرب مرة ثانية.', history: contents };
 }
 
-export { getAgentKey, setAgentKey, runAgent, getIsAdmin, isAdminName, getCurrentUsername, loadChat, saveChat, clearChat, SHARE_KEY_SQL, ADMIN_USERS };
+export { getAgentKey, setAgentKey, runAgent, getIsAdmin, isAdminName, getCurrentUsername, loadChat, saveChat, clearChat, SHARE_KEY_SQL, ADMIN_USERS, mapFillQuoteArgs };

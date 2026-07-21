@@ -483,3 +483,26 @@ describe('سقف الكابينة 215kWh على كل المستويات (لا ا
     expect(t.premium.material.id).toBe(70);
   });
 });
+
+describe('مساعد المناقصات: تحويل وسيطات fill_quote للمواد المحددة والثانوية', () => {
+  it('panelId/inverterId ← overrides وsecondary ← secondarySelections مع الكميات', async () => {
+    const { mapFillQuoteArgs } = await import('../src/lib/agent.js');
+    const out = mapFillQuoteArgs({
+      ampDay: 84, ampNight: 0, roofAreaM2: 120, tier: 'economy',
+      panelId: 5, inverterId: 12,
+      secondary: [{ id: 30, qty: 0 }, { id: 31 }, { id: 44, qty: 200 }, { id: 0, qty: 5 }],
+    });
+    expect(out.overrides).toEqual({ panel: 5, inverter: 12 });
+    expect(out.secondarySelections).toEqual({ 30: { qty: '' }, 31: { qty: '' }, 44: { qty: 200 } });
+    expect(out.ampDay).toBe(84);
+    expect('panelId' in out).toBe(false);
+    expect('secondary' in out).toBe(false);
+  });
+
+  it('بدون مواد محددة: لا overrides ولا secondarySelections', async () => {
+    const { mapFillQuoteArgs } = await import('../src/lib/agent.js');
+    const out = mapFillQuoteArgs({ ampDay: 20, ampNight: 10, nightSupplyHours: 4 });
+    expect('overrides' in out).toBe(false);
+    expect('secondarySelections' in out).toBe(false);
+  });
+});
