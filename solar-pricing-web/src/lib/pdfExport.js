@@ -184,9 +184,7 @@ export async function deliverPdf(blob, fileName) {
   return { canceled: false, shared: false };
 }
 
-// structure=false افتراضياً: صفحة مخطط الهيكل معطّلة مؤقتاً لحد ما نجهّز صورة/رندر احترافي
-// يليق بالعرض — الرسم المتّجه السابق كان ضعيفاً بصرياً فشلناه من العروض
-export async function exportInvoicePdf({ quote, items, notes, company, fileName, attachment = null, installment = null, structure = false }) {
+export async function exportInvoicePdf({ quote, items, notes, company, fileName, attachment = null, installment = null, structure = true }) {
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-2000px;top:0;width:794px;background:#fff;z-index:-1;';
   host.innerHTML = buildInvoiceInnerHtml({ quote, items, notes, company, installment });
@@ -245,11 +243,20 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
       }
     }
 
-    // مخطط هيكل الألواح التلقائي — صفحة مستقلة تُضاف لكل عرض بيه ألواح
+    // مخطط هيكل الألواح 3D — صفحة مستقلة تُضاف لكل عرض بيه ألواح
     if (structure) {
-      const panelCount = panelCountFromItems(items);
-      const structHtml = buildStructurePageHtml(panelCount, company);
-      if (structHtml) await addHtmlPage(pdf, structHtml);
+      try {
+        const panelCount = panelCountFromItems(items);
+        if (panelCount > 0) {
+          // three.js يُحمّل ديناميكياً هنا فقط (وقت التصدير) حتى ما يثقل فتح التطبيق
+          const { renderStructurePng } = await import('./structure3d.js');
+          const img = await renderStructurePng(panelCount, { width: 1000, height: 620 });
+          const structHtml = buildStructurePageHtml(panelCount, company, img || '');
+          if (structHtml) await addHtmlPage(pdf, structHtml);
+        }
+      } catch {
+        /* فشل الرندر 3D (WebGL غير متاح) — نتخطى صفحة الهيكل بلا كسر العرض */
+      }
     }
 
     // إذا اكو مرفق تصميم (صورة/PDF) نلحقه بنهاية الملف

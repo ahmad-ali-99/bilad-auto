@@ -507,34 +507,32 @@ describe('مساعد المناقصات: تحويل وسيطات fill_quote لل
   });
 });
 
-describe('مخطط هيكل الألواح: تقسيم الطاولات وكشف عدد الألواح', () => {
-  it('splitTables: 24 لوح ← طاولتان 2×6', async () => {
-    const { splitTables } = await import('../src/lib/structureDiagram.js');
-    const t = splitTables(24);
-    expect(t).toEqual([
-      { label: 'الطاولة الأمامية', rows: 2, cols: 6 },
-      { label: 'الطاولة الخلفية', rows: 2, cols: 6 },
-    ]);
+describe('هيكل الألواح: قاعدة التقسيم (2×8 حد أقصى + رفع أقدام)', () => {
+  it('splitStructures: الأمثلة المعتمدة', async () => {
+    const { splitStructures } = await import('../src/lib/structureDiagram.js');
+    const cols = (n) => splitStructures(n).map((s) => s.cols);
+    expect(cols(10)).toEqual([5]); // ستركجر واحد 2×5
+    expect(cols(12)).toEqual([6]);
+    expect(cols(16)).toEqual([8]); // حد الستركجر الواحد
+    expect(cols(18)).toEqual([5, 4]); // زاد ← ستركجر ثاني
+    expect(cols(24)).toEqual([6, 6]);
+    expect(cols(32)).toEqual([8, 8]);
+    expect(cols(50)).toEqual([7, 6, 6, 6]);
   });
 
-  it('splitTables: 10 ألواح ← أمامية 2×3 + خلفية 2×2 (المجموع 10)', async () => {
-    const { splitTables } = await import('../src/lib/structureDiagram.js');
-    const t = splitTables(10);
-    expect(t.map((x) => x.cols)).toEqual([3, 2]);
-    expect(t.reduce((s, x) => s + x.rows * x.cols, 0)).toBe(10);
-  });
-
-  it('splitTables: أعداد زوجية مختلفة يبقى مجموع الخلايا = العدد', async () => {
-    const { splitTables } = await import('../src/lib/structureDiagram.js');
-    for (const n of [8, 14, 20, 32, 40]) {
-      const sum = splitTables(n).reduce((s, x) => s + x.rows * x.cols, 0);
-      expect(sum).toBe(n);
+  it('splitStructures: مجموع الخلايا = العدد وكل ستركجر ≤ 8 أعمدة', async () => {
+    const { splitStructures } = await import('../src/lib/structureDiagram.js');
+    for (const n of [8, 10, 14, 20, 26, 32, 40, 50, 64]) {
+      const st = splitStructures(n);
+      expect(st.reduce((s, x) => s + x.rows * x.cols, 0)).toBe(n);
+      expect(st.every((x) => x.cols <= 8)).toBe(true);
+      expect(st.length).toBe(Math.max(1, Math.ceil(n / 16)));
     }
   });
 
-  it('splitTables: صفر ألواح ← بلا طاولات', async () => {
-    const { splitTables } = await import('../src/lib/structureDiagram.js');
-    expect(splitTables(0)).toEqual([]);
+  it('splitStructures: صفر ← بلا ستركجرات', async () => {
+    const { splitStructures } = await import('../src/lib/structureDiagram.js');
+    expect(splitStructures(0)).toEqual([]);
   });
 
   it('panelCountFromItems: يجمع بند الألواح ويستثني الهيكل والصبات', async () => {
@@ -548,9 +546,10 @@ describe('مخطط هيكل الألواح: تقسيم الطاولات وكشف
     expect(panelCountFromItems(items)).toBe(24);
   });
 
-  it('buildStructurePageHtml: بلا ألواح ← صفحة فارغة', async () => {
+  it('buildStructurePageHtml: بلا صورة أو بلا ألواح ← صفحة فارغة', async () => {
     const { buildStructurePageHtml } = await import('../src/lib/structureDiagram.js');
-    expect(buildStructurePageHtml(0, {})).toBe('');
-    expect(buildStructurePageHtml(24, {}).includes('svg')).toBe(true);
+    expect(buildStructurePageHtml(0, {}, 'data:image/png;base64,x')).toBe('');
+    expect(buildStructurePageHtml(24, {}, '')).toBe('');
+    expect(buildStructurePageHtml(24, {}, 'data:image/png;base64,x').includes('<img')).toBe(true);
   });
 });
