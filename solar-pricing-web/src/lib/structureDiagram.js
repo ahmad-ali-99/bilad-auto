@@ -1,11 +1,13 @@
-// رسم ثلاثي الأبعاد تسويقي لهيكل الألواح — وجه اللوح مواجه للقارئ، صبّة تحت كل رجل،
-// الطاولة الأمامية واطية والخلفية أعلى (أرجل أطول). يتولّد حسب عدد ألواح العرض.
+// رسم آيزومتري لهيكل الألواح مطابق للرفرنس — يتقسّم تلقائياً حسب عدد ألواح العرض:
+// طاولتان تنزاحان قطرياً للخلف (أعلى-يسار)، الألواح بميل يُظهر وجوهها للقارئ،
+// قوالب بالاست كونكريتية بصف أمامي، أرجل ودعامات، ومنصّة كونكريت تحت الكل.
 
-const PANEL_W_M = 1.13; // عرض اللوح (على الصف)
-const PANEL_L_M = 1.9; // طول اللوح (طابق واحد على الميل)
-const TILT_DEG = 20;
-const FRONT_H_M = 0.5; // ارتفاع أرجل الطاولة الأمامية
-const BACK_EXTRA_H_M = 1.15; // زيادة ارتفاع أرجل الطاولة الخلفية
+const PANEL_W_M = 1.05; // عرض عمود اللوح (أفقي على الصف)
+const TIER_H_M = 0.62; // ارتفاع الطابق الواحد على الميل (لاندسكيب → أوسع من أطول)
+const SLOPE_DEPTH = 1.9; // إسقاط عمق السطح المائل (طابقان)
+const RISE = 1.15; // ارتفاع الحافة الخلفية عن الأمامية (ميل ~31°)
+const FRONT_H = 0.45; // ارتفاع أرجل الطاولة الأمامية
+const BACK_LIFT = 0.7; // زيادة ارتفاع الطاولة الخلفية
 
 export function panelCountFromItems(items) {
   let n = 0;
@@ -32,87 +34,80 @@ export function splitTables(panelCount) {
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const r1 = (x) => Math.round(x * 100) / 100;
 
-// ===== إسقاط أمامي 3/4: الصف يمتد لليمين صاعداً، والعمق يذهب لأعلى-اليمين، y للأعلى =====
-// النتيجة: وجه اللوح المائل يواجه القارئ (أسفل-يسار)، والهيكل تحته.
-const SC = 46;
-// معاملات مضبوطة لمنظر شبه أمامي: وجه اللوح يواجه القارئ مباشرة، والعمق يذهب للأعلى
+// إسقاط آيزومتري مضبوط على الرفرنس:
+// x = عرض الصف (يمين وأوطى قليلاً)، y = العمق للخلف (يسار وأعلى)، z = الارتفاع
+const SC = 52;
 function proj(x, y, z) {
-  return { x: (x * 1.0 + z * 0.26) * SC, y: (-x * 0.085 - y * 1.0 - z * 0.72) * SC };
+  return { x: (x * 0.94 - y * 0.56) * SC, y: (x * 0.3 - y * 0.42 - z) * SC };
 }
-const P = (p) => `${r1(p.x)},${r1(p.y)}`;
+const A = (p) => `${r1(p.x)},${r1(p.y)}`;
 const lerp = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t });
-const prj = (p) => proj(p.x, p.y, p.z);
+const pj = (p) => proj(p.x, p.y, p.z);
 
-// صندوق (صبّة كونكريت/قاعدة) — وجه علوي + وجهان أماميان
-function box(x0, z0, sx, sz, h, yb, cTop, cFront, cRight) {
-  const x1 = x0 + sx, z1 = z0 + sz, yt = yb + h;
-  const T = [proj(x0, yt, z0), proj(x1, yt, z0), proj(x1, yt, z1), proj(x0, yt, z1)];
-  const fb0 = proj(x0, yb, z0), fb1 = proj(x1, yb, z0), rb1 = proj(x1, yb, z1);
+// صندوق كونكريت (منصّة/بالاست): وجه علوي + وجه أمامي + وجه يمين
+function box(x0, y0, sx, sy, h, zb, cTop, cFront, cRight) {
+  const x1 = x0 + sx, y1 = y0 + sy, zt = zb + h;
+  const T0 = proj(x0, y0, zt), T1 = proj(x1, y0, zt), T2 = proj(x1, y1, zt), T3 = proj(x0, y1, zt);
+  const F0 = proj(x0, y0, zb), F1 = proj(x1, y0, zb), R2 = proj(x1, y1, zb);
   return (
-    `<polygon points="${P(T[0])} ${P(T[1])} ${P(fb1)} ${P(fb0)}" fill="${cFront}"/>` +
-    `<polygon points="${P(T[1])} ${P(T[2])} ${P(rb1)} ${P(fb1)}" fill="${cRight}"/>` +
-    `<polygon points="${P(T[0])} ${P(T[1])} ${P(T[2])} ${P(T[3])}" fill="${cTop}"/>`
+    `<polygon points="${A(T0)} ${A(T1)} ${A(F1)} ${A(F0)}" fill="${cFront}"/>` +
+    `<polygon points="${A(T1)} ${A(T2)} ${A(R2)} ${A(F1)}" fill="${cRight}"/>` +
+    `<polygon points="${A(T0)} ${A(T1)} ${A(T2)} ${A(T3)}" fill="${cTop}"/>`
   );
 }
 
-// خطوط خلايا داخل وحدة لوح
 function cells(p1, p2, p3, p4) {
-  const line = (a, b) => `<line x1="${r1(a.x)}" y1="${r1(a.y)}" x2="${r1(b.x)}" y2="${r1(b.y)}" stroke="#9fb2df" stroke-width="0.5" opacity="0.5"/>`;
+  const L = (a, b) => `<line x1="${r1(a.x)}" y1="${r1(a.y)}" x2="${r1(b.x)}" y2="${r1(b.y)}" stroke="#9fb2df" stroke-width="0.5" opacity="0.5"/>`;
   let s = '';
-  for (let i = 1; i < 6; i++) { const t = i / 6; s += line(prj(lerp(p1, p2, t)), prj(lerp(p4, p3, t))); }
-  for (let j = 1; j < 3; j++) { const t = j / 3; s += line(prj(lerp(p1, p4, t)), prj(lerp(p2, p3, t))); }
+  for (let i = 1; i < 6; i++) { const t = i / 6; s += L(pj(lerp(p1, p2, t)), pj(lerp(p4, p3, t))); }
+  for (let j = 1; j < 3; j++) { const t = j / 3; s += L(pj(lerp(p1, p4, t)), pj(lerp(p2, p3, t))); }
   return s;
 }
 
-// طاولة واحدة: أرجل + صبّات تحت الأرجل + سطح الألواح المواجه للقارئ
-function mountTable(ox, oz, baseH, cols) {
-  const beta = (TILT_DEG * Math.PI) / 180;
+// طاولة واحدة (ox,oy = ركن أمامي-يمين، baseH = ارتفاع الأرجل الأمامية)
+function table(ox, oy, baseH, cols) {
   const W = cols * PANEL_W_M;
-  const L2 = 2 * PANEL_L_M;
-  const rise = L2 * Math.sin(beta);
-  const depth = L2 * Math.cos(beta);
-  const FL = { x: ox, y: baseH, z: oz }, FR = { x: ox + W, y: baseH, z: oz };
-  const BL = { x: ox, y: baseH + rise, z: oz + depth }, BR = { x: ox + W, y: baseH + rise, z: oz + depth };
+  const FL = { x: ox, y: oy, z: baseH }, FR = { x: ox + W, y: oy, z: baseH };
+  const BL = { x: ox, y: oy + SLOPE_DEPTH, z: baseH + RISE }, BR = { x: ox + W, y: oy + SLOPE_DEPTH, z: baseH + RISE };
   let svg = '';
 
   // ظل أرضي
-  svg += `<polygon points="${P(proj(FL.x, 0, FL.z))} ${P(proj(FR.x, 0, FR.z))} ${P(proj(BR.x, 0, BR.z))} ${P(proj(BL.x, 0, BL.z))}" fill="#000" opacity="0.08"/>`;
+  svg += `<polygon points="${A(proj(FL.x, FL.y, 0))} ${A(proj(FR.x, FR.y, 0))} ${A(proj(BR.x, BR.y, 0))} ${A(proj(BL.x, BL.y, 0))}" fill="#000" opacity="0.07"/>`;
 
-  // أرجل + صبّات (عند كل عمودين تقريباً، أمامي وخلفي)
-  const step = Math.max(1, Math.round(cols / 4));
-  const cs = 0.34;
+  // قوالب بالاست كونكريتية بصف أمامي (واحد لكل عمود)
+  for (let c = 0; c <= cols; c++) {
+    const x = ox + (c / cols) * W - 0.24;
+    svg += box(x, oy - 0.66, 0.48, 0.48, 0.42, 0, '#e4e7eb', '#c3c8ce', '#d2d6db');
+  }
+
+  // أرجل + دعامات (كل ~3 أعمدة)
+  const step = Math.max(1, Math.round(cols / 3));
   for (let c = 0; c <= cols; c += step) {
     const x = ox + (c / cols) * W;
-    // صبّة أمامية + رجل أمامية
-    svg += box(x - cs / 2, oz - cs / 2, cs, cs, 0.3, 0, '#e2e5e9', '#c2c7cd', '#cfd4d9');
-    const fb = proj(x, 0, oz), ft = proj(x, baseH, oz);
-    svg += `<line x1="${r1(fb.x)}" y1="${r1(fb.y)}" x2="${r1(ft.x)}" y2="${r1(ft.y)}" stroke="#6b7480" stroke-width="3.4" stroke-linecap="round"/>`;
-    // صبّة خلفية + رجل خلفية (أطول)
-    svg += box(x - cs / 2, oz + depth - cs / 2, cs, cs, 0.3, 0, '#e2e5e9', '#c2c7cd', '#cfd4d9');
-    const bb = proj(x, 0, oz + depth), bt = proj(x, baseH + rise, oz + depth);
-    svg += `<line x1="${r1(bb.x)}" y1="${r1(bb.y)}" x2="${r1(bt.x)}" y2="${r1(bt.y)}" stroke="#6b7480" stroke-width="3.4" stroke-linecap="round"/>`;
-    // دعامة قطرية (مثلث الهيكل)
-    svg += `<line x1="${r1(fb.x)}" y1="${r1(fb.y)}" x2="${r1(bt.x)}" y2="${r1(bt.y)}" stroke="#6b7480" stroke-width="2"/>`;
+    const fB = proj(x, oy, 0), fT = proj(x, oy, baseH);
+    const bB = proj(x, oy + SLOPE_DEPTH, 0), bT = proj(x, oy + SLOPE_DEPTH, baseH + RISE);
+    svg += `<line x1="${r1(fB.x)}" y1="${r1(fB.y)}" x2="${r1(fT.x)}" y2="${r1(fT.y)}" stroke="#6b7480" stroke-width="3.2" stroke-linecap="round"/>`;
+    svg += `<line x1="${r1(bB.x)}" y1="${r1(bB.y)}" x2="${r1(bT.x)}" y2="${r1(bT.y)}" stroke="#6b7480" stroke-width="3.2" stroke-linecap="round"/>`;
+    svg += `<line x1="${r1(fB.x)}" y1="${r1(fB.y)}" x2="${r1(bT.x)}" y2="${r1(bT.y)}" stroke="#6b7480" stroke-width="1.8"/>`; // دعامة مثلث
+    svg += `<line x1="${r1(fT.x)}" y1="${r1(fT.y)}" x2="${r1(bT.x)}" y2="${r1(bT.y)}" stroke="#5b6673" stroke-width="1.6"/>`; // عارضة علوية
   }
-  // عارضة أفقية تحت السطح (أمامية)
-  svg += `<line x1="${r1(proj(FL.x, FL.y, FL.z).x)}" y1="${r1(proj(FL.x, FL.y, FL.z).y)}" x2="${r1(proj(FR.x, FR.y, FR.z).x)}" y2="${r1(proj(FR.x, FR.y, FR.z).y)}" stroke="#5b6673" stroke-width="2"/>`;
 
-  // سطح الألواح: 2 طابق × cols، وجه اللوح مواجه للقارئ
+  // سطح الألواح: 2 طابق × cols، الوجه للقارئ
   for (let r = 0; r < 2; r++) {
     for (let c = 0; c < cols; c++) {
       const u0 = c / cols, u1 = (c + 1) / cols, v0 = r / 2, v1 = (r + 1) / 2;
       const tA = lerp(FL, FR, u0), bA = lerp(BL, BR, u0), tB = lerp(FL, FR, u1), bB = lerp(BL, BR, u1);
       const p1 = lerp(tA, bA, v0), p2 = lerp(tB, bB, v0), p3 = lerp(tB, bB, v1), p4 = lerp(tA, bA, v1);
-      svg += `<polygon points="${P(prj(p1))} ${P(prj(p2))} ${P(prj(p3))} ${P(prj(p4))}" fill="url(#pv)" stroke="#0e1e3c" stroke-width="1.1"/>`;
+      svg += `<polygon points="${A(pj(p1))} ${A(pj(p2))} ${A(pj(p3))} ${A(pj(p4))}" fill="url(#pv)" stroke="#0e1e3c" stroke-width="1.1"/>`;
       svg += cells(p1, p2, p3, p4);
     }
   }
-  const surf = `${P(prj(FL))} ${P(prj(FR))} ${P(prj(BR))} ${P(prj(BL))}`;
+  const surf = `${A(pj(FL))} ${A(pj(FR))} ${A(pj(BR))} ${A(pj(BL))}`;
   svg += `<polygon points="${surf}" fill="url(#gloss)" opacity="0.4"/>`;
-  svg += `<polygon points="${surf}" fill="none" stroke="#0a1830" stroke-width="2.4"/>`;
+  svg += `<polygon points="${surf}" fill="none" stroke="#0a1830" stroke-width="2.3"/>`;
 
-  const corners = [proj(FL.x, 0, FL.z), prj(FL), prj(FR), prj(BL), prj(BR), proj(ox + W, 0, oz + depth)];
-  return { svg, corners };
+  const pts = [proj(ox, oy - 0.7, 0), proj(ox + W, oy, 0), pj(FL), pj(FR), pj(BL), pj(BR), proj(ox, oy + SLOPE_DEPTH, 0)];
+  return { svg, pts };
 }
 
 export function buildStructureSvg(panelCount) {
@@ -120,35 +115,41 @@ export function buildStructureSvg(panelCount) {
   if (!tables.length) return '';
   const frontCols = tables[0].cols;
   const backCols = tables[1] ? tables[1].cols : 0;
-  const beta = (TILT_DEG * Math.PI) / 180;
-  const depth = 2 * PANEL_L_M * Math.cos(beta);
+  const frontW = frontCols * PANEL_W_M;
 
-  // نرسم الخلفية أولاً (خلف وأعلى)، ثم الأمامية
-  const parts = [];
+  const drawn = [];
   const pts = [];
+  // الطاولة الخلفية أعمق (أعلى-يسار) وأعلى قليلاً — ترسم أولاً
   if (backCols) {
-    const t = mountTable(-1.8, depth + 1.4, FRONT_H_M + BACK_EXTRA_H_M, backCols);
-    parts.push(t.svg); t.corners.forEach((p) => pts.push(p));
+    const t = table(-1.2, SLOPE_DEPTH + 1.4, FRONT_H + BACK_LIFT, backCols);
+    drawn.push(t.svg); t.pts.forEach((p) => pts.push(p));
   }
-  const f = mountTable(0, 0, FRONT_H_M, frontCols);
-  parts.push(f.svg); f.corners.forEach((p) => pts.push(p));
+  const f = table(0, 0, FRONT_H, frontCols);
+  drawn.push(f.svg); f.pts.forEach((p) => pts.push(p));
 
-  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y), pad = 34;
+  // منصّة كونكريت تحت الكل (ترسم أولاً)
+  const backW = backCols ? backCols * PANEL_W_M : frontW;
+  const minPx = Math.min(0, -1.2) - 0.9, maxPx = Math.max(frontW, -1.2 + backW) + 0.9;
+  const minPy = -0.9, maxPy = (backCols ? SLOPE_DEPTH + 1.4 : 0) + SLOPE_DEPTH + 0.9;
+  const platform = box(minPx, minPy, maxPx - minPx, maxPy - minPy, 0.3, -0.3, '#d6dade', '#aeb4bb', '#c1c6cc');
+  [proj(minPx, minPy, 0), proj(maxPx, minPy, 0), proj(maxPx, maxPy, 0), proj(minPx, maxPy, 0)].forEach((p) => pts.push(p));
+
+  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y), pad = 30;
   const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad;
   const minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;
   const w = maxX - minX, h = maxY - minY;
 
   return `<svg viewBox="${r1(minX)} ${r1(minY)} ${r1(w)} ${r1(h)}" width="${r1(w)}" height="${r1(h)}" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="pv" x1="0" y1="0" x2="0.7" y2="1">
-      <stop offset="0" stop-color="#556aae"/><stop offset="0.5" stop-color="#33478c"/><stop offset="1" stop-color="#22346e"/>
+    <linearGradient id="pv" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#5a6fb2"/><stop offset="0.5" stop-color="#35498e"/><stop offset="1" stop-color="#24366e"/>
     </linearGradient>
     <linearGradient id="gloss" x1="0" y1="0" x2="1" y2="0.5">
-      <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.42" stop-color="#fff" stop-opacity="0.42"/>
-      <stop offset="0.5" stop-color="#fff" stop-opacity="0.6"/><stop offset="0.58" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.42" stop-color="#fff" stop-opacity="0.4"/>
+      <stop offset="0.5" stop-color="#fff" stop-opacity="0.58"/><stop offset="0.58" stop-color="#fff" stop-opacity="0"/>
     </linearGradient>
   </defs>
-  ${parts.join('')}
+  ${platform}${drawn.join('')}
   </svg>`;
 }
 
@@ -182,7 +183,7 @@ export function buildStructurePageHtml(panelCount, company = {}) {
 .mkt-sheet .hero h1 { font-size: 1.68rem; font-weight: 800; color: #12305c; margin: 6px 0 2px; text-shadow: 0 1px 0 #fff; }
 .mkt-sheet .hero p { font-size: 1rem; color: #2c4a72; margin: 0; font-weight: 600; }
 .mkt-sheet .stage { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; padding: 6px 22px; }
-.mkt-sheet .stage svg { max-width: 100%; max-height: 520px; height: auto; filter: drop-shadow(0 20px 26px rgba(20,48,92,0.3)); }
+.mkt-sheet .stage svg { max-width: 100%; max-height: 540px; height: auto; filter: drop-shadow(0 20px 26px rgba(20,48,92,0.28)); }
 .mkt-sheet .count { position: relative; text-align: center; margin: 0 0 10px; font-weight: 800; color: #12305c; font-size: 1.05rem; }
 .mkt-sheet .count b { color: #f5a623; }
 .mkt-sheet .feats { position: relative; display: flex; justify-content: center; gap: 12px; padding: 0 26px; flex-wrap: nowrap; }
