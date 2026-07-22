@@ -630,13 +630,7 @@ export default function SystemShowcase({
         mkCatenary(polesX[i], polesX[i + 1], 6.62, poleZ - 0.55, 0.35);
         mkCatenary(polesX[i], polesX[i + 1], 6.62, poleZ + 0.55, 0.35);
       }
-      // سلك خدمة من العمود للبيت
-      {
-        const a = new THREE.Vector3(-10, 6.5, poleZ), b2 = new THREE.Vector3(-HW / 2 + 0.5, HH - 0.4, -HD / 2);
-        const mid = a.clone().lerp(b2, 0.5); mid.y -= 1.2;
-        const cur = new THREE.CatmullRomCurve3([a, mid, b2]);
-        const tube = new THREE.Mesh(track(new THREE.TubeGeometry(cur, 24, 0.014, 6, false)), wireM); scene.add(tube);
-      }
+      // (الرسالة الذهبية — قسم 1: بيت البطل ما يوصله ولا سلك، لا مولدة ولا خدمة)
 
       // ================= أعمدة إنارة فانوسية =================
       const mkLamp = (x, z) => {
@@ -1125,6 +1119,81 @@ export default function SystemShowcase({
       }
       const ball = new THREE.Mesh(track(new THREE.SphereGeometry(0.13, 12, 12)), M({ color: 0xe8e4d0, roughness: 0.6 }));
       ball.position.set(-4.2, 0.13, -HD / 2 - 3.4); scene.add(ball);
+
+      // ================= المرحلة 4: منطقة المولدة — السرد البصري (القسمان 1 و8) =================
+      // مولدة الحي بزاوية الشارع: فوضى منظمة بأسلاك catenary حقيقية للجيران —
+      // وبيت البطل ما يوصله ولا سلك. هاي أهم رسالة تسويقية بالمشهد.
+      const GEN_X = -25.5, GEN_Z = WALL_Z - SIDEWALK - 0.9;
+      const genSteelM = M({ color: 0x3a4148, roughness: 0.7, metalness: 0.45 });
+      const genRustM = M({ color: 0x6b4a2c, roughness: 0.95 });
+      {
+        const gen = new THREE.Group();
+        const body4 = new THREE.Mesh(B(2.3, 1.5, 1.25), genSteelM); body4.position.y = 0.95; body4.castShadow = true; gen.add(body4);
+        const skid1 = new THREE.Mesh(B(2.5, 0.16, 0.2), genRustM); skid1.position.set(0, 0.08, 0.45); gen.add(skid1);
+        const skid2 = skid1.clone(); skid2.position.z = -0.45; gen.add(skid2);
+        const roofG = new THREE.Mesh(B(2.5, 0.07, 1.45), charcoalDark); roofG.position.y = 1.75; gen.add(roofG);
+        // شبك تهوية + بقع صدأ
+        for (let i = 0; i < 4; i++) { const vent = new THREE.Mesh(B(0.34, 0.5, 0.02), M({ color: 0x272c31, roughness: 0.8 })); vent.position.set(-0.8 + i * 0.55, 1.0, 0.64); gen.add(vent); }
+        [[0.9, 0.5, 0.65], [-1.05, 1.3, 0.64]].forEach(([rx2, ry3, rz2]) => { const rust = new THREE.Mesh(B(0.3, 0.22, 0.015), genRustM); rust.position.set(rx2, ry3, rz2); gen.add(rust); });
+        // عادم الدخان
+        const exh = new THREE.Mesh(track(new THREE.CylinderGeometry(0.07, 0.07, 0.8, 8)), genRustM);
+        exh.position.set(0.85, 2.1, -0.3); gen.add(exh);
+        // عمود التوزيع العالي بجنبها + كتلة فوضى قصيرة حوله
+        const post = new THREE.Mesh(track(new THREE.CylinderGeometry(0.08, 0.1, 5.6, 8)), poleM);
+        post.position.set(1.7, 2.8, 0); post.castShadow = true; gen.add(post);
+        const cross1 = new THREE.Mesh(B(1.3, 0.08, 0.08), poleM); cross1.position.set(1.7, 5.1, 0); gen.add(cross1);
+        const cross2 = new THREE.Mesh(B(0.08, 0.08, 1.1), poleM); cross2.position.set(1.7, 4.7, 0); gen.add(cross2);
+        gen.position.set(GEN_X, 0, GEN_Z); gen.rotation.y = 0.35; scene.add(gen);
+      }
+      // شيلمانات خشب ترفع الأسلاك عند عبور الشارع (القسم 8)
+      const shilmanTops = [];
+      [[-21, WALL_Z - SIDEWALK - ROAD_W + 0.4], [-11, WALL_Z - SIDEWALK - ROAD_W + 0.4]].forEach(([sx2, sz2]) => {
+        const sh2 = new THREE.Mesh(track(new THREE.CylinderGeometry(0.05, 0.07, 4.6, 7)), palmTrunkM);
+        sh2.position.set(sx2, 2.3, sz2); sh2.rotation.z = (Math.random() - 0.5) * 0.06; sh2.castShadow = true; scene.add(sh2);
+        shilmanTops.push(new THREE.Vector3(sx2, 4.55, sz2));
+      });
+      // حزمة أسلاك المولدة: لكل جار منحنى catenary خاص بترهله — كل سلك بمنحناه
+      const genTop = new THREE.Vector3(GEN_X + 1.6, 5.3, GEN_Z);
+      const genWire = (pts, sag = 0.8) => {
+        const full = [];
+        for (let i = 0; i < pts.length - 1; i++) {
+          const a2 = pts[i], b3 = pts[i + 1];
+          for (let k = 0; k <= 10; k++) {
+            const u = k / 10;
+            const p3 = a2.clone().lerp(b3, u);
+            p3.y -= Math.sin(u * Math.PI) * (sag * (0.7 + Math.random() * 0.15));
+            full.push(p3);
+          }
+        }
+        const cur = new THREE.CatmullRomCurve3(full);
+        const tube = new THREE.Mesh(track(new THREE.TubeGeometry(cur, 40, 0.014, 6, false)), wireM);
+        scene.add(tube);
+      };
+      // جيران صفّنا (بلا عبور شارع)
+      genWire([genTop, new THREE.Vector3(-19.5, 5.6, 1.0)], 1.1);
+      genWire([genTop, new THREE.Vector3(-16, 5.4, 0.8)], 1.4);
+      genWire([genTop, new THREE.Vector3(-30.5, 3.6, 0.6)], 0.9);
+      // جيران كَبال الشارع (عبر الشيلمانات)
+      genWire([genTop, shilmanTops[0], new THREE.Vector3(-22.5, 5.2, ACROSS_Z + 5.2)], 0.7);
+      genWire([genTop, shilmanTops[0], new THREE.Vector3(-20, 5.0, ACROSS_Z + 5.0)], 0.85);
+      genWire([genTop, shilmanTops[1], new THREE.Vector3(-8.5, 5.0, ACROSS_Z + 5.2)], 0.75);
+      genWire([genTop, shilmanTops[1], new THREE.Vector3(5.5, 5.6, ACROSS_Z + 5.2)], 0.9);
+      genWire([genTop, shilmanTops[1], new THREE.Vector3(19, 5.2, ACROSS_Z + 5.2)], 1.0);
+      // فوضى قصيرة حول العمود (لفّات متدلية)
+      for (let i = 0; i < 3; i++) {
+        const a2 = genTop.clone().add(new THREE.Vector3(-0.3 + i * 0.3, -0.2 - i * 0.25, 0.1));
+        const b3 = a2.clone().add(new THREE.Vector3(0.7, -0.9 - Math.random() * 0.5, 0.3));
+        genWire([a2, b3], 0.5);
+      }
+      // دخان المولدة: particles شفافة 15% تصعد وتنحرف ويا الريح (+x) — جدول الحركة
+      const smoke = [];
+      const smokeTexS = cloudTex(true);
+      for (let i = 0; i < 9; i++) {
+        const m2 = track(new THREE.SpriteMaterial({ map: smokeTexS, transparent: true, opacity: 0, color: 0x8a8f94, fog: true, depthWrite: false }));
+        const sp2 = new THREE.Sprite(m2);
+        sp2.position.set(GEN_X + 0.85, 2.6, GEN_Z - 0.3); scene.add(sp2);
+        smoke.push({ sp: sp2, m: m2, age: (i / 9) * 4 });
+      }
       mkPalm(-HW / 2 + 1.2, -HD / 2 - 1.4, 3.6, 0.85); // نخلة بحديقتنا
       // إغلاق نهايات الشوارع بصرياً (قاعدة الحافة — قسم 2)
       mkPalm(-36.5, WALL_Z - SIDEWALK - 1, 4.5, 1.05);
@@ -1401,6 +1470,15 @@ export default function SystemShowcase({
         }
         // بقعة الماي تعكس لون سماء الوقت الحالي
         puddleM.color.copy(P.mid);
+
+        // دخان المولدة: يصعد ببطء، ينحرف ويا الريح (+x)، يتلاشى خلال 4 ثوان (شفافية قصوى 15%)
+        for (const sm of smoke) {
+          sm.age += dt; if (sm.age > 4) sm.age = 0;
+          const u = sm.age / 4;
+          sm.sp.position.set(GEN_X + 0.85 + u * 2.2 + Math.sin(et + sm.age) * 0.2, 2.6 + u * 3.2, GEN_Z - 0.3);
+          const s3 = 0.5 + u * 2.2; sm.sp.scale.set(s3, s3 * 0.8, 1);
+          sm.m.opacity = 0.15 * Math.sin(u * Math.PI);
+        }
 
         // تدفق الطاقة
         for (const w2 of wires) {
