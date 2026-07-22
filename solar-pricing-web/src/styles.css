@@ -1267,3 +1267,41 @@ h2.page-title::before {
   animation: ldspin 0.9s linear infinite;
 }
 @keyframes ldspin { to { transform: rotate(360deg); } }
+/* القسم 12: بادجات زجاجية بحدود ذهبية + عناصر رحلة السكرول */
+.showcase-chip {
+  background: rgba(255,255,255,0.85) !important;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(212,169,71,0.55) !important;
+  box-shadow: 0 5px 16px rgba(27,42,74,0.16) !important;
+}
+.showcase-timebar {
+  background: rgba(255,255,255,0.85) !important;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(212,169,71,0.55) !important;
+}
+.showcase-journey {
+  position: absolute; top: 13%; left: 0; right: 0; z-index: 3; text-align: center;
+  pointer-events: none; transition: opacity 0.25s; font-family: 'Cairo', sans-serif; direction: rtl;
+}
+.showcase-journey h2 {
+  margin: 0 0 6px; font-size: 1.9rem; font-weight: 800; color: #fff;
+  text-shadow: 0 2px 14px rgba(27,42,74,0.75), 0 1px 3px rgba(27,42,74,0.9);
+}
+.showcase-journey p {
+  margin: 0; font-size: 1.05rem; font-weight: 700; color: #f4efe2;
+  text-shadow: 0 1px 8px rgba(27,42,74,0.8);
+}
+.showcase-skip {
+  position: absolute; bottom: 16px; left: 14px; z-index: 4;
+  background: rgba(255,255,255,0.85); backdrop-filter: blur(8px);
+  border: 1px solid rgba(212,169,71,0.55); border-radius: 12px;
+  padding: 7px 14px; font-family: 'Cairo', sans-serif; font-weight: 700; font-size: 0.82rem;
+  color: #1B2A4A; cursor: pointer;
+}
+.showcase-skip:hover { background: #fff; }
+.showcase-replay {
+  position: absolute; bottom: 175px; left: 50%; transform: translateX(-50%); z-index: 4;
+  background: linear-gradient(135deg, #D4A947, #c39a3d); border: none; border-radius: 14px;
+  padding: 12px 22px; font-family: 'Cairo', sans-serif; font-weight: 800; font-size: 1rem;
+  color: #1B2A4A; cursor: pointer; box-shadow: 0 8px 24px rgba(27,42,74,0.35);
+}

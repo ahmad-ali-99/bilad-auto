@@ -26,9 +26,17 @@ export default function SystemShowcase({
   const rafRef = useRef(0);
   const timeRef = useRef(15.5); // الافتراضي 3:30 عصراً (المواصفة قسم 3)
   const [timeLabel, setTimeLabel] = useState(fmtTime(15.5));
-  // تحميل الأصول الواقعية (HDRI/خامات/موديلات) — تقدم بالنسبة المئوية
+  // تحميل الأصول الواقعية (خامات/موديلات) — تقدم بالنسبة المئوية
   const [loadPct, setLoadPct] = useState(0);
   const [loadingAssets, setLoadingAssets] = useState(true);
+  // رحلة السكرول (القسم 17): refs مباشرة حتى ما نعيد الرسم كل فريم
+  const clockRef = useRef(null);
+  const sliderRef = useRef(null);
+  const jBoxRef = useRef(null);
+  const jTitleRef = useRef(null);
+  const jSubRef = useRef(null);
+  const replayRef = useRef(null);
+  const journeyRef = useRef({ t: 0, target: 0 });
 
   useEffect(() => {
     let disposed = false;
@@ -93,6 +101,8 @@ export default function SystemShowcase({
       const roofT = noiseTex('#d6d1c8', 12), roofB = bumpTex(22);
       const woodT = noiseTex('#b5713d', 20, 128, (g, s) => { g.strokeStyle = 'rgba(90,45,15,0.35)'; g.lineWidth = 2; for (let x = 0; x < s; x += 10) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, s); g.stroke(); } });
 
+      // موبايل/جهاز خفيف: ظلال أوطى + عشب أقل + دقة رسم أقل (قسم 11)
+      const lowPerf = Math.min(window.innerWidth, window.innerHeight) < 640 || (navigator.hardwareConcurrency || 8) <= 4;
       const scene = new THREE.Scene();
       // ضباب جوي (القسم 9): بلون الأفق، يبدأ 80م ويكتمل 300م — يصنع طبقات العمق
       scene.fog = new THREE.Fog(0xc8d4dc, 80, 300);
@@ -223,7 +233,7 @@ export default function SystemShowcase({
 
       // شمس المواصفة: #FFE8C4 عصراً، ظلال PCF ناعمة 2048 مركزة على بيت البطل ومحيطه
       const sunLight = new THREE.DirectionalLight(0xffe8c4, 1.8);
-      sunLight.castShadow = true; sunLight.shadow.mapSize.set(2048, 2048); sunLight.shadow.bias = -0.0004;
+      sunLight.castShadow = true; sunLight.shadow.mapSize.set(lowPerf ? 1024 : 2048, lowPerf ? 1024 : 2048); sunLight.shadow.bias = -0.0004;
       sunLight.shadow.radius = 4; // نعومة حواف الظل
       Object.assign(sunLight.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 0.5, far: 160 });
       scene.add(sunLight);
@@ -556,7 +566,7 @@ export default function SystemShowcase({
            transformed.x += sway * position.y;`
         );
       };
-      const grassN = 1800;
+      const grassN = lowPerf ? 900 : 1800; // عشب −50% على الموبايل
       const grass = new THREE.InstancedMesh(bladeGeo, grassMat, grassN);
       const dum = new THREE.Object3D(); const gcol = new THREE.Color(); let gi = 0;
       const grassSpots = []; // مواقع الحديقة — تُعاد للاستخدام مع خصلات العشب الحقيقية (GLB)
@@ -1247,7 +1257,7 @@ export default function SystemShowcase({
       const camera = new THREE.PerspectiveCamera(45, W() / H(), 0.1, 600);
       camera.position.set(3.5, 6, WALL_Z - SIDEWALK - ROAD_W - 4.5);
       renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowPerf ? 1.5 : 2));
       renderer.setSize(W(), H());
       renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -1284,12 +1294,60 @@ export default function SystemShowcase({
 
       controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true; controls.dampingFactor = 0.08;
-      controls.autoRotate = true; controls.autoRotateSpeed = 0.4;
+      // drift سكون بطيء جداً 2-3°/دقيقة (جدول الحركة) — يتوقف عند التفاعل ويرجع بعد 5 ثوان خمول
+      controls.autoRotate = true; controls.autoRotateSpeed = 0.006;
+      controls.enableZoom = false; // العجلة صارت لرحلة السكرول
       controls.minDistance = 2.5; controls.maxDistance = 70;
       controls.minPolarAngle = 0.15; controls.maxPolarAngle = Math.PI / 2 - 0.02;
       controls.target.set(0, 3.4, -1);
-      controls.addEventListener('start', () => { controls.autoRotate = false; });
+      let lastUserAct = 0;
+      controls.addEventListener('start', () => { controls.autoRotate = false; lastUserAct = performance.now(); });
       controls.update();
+
+      // ================= رحلة السكرول السينمائية (القسم 17) =================
+      // السكرول = تقدم الرحلة 0..1 بكيفريمات الجدول، ويا damping ~0.08 وeasing
+      const journey = journeyRef.current;
+      const JKEYS = [
+        { p: 0.00, pos: [9, 25, -38], look: [-3, 4, 0] },        // establishing مرتفعة 25م
+        { p: 0.12, pos: [6, 8, -30], look: [0, 4, -2] },          // نزول قوسي
+        { p: 0.18, pos: [-17, 1.7, -16.5], look: [-10, 3.2, -8] }, // مستوى النظر — المولدة تدخل الكادر يسار
+        { p: 0.25, pos: [-4, 1.7, -15.5], look: [0, 3.5, -4] },   // نمشي بالشارع نحو البيت
+        { p: 0.32, pos: [-12, 3, -6], look: [0, 3.5, 0] },        // بداية الدوران النصفي
+        { p: 0.40, pos: [-9, 5.5, 8], look: [0, 3.5, 0] },        // نص دورة حول البيت
+        { p: 0.48, pos: [-3, 10, 9], look: [0, 5.8, 0] },         // صعود حلزوني
+        { p: 0.58, pos: [3, 15, -8], look: [1, 6.4, -2] },        // top-down مائل — الألواح تملأ الكادر
+        { p: 0.78, pos: [5, 16.5, -11], look: [1, 6.4, -2] },     // الوقت يتحول للّيل
+        { p: 0.92, pos: [9, 25, -38], look: [-3, 4, 0] },         // رجوع للقطة الافتتاح ليلاً
+        { p: 1.00, pos: [9, 25, -38], look: [-3, 4, 0] },
+      ];
+      const JSTAGES = [
+        { a: 0.00, b: 0.10, t: 'منظومتك الشمسية على بيتك', s: 'جولة بحي بغدادي — بيت مستقل بالطاقة من بلاد أوتو' },
+        { a: 0.13, b: 0.24, t: 'المشكلة: المولدة', s: 'أسلاك متشابكة وأمبيرات محدودة وفاتورة كل شهر' },
+        { a: 0.27, b: 0.40, t: 'الحل: بيت مستقل', s: 'بيت نظيف — ولا سلك مولدة واصله' },
+        { a: 0.43, b: 0.57, t: 'المنظومة على السطح', s: 'الألواح والانفرترات والبطاريات — كل شي مرئي وقابل للعد' },
+        { a: 0.60, b: 0.77, t: 'إمسك الغروب بإيدك', s: 'استمر بالسكرول… الليل ينزل وبيتك يبقى مضوّي' },
+        { a: 0.80, b: 1.00, t: 'بلاد أوتو — استقلالك الكهربائي', s: 'بيتك نجمة الحي' },
+      ];
+      let jStageIdx = -1;
+      const easeC = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
+      const onWheel = (e) => {
+        e.preventDefault();
+        journey.target = Math.max(0, Math.min(1, journey.target + e.deltaY * 0.00032));
+        lastUserAct = performance.now();
+      };
+      renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
+      let touchY = null;
+      const onTS = (e) => { if (e.touches.length === 1) touchY = e.touches[0].clientY; };
+      const onTM = (e) => {
+        if (touchY == null || e.touches.length !== 1) return;
+        const dy2 = touchY - e.touches[0].clientY; touchY = e.touches[0].clientY;
+        journey.target = Math.max(0, Math.min(1, journey.target + dy2 * 0.0016));
+        lastUserAct = performance.now();
+      };
+      renderer.domElement.addEventListener('touchstart', onTS, { passive: true });
+      renderer.domElement.addEventListener('touchmove', onTM, { passive: true });
+      disp.push({ dispose: () => { renderer.domElement.removeEventListener('wheel', onWheel); renderer.domElement.removeEventListener('touchstart', onTS); renderer.domElement.removeEventListener('touchmove', onTM); } });
+      const jv = new THREE.Vector3(), jl = new THREE.Vector3();
 
       // ================= أصول واقعية (PBR + GLB) — تحميل كسول بتقدم =================
       // السماء صارت قبة المواصفة (بلا HDRI) — نحمّل الخامات والموديلات فقط.
@@ -1506,7 +1564,53 @@ export default function SystemShowcase({
         // Bloom بعتبة عالية (القسم 9): نهاراً شبه معدوم، ليلاً على الأضوية فقط
         bloom.strength = isDay ? 0.08 : 0.4;
         bloom.threshold = isDay ? 1.15 : 0.88;
-        controls.update();
+
+        // ===== رحلة السكرول: damping + كاميرا الكيفريمات + ربط الوقت (58-78%) =====
+        journey.t += (journey.target - journey.t) * Math.min(1, dt * 5);
+        const jActive = journey.t > 0.004 || journey.target > 0.004;
+        if (jActive) {
+          controls.enabled = false; controls.autoRotate = false;
+          let ki = 0; while (ki < JKEYS.length - 2 && JKEYS[ki + 1].p < journey.t) ki++;
+          const KA = JKEYS[ki], KB = JKEYS[ki + 1];
+          const ku = easeC(Math.max(0, Math.min(1, (journey.t - KA.p) / (KB.p - KA.p || 1))));
+          jv.set(KA.pos[0], KA.pos[1], KA.pos[2]).lerp(jl.set(KB.pos[0], KB.pos[1], KB.pos[2]), ku);
+          camera.position.copy(jv);
+          jv.set(KA.look[0], KA.look[1], KA.look[2]).lerp(jl.set(KB.look[0], KB.look[1], KB.look[2]), ku);
+          camera.lookAt(jv);
+          // الوقت مربوط خطياً بمقطع 58-78% (المستخدم «يدير الشمس» بالسكرول)
+          if (journey.t >= 0.58) {
+            const tu = Math.min(1, (journey.t - 0.58) / 0.20);
+            timeRef.current = 15.5 + tu * 6.0; // عصر 3:30 ← ليل 9:30
+            if (clockRef.current) clockRef.current.textContent = '🕐 ' + fmtTime(timeRef.current);
+            if (sliderRef.current) sliderRef.current.value = String(timeRef.current);
+          }
+          // نصوص المراحل + زر إعادة الجولة
+          let si2 = -1, sOp = 0;
+          for (let i = 0; i < JSTAGES.length; i++) {
+            const st2 = JSTAGES[i];
+            if (journey.t >= st2.a - 0.03 && journey.t <= st2.b + 0.03) {
+              si2 = i;
+              const fadeIn = Math.min(1, (journey.t - (st2.a - 0.03)) / 0.05);
+              const fadeOut = Math.min(1, ((st2.b + 0.03) - journey.t) / 0.05);
+              sOp = Math.max(0, Math.min(fadeIn, fadeOut));
+              break;
+            }
+          }
+          if (si2 !== jStageIdx && si2 >= 0) {
+            jStageIdx = si2;
+            if (jTitleRef.current) jTitleRef.current.textContent = JSTAGES[si2].t;
+            if (jSubRef.current) jSubRef.current.textContent = JSTAGES[si2].s;
+          }
+          if (jBoxRef.current) jBoxRef.current.style.opacity = String(sOp);
+          if (replayRef.current) replayRef.current.style.display = journey.t > 0.9 ? 'block' : 'none';
+        } else {
+          controls.enabled = true;
+          if (jBoxRef.current) jBoxRef.current.style.opacity = '0';
+          if (replayRef.current) replayRef.current.style.display = 'none';
+          // drift السكون يرجع بعد 5 ثوان خمول
+          if (!controls.autoRotate && performance.now() - lastUserAct > 5000) controls.autoRotate = true;
+          controls.update();
+        }
         composer.render();
       };
       animate();
@@ -1554,16 +1658,26 @@ export default function SystemShowcase({
           </div>
         </div>
       )}
+      {/* نصوص مراحل رحلة السكرول (القسم 17) — تُدار مباشرة من حلقة الرسم */}
+      <div className="showcase-journey" ref={jBoxRef} style={{ opacity: 0 }}>
+        <h2 ref={jTitleRef}>منظومتك الشمسية على بيتك</h2>
+        <p ref={jSubRef}>جولة بحي بغدادي — بيت مستقل بالطاقة من بلاد أوتو</p>
+      </div>
       <div className="showcase-hud">
         {chips.map((c, i) => (<div className="showcase-chip" key={i}><span className="ic">{c[0]}</span><span className="lb">{c[1]}</span><b className="vl">{c[2]}</b></div>))}
       </div>
       <div className="showcase-timebar">
-        <span className="tclock">🕐 {timeLabel}</span>
+        <span className="tclock" ref={clockRef}>🕐 {timeLabel}</span>
         <span className="tend">🌅</span>
-        <input type="range" min={6} max={30} step={0.25} defaultValue={15.5} onInput={onTime} onChange={onTime} />
+        <input ref={sliderRef} type="range" min={6} max={30} step={0.25} defaultValue={15.5} onInput={onTime} onChange={onTime} />
         <span className="tend">🌙</span>
       </div>
-      <div className="showcase-hint">🖱️ اسحب للتدوير • عجلة الماوس للتقريب • حرّك الشريط لوقت اليوم</div>
+      <div className="showcase-hint">🖱️ سكرول = الجولة • سحب = نظرة حرة • الشريط = وقت اليوم</div>
+      <button className="showcase-skip" onClick={() => { journeyRef.current.target = 1; }} title="تخطي للنهاية">⏭ تخطي</button>
+      <button className="showcase-replay" ref={replayRef} style={{ display: 'none' }}
+        onClick={() => { journeyRef.current.target = 0; timeRef.current = 15.5; setTimeLabel(fmtTime(15.5)); if (sliderRef.current) sliderRef.current.value = '15.5'; }}>
+        ☀️ رجّع النهار وأعد الجولة
+      </button>
     </div>
   );
 }
