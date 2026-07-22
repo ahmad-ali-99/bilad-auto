@@ -184,7 +184,9 @@ export async function deliverPdf(blob, fileName) {
   return { canceled: false, shared: false };
 }
 
-export async function exportInvoicePdf({ quote, items, notes, company, fileName, attachment = null, installment = null, structure = true }) {
+// structure=false افتراضياً: صفحة مخطط الهيكل معطّلة مؤقتاً لحد ما نجهّز صورة/رندر احترافي
+// يليق بالعرض — الرسم المتّجه السابق كان ضعيفاً بصرياً فشلناه من العروض
+export async function exportInvoicePdf({ quote, items, notes, company, fileName, attachment = null, installment = null, structure = false }) {
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-2000px;top:0;width:794px;background:#fff;z-index:-1;';
   host.innerHTML = buildInvoiceInnerHtml({ quote, items, notes, company, installment });
