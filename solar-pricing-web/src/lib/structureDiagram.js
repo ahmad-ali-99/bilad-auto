@@ -19,13 +19,17 @@ export function splitTables(panelCount) {
   return splitStructures(panelCount);
 }
 
+// نعدّ فقط بند الألواح الشمسية الحقيقي. نشترط كلمة لوح/ألواح + مؤشر شمسي/ضوئي،
+// ونستبعد بنوداً تذكر «ألواح» عرضاً (الانفيرتر «يستقبل ألواح»، البطارية «للوحدة»)
+// أو بنود الهيكل/الصبّات/الكيبل/البورد — حتى يطابق العدد بالتصميم عددَ ألواح الأفر.
 export function panelCountFromItems(items) {
   let n = 0;
   for (const it of items || []) {
     const d = String(it.description || '');
-    if (/ألواح|الواح|لوح/.test(d) && !/هيكل|صبات|صبّات|كيبل|كابل|بورد|حماية/.test(d)) {
-      n += Number(it.quantity) || 0;
-    }
+    const hasPanelWord = /ألواح|الواح|لوح|بانل|panel|module|pv/i.test(d);
+    const isSolar = /شمسي|ضوئي|solar|بانل|panel|module|pv/i.test(d);
+    const isOther = /هيكل|صب|كيبل|كابل|بورد|حماي|انفرتر|انفيرتر|inverter|بطاري|batter|شاحن|منظم|رصاص/i.test(d);
+    if (hasPanelWord && isSolar && !isOther) n += Number(it.quantity) || 0;
   }
   return n;
 }

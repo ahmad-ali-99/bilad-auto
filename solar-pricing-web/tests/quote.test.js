@@ -546,6 +546,18 @@ describe('هيكل الألواح: قاعدة التقسيم (2×8 حد أقصى
     expect(panelCountFromItems(items)).toBe(24);
   });
 
+  it('panelCountFromItems: لا يعدّ ذكر «ألواح» بالانفيرتر ولا «للوحدة» بالبطارية', async () => {
+    const { panelCountFromItems } = await import('../src/lib/structureDiagram.js');
+    const items = [
+      { description: 'تجهيز وتركيب ألواح شمسية 650 واط (LONGI Hi-MO X10) Bifacial Module', quantity: 10 },
+      { description: 'انفيرتر هايبرد Hoymiles Inverter يستقبل ألواح حتى 6000 واط 2MPPT', quantity: 1 },
+      { description: 'بطاريات ليثيوم Hoymiles LB16D قدرة 16kWh للوحدة الواحدة', quantity: 2 },
+      { description: 'هيكل الألواح مغلون لكل لوح', quantity: 10 },
+      { description: 'بوردات الحماية للألواح والانفيرتر DC', quantity: 1 },
+    ];
+    expect(panelCountFromItems(items)).toBe(10);
+  });
+
   it('buildStructurePageHtml: بلا صورة أو بلا ألواح ← صفحة فارغة', async () => {
     const { buildStructurePageHtml } = await import('../src/lib/structureDiagram.js');
     expect(buildStructurePageHtml(0, {}, 'data:image/png;base64,x')).toBe('');

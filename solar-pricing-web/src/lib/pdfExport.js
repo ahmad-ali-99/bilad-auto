@@ -6,8 +6,9 @@ import { PDFDocument } from 'pdf-lib';
 import { buildInvoiceInnerHtml } from './invoiceHtml.js';
 import { buildStructurePageHtml, panelCountFromItems } from './structureDiagram.js';
 
-// يرسم HTML لعنصر مخفي → canvas ويضيفه صفحة جديدة بالـPDF (لمخطط الهيكل)
-async function addHtmlPage(pdf, html) {
+// يرسم HTML لعنصر مخفي → canvas ويضيفه صفحة كاملة بالـPDF (لصفحة التصميم/الغلاف).
+// ensurePage: يبدأ صفحة جديدة (أو يستخدم الأولى إن كانت فارغة) — حتى نتحكم بالترتيب.
+async function addHtmlPage(pdf, html, ensurePage, pageWmm = 210, pageHmm = 297) {
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-2000px;top:0;width:794px;background:#fff;z-index:-1;';
   host.innerHTML = html;
@@ -20,10 +21,11 @@ async function addHtmlPage(pdf, html) {
     if (!el) return;
     const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
     if (!canvas.width || !canvas.height) return; // لا نضيف صفحة فارغة/تالفة
-    const pageW = 210;
-    const imgH = (canvas.height * pageW) / canvas.width;
-    pdf.addPage();
-    pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageW, Math.min(imgH, 297));
+    let w = pageWmm;
+    let h = (canvas.height * pageWmm) / canvas.width;
+    if (h > pageHmm) { const s = pageHmm / h; w = pageWmm * s; h = pageHmm; } // نلائم داخل الصفحة
+    ensurePage();
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', (pageWmm - w) / 2, 0, w, h);
   } finally {
     document.body.removeChild(host);
   }
@@ -216,14 +218,42 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageWmm = 210;
     const pageHmm = 297;
-    const imgHmm = (canvas.height * pageWmm) / canvas.width;
 
+    // نتحكم بترتيب الصفحات: أول صفحة تُستخدم مباشرة، وما بعدها addPage.
+    let pageStarted = false;
+    const ensurePage = () => { if (pageStarted) pdf.addPage(); pageStarted = true; };
+
+    // 1) صفحة التصميم 3D أولاً (غلاف يبهر الزبون) — تُضاف لكل عرض بيه ألواح.
+    if (structure) {
+      try {
+        const panelCount = panelCountFromItems(items);
+        if (panelCount > 0) {
+          // three.js يُحمّل ديناميكياً هنا فقط (وقت التصدير) حتى ما يثقل فتح التطبيق
+          const { renderStructurePng } = await import('./structure3d.js');
+          const img = await renderStructurePng(panelCount, { width: 1000, height: 620 });
+          const structHtml = buildStructurePageHtml(panelCount, company, img || '');
+          if (structHtml) await addHtmlPage(pdf, structHtml, ensurePage, pageWmm, pageHmm);
+        }
+      } catch {
+        /* فشل الرندر 3D (WebGL غير متاح) — نتخطى صفحة الهيكل بلا كسر العرض */
+      }
+    }
+
+    // 2) الفاتورة بعد الغلاف
+    const imgHmm = (canvas.height * pageWmm) / canvas.width;
+    // فائض بسيط (≤25%) نضغطه على صفحة واحدة حتى الملاحظات/التوقيع ما يطفحون لصفحة شبه فارغة
+    const FIT_TOL = 1.25;
     if (imgHmm <= pageHmm) {
+      ensurePage();
       pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageWmm, imgHmm);
+    } else if (imgHmm <= pageHmm * FIT_TOL) {
+      ensurePage();
+      const s = pageHmm / imgHmm;
+      const w = pageWmm * s;
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', (pageWmm - w) / 2, 0, w, pageHmm);
     } else {
       const pageHpx = Math.floor((pageHmm / pageWmm) * canvas.width);
       let y = 0;
-      let first = true;
       while (y < canvas.height - 2) {
         const limit = y + pageHpx;
         let next = Math.min(limit, canvas.height);
@@ -240,26 +270,9 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, slice.width, slice.height);
         ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-        if (!first) pdf.addPage();
+        ensurePage();
         pdf.addImage(slice.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageWmm, (sliceH * pageWmm) / canvas.width);
-        first = false;
         y = next;
-      }
-    }
-
-    // مخطط هيكل الألواح 3D — صفحة مستقلة تُضاف لكل عرض بيه ألواح
-    if (structure) {
-      try {
-        const panelCount = panelCountFromItems(items);
-        if (panelCount > 0) {
-          // three.js يُحمّل ديناميكياً هنا فقط (وقت التصدير) حتى ما يثقل فتح التطبيق
-          const { renderStructurePng } = await import('./structure3d.js');
-          const img = await renderStructurePng(panelCount, { width: 1000, height: 620 });
-          const structHtml = buildStructurePageHtml(panelCount, company, img || '');
-          if (structHtml) await addHtmlPage(pdf, structHtml);
-        }
-      } catch {
-        /* فشل الرندر 3D (WebGL غير متاح) — نتخطى صفحة الهيكل بلا كسر العرض */
       }
     }
 
