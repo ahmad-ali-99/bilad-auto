@@ -24,8 +24,8 @@ export default function SystemShowcase({
 }) {
   const mountRef = useRef(null);
   const rafRef = useRef(0);
-  const timeRef = useRef(13);
-  const [timeLabel, setTimeLabel] = useState(fmtTime(13));
+  const timeRef = useRef(15.5); // الافتراضي 3:30 عصراً (المواصفة قسم 3)
+  const [timeLabel, setTimeLabel] = useState(fmtTime(15.5));
   // تحميل الأصول الواقعية (HDRI/خامات/موديلات) — تقدم بالنسبة المئوية
   const [loadPct, setLoadPct] = useState(0);
   const [loadingAssets, setLoadingAssets] = useState(true);
@@ -42,6 +42,7 @@ export default function SystemShowcase({
       const { EffectComposer } = await import('three/examples/jsm/postprocessing/EffectComposer.js');
       const { RenderPass } = await import('three/examples/jsm/postprocessing/RenderPass.js');
       const { UnrealBloomPass } = await import('three/examples/jsm/postprocessing/UnrealBloomPass.js');
+      const { ShaderPass } = await import('three/examples/jsm/postprocessing/ShaderPass.js');
       const mount = mountRef.current;
       if (disposed || !mount) return;
       const track = (o) => { disp.push(o); return o; };
@@ -93,7 +94,8 @@ export default function SystemShowcase({
       const woodT = noiseTex('#b5713d', 20, 128, (g, s) => { g.strokeStyle = 'rgba(90,45,15,0.35)'; g.lineWidth = 2; for (let x = 0; x < s; x += 10) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, s); g.stroke(); } });
 
       const scene = new THREE.Scene();
-      scene.fog = new THREE.Fog(0xcfe4f5, 70, 190);
+      // ضباب جوي (القسم 9): بلون الأفق، يبدأ 80م ويكتمل 300م — يصنع طبقات العمق
+      scene.fog = new THREE.Fog(0xc8d4dc, 80, 300);
 
       // ================= خامات البناء =================
       const fadeMats = [];
@@ -124,27 +126,86 @@ export default function SystemShowcase({
         track(new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false, depthWrite: false }))
       );
       scene.add(skyDome);
-      const skyPal = {
-        day: ['#7db8e8', '#b8d9f2', '#e6f0f6'],
-        set: ['#5a6da8', '#e8996a', '#ffd9a8'],
-        night: ['#060b18', '#0d1730', '#1a2745'],
-      };
+      // ===== لوحات أوقات اليوم الخمسة (bilad-auto-env-spec.md — القسمان 3 و9) =====
+      // كل لوحة: [أعلى القبة، وسط، أفق] + لون شمس + شدة + تعريض ACES + لون ضباب
       const hex2 = (h) => new THREE.Color(h);
-      const drawSky = (mixSet, night) => {
-        const top = night ? hex2(skyPal.night[0]) : lerpC(hex2(skyPal.day[0]), hex2(skyPal.set[0]), mixSet);
-        const mid = night ? hex2(skyPal.night[1]) : lerpC(hex2(skyPal.day[1]), hex2(skyPal.set[1]), mixSet);
-        const bot = night ? hex2(skyPal.night[2]) : lerpC(hex2(skyPal.day[2]), hex2(skyPal.set[2]), mixSet);
+      const SKY_KEYS = [
+        // t (ساعة), top, mid, horizon, sunColor, sunI, hemiI, exposure, fog
+        [6.0,  '#4A6B8C', '#8FA8C0', '#D4A947', '#FFD9A0', 0.9, 0.45, 0.90, '#C8CCC4'], // فجر/صبح بارد ذهبي
+        [9.0,  '#6FA8DC', '#A8CBE8', '#E0E0CC', '#FFEED8', 1.7, 0.60, 1.00, '#C8D4DC'], // ضحى
+        [12.5, '#5E9CD8', '#A0C6E6', '#DCE4E0', '#FFF2E0', 2.1, 0.70, 1.10, '#C8D4DC'], // ظهر — أعلى سطوع
+        [15.5, '#6FA8DC', '#A8CBE8', '#E8E4D0', '#FFE8C4', 1.8, 0.60, 1.00, '#C8D4DC'], // عصر — الافتراضي الذهبي
+        [18.5, '#3A4A6B', '#C98A5C', '#D4A947', '#E8A85C', 0.8, 0.40, 0.95, '#B8A088'], // مغرب — ذهبي→فوشي بالأفق
+        [19.6, '#1B2A4A', '#2A3A5C', '#C94F7C', '#8898B8', 0.2, 0.25, 0.90, '#3A4458'], // آخر الشفق
+        [21.0, '#0E1830', '#16223E', '#1B2A4A', '#B8D4E8', 0.1, 0.18, 0.88, '#141C2E'], // ليل نيلي
+        [30.0, '#0E1830', '#16223E', '#1B2A4A', '#B8D4E8', 0.1, 0.18, 0.88, '#141C2E'],
+      ];
+      const _skyTmp = { a: new THREE.Color(), b: new THREE.Color() };
+      const skyAt = (t) => {
+        const tt = t < 6 ? t + 24 : t; // 0-6 صباحاً = امتداد الليل
+        let i = 0; while (i < SKY_KEYS.length - 2 && SKY_KEYS[i + 1][0] < tt) i++;
+        const A = SKY_KEYS[i], Bk = SKY_KEYS[i + 1];
+        const u = Math.max(0, Math.min(1, (tt - A[0]) / (Bk[0] - A[0] || 1)));
+        const mix = (ia) => _skyTmp.a.set(A[ia]).lerp(_skyTmp.b.set(Bk[ia]), u).clone();
+        return {
+          top: mix(1), mid: mix(2), bot: mix(3), sunC: mix(4),
+          sunI: A[5] + (Bk[5] - A[5]) * u, hemiI: A[6] + (Bk[6] - A[6]) * u,
+          expo: A[7] + (Bk[7] - A[7]) * u, fogC: mix(8),
+        };
+      };
+      let lastSkyDraw = -99;
+      const drawSkyGrad = (top, mid, bot) => {
         const g = skyCtx.createLinearGradient(0, 0, 0, 256);
         g.addColorStop(0, '#' + top.getHexString());
-        g.addColorStop(0.62, '#' + mid.getHexString());
+        g.addColorStop(0.6, '#' + mid.getHexString());
         g.addColorStop(1, '#' + bot.getHexString());
         skyCtx.fillStyle = g; skyCtx.fillRect(0, 0, 2, 256);
         skyTex.needsUpdate = true;
       };
-      drawSky(0, false);
-      const sunBall = new THREE.Mesh(track(new THREE.SphereGeometry(2.0, 24, 24)), track(new THREE.MeshBasicMaterial({ color: 0xfff3c8, fog: false })));
-      const sunHalo = new THREE.Mesh(track(new THREE.SphereGeometry(3.4, 24, 24)), track(new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.25, fog: false })));
+      // قرص الشمس: يظهر فقط بالزوايا الجمالية الواطية (صبح/مغرب) — بالعصر تأثير بلا قرص
+      const sunBall = new THREE.Mesh(track(new THREE.SphereGeometry(2.0, 24, 24)), track(new THREE.MeshBasicMaterial({ color: 0xffe8c4, fog: false })));
+      const sunHalo = new THREE.Mesh(track(new THREE.SphereGeometry(3.6, 24, 24)), track(new THREE.MeshBasicMaterial({ color: 0xd4a947, transparent: true, opacity: 0.22, fog: false })));
       scene.add(sunBall, sunHalo);
+
+      // ===== الغيوم: ركامية قرب الأفق + خيوط cirrus عالية (القسم 3 + جدول الحركة 16) =====
+      const cloudTex = (soft) => {
+        const c = mkCanvas(256); const g = c.getContext('2d');
+        for (let i = 0; i < (soft ? 5 : 14); i++) {
+          const cx = 40 + Math.random() * 176, cy = 90 + Math.random() * 76;
+          const r = soft ? 55 + Math.random() * 45 : 22 + Math.random() * 34;
+          const grd = g.createRadialGradient(cx, cy, 0, cx, cy, r);
+          grd.addColorStop(0, 'rgba(252,252,250,0.82)');
+          grd.addColorStop(0.65, 'rgba(248,248,246,0.35)');
+          grd.addColorStop(1, 'rgba(248,248,246,0)');
+          g.fillStyle = grd; g.beginPath(); g.arc(cx, cy, r, 0, 6.29); g.fill();
+        }
+        const t2 = track(new THREE.CanvasTexture(c)); t2.colorSpace = THREE.SRGBColorSpace; return t2;
+      };
+      const cloudGroup = new THREE.Group();
+      const cumulusMats = [];
+      for (let i = 0; i < 11; i++) {
+        const m = track(new THREE.SpriteMaterial({ map: cloudTex(false), transparent: true, opacity: 0.9, fog: false, depthWrite: false }));
+        cumulusMats.push(m);
+        const sp = new THREE.Sprite(m);
+        const ang = (i / 11) * Math.PI * 2 + Math.random() * 0.3;
+        const rr = 235 + Math.random() * 45;
+        sp.position.set(Math.cos(ang) * rr, 26 + Math.random() * 26, Math.sin(ang) * rr);
+        // عيب مقصود #10: غيمة وحدة أكبر من البقية بوضوح
+        const s = i === 4 ? 150 : 65 + Math.random() * 45;
+        sp.scale.set(s, s * 0.52, 1);
+        cloudGroup.add(sp);
+      }
+      for (let i = 0; i < 5; i++) {
+        const m = track(new THREE.SpriteMaterial({ map: cloudTex(true), transparent: true, opacity: 0.32, fog: false, depthWrite: false }));
+        cumulusMats.push(m);
+        const sp = new THREE.Sprite(m);
+        const ang = Math.random() * Math.PI * 2;
+        sp.position.set(Math.cos(ang) * 190, 125 + Math.random() * 35, Math.sin(ang) * 190);
+        sp.scale.set(210 + Math.random() * 80, 26, 1); // خيوط رقيقة ممدودة
+        cloudGroup.add(sp);
+      }
+      scene.add(cloudGroup);
+      const CLOUD_ROT = (Math.PI * 2) / 1200; // دورة كاملة / 20 دقيقة
       const starGeo = track(new THREE.BufferGeometry());
       {
         const pos = new Float32Array(360 * 3);
@@ -160,13 +221,16 @@ export default function SystemShowcase({
       const starMat = track(new THREE.PointsMaterial({ color: 0xdfe9ff, size: 0.5, transparent: true, opacity: 0, sizeAttenuation: true, fog: false }));
       const stars = new THREE.Points(starGeo, starMat); scene.add(stars);
 
-      const sunLight = new THREE.DirectionalLight(0xfff2d8, 2.6);
+      // شمس المواصفة: #FFE8C4 عصراً، ظلال PCF ناعمة 2048 مركزة على بيت البطل ومحيطه
+      const sunLight = new THREE.DirectionalLight(0xffe8c4, 1.8);
       sunLight.castShadow = true; sunLight.shadow.mapSize.set(2048, 2048); sunLight.shadow.bias = -0.0004;
-      Object.assign(sunLight.shadow.camera, { left: -34, right: 34, top: 34, bottom: -34, near: 0.5, far: 160 });
+      sunLight.shadow.radius = 4; // نعومة حواف الظل
+      Object.assign(sunLight.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 0.5, far: 160 });
       scene.add(sunLight);
-      const hemi = track(new THREE.HemisphereLight(0xdff0ff, 0xc7b490, 0.55)); scene.add(hemi);
-      const amb = track(new THREE.AmbientLight(0xfff4e2, 0.25)); scene.add(amb);
-      const fillL = track(new THREE.DirectionalLight(0xfff0d8, 0.35)); fillL.position.set(8, 6, -10); scene.add(fillL);
+      // ضوء سماء: علوي #B8D4E8 / سفلي #D8C8A8 (ارتداد أرض) — الظلال ملونة مو سوداء
+      const hemi = track(new THREE.HemisphereLight(0xb8d4e8, 0xd8c8a8, 0.6)); scene.add(hemi);
+      const amb = track(new THREE.AmbientLight(0xd8c8a8, 0.15)); scene.add(amb);
+      const fillL = track(new THREE.DirectionalLight(0xb8d4e8, 0.25)); fillL.position.set(8, 6, -10); scene.add(fillL);
       const moonBall = new THREE.Mesh(track(new THREE.SphereGeometry(0.9, 20, 20)), track(new THREE.MeshBasicMaterial({ color: 0xe8efff, fog: false })));
       scene.add(moonBall);
       const moonLight = track(new THREE.DirectionalLight(0xa8c0e8, 0.0)); scene.add(moonLight);
@@ -758,17 +822,34 @@ export default function SystemShowcase({
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 0.75;
       mount.appendChild(renderer.domElement);
-      // بيئة انعكاسات PBR
+      // بيئة انعكاسات PBR (للزجاج والمعادن — المواصفة: envMap انعكاس سماء يكفي)
       const pmrem = new THREE.PMREMGenerator(renderer);
       const envRT = pmrem.fromScene(new RoomEnvironment(), 0.04);
       scene.environment = envRT.texture;
-      scene.environmentIntensity = 0.35;
+      scene.environmentIntensity = 0.5;
       disp.push({ dispose: () => { envRT.dispose(); pmrem.dispose(); } });
 
+      // سلسلة المعالجة (القسم 9): ACES ← Bloom بعتبة عالية ← تشبع +6% ← Vignette
       composer = new EffectComposer(renderer);
       composer.addPass(new RenderPass(scene, camera));
       const bloom = new UnrealBloomPass(new THREE.Vector2(W(), H()), 0.15, 0.55, 0.92);
       composer.addPass(bloom);
+      const gradePass = new ShaderPass({
+        uniforms: { tDiffuse: { value: null }, uSat: { value: 1.06 }, uVig: { value: 0.18 } },
+        vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+        fragmentShader: `
+          uniform sampler2D tDiffuse; uniform float uSat; uniform float uVig; varying vec2 vUv;
+          void main(){
+            vec4 c = texture2D(tDiffuse, vUv);
+            float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
+            c.rgb = mix(vec3(l), c.rgb, uSat);                       // تشبع +5-8%
+            float d = distance(vUv, vec2(0.5));
+            c.rgb *= 1.0 - uVig * smoothstep(0.42, 0.85, d);          // Vignette خفيف
+            gl_FragColor = c;
+          }`,
+      });
+      composer.addPass(gradePass);
+      disp.push(gradePass);
 
       controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true; controls.dampingFactor = 0.08;
@@ -779,20 +860,17 @@ export default function SystemShowcase({
       controls.addEventListener('start', () => { controls.autoRotate = false; });
       controls.update();
 
-      // ================= أصول واقعية (HDRI + PBR + GLB) — تحميل كسول بتقدم =================
+      // ================= أصول واقعية (PBR + GLB) — تحميل كسول بتقدم =================
+      // السماء صارت قبة المواصفة (بلا HDRI) — نحمّل الخامات والموديلات فقط.
       // تُخزَّن بجهاز المستخدم دائمياً (CacheFirst بالـService Worker) — تنزل مرة وحدة فقط.
-      const envSt = { on: false, cur: '', day: null, set: null, night: null };
       (async () => {
         try {
-          const { RGBELoader } = await import('three/examples/jsm/loaders/RGBELoader.js');
           const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
           const baseURL = new URL('showcase/', document.baseURI).href;
           const manager = new THREE.LoadingManager();
           manager.onProgress = (u, l, tot) => { if (!disposed) setLoadPct(Math.min(99, Math.round((l / Math.max(1, tot)) * 100))); };
-          const rgbe = new RGBELoader(manager);
           const texL = new THREE.TextureLoader(manager);
           const glbL = new GLTFLoader(manager);
-          const loadHdr = (f) => new Promise((res, rej) => rgbe.load(baseURL + 'hdr/' + f, res, undefined, rej));
           const loadTex = (f, srgb) => new Promise((res, rej) => texL.load(baseURL + 'tex/' + f, (t2) => {
             t2.wrapS = t2.wrapT = THREE.RepeatWrapping; t2.anisotropy = 8;
             if (srgb) t2.colorSpace = THREE.SRGBColorSpace;
@@ -800,16 +878,7 @@ export default function SystemShowcase({
           }, undefined, rej));
           const loadGlb = (p) => new Promise((res, rej) => glbL.load(baseURL + 'glb/' + p, res, undefined, rej));
 
-          // 1) السماوات HDRI (خلفية بغيوم حقيقية + إضاءة بيئية)
-          const pm = new THREE.PMREMGenerator(renderer);
-          const mkEnv = (tex2) => { tex2.mapping = THREE.EquirectangularReflectionMapping; const rt = pm.fromEquirectangular(tex2); disp.push(rt); return { bg: tex2, env: rt.texture }; };
-          const [hDay, hSet, hNight] = await Promise.all([loadHdr('day.hdr'), loadHdr('sunset.hdr'), loadHdr('night.hdr')]);
-          [hDay, hSet, hNight].forEach((t2) => track(t2));
-          envSt.day = mkEnv(hDay); envSt.set = mkEnv(hSet); envSt.night = mkEnv(hNight);
-          disp.push(pm);
-          envSt.on = true; skyDome.visible = false;
-
-          // 2) خامات PBR حقيقية (diff+normal+arm) — الـarm: R=AO/G=خشونة/B=معدنية
+          // خامات PBR حقيقية (diff+normal+arm) — الـarm: R=AO/G=خشونة/B=معدنية
           const applyPBR = async (mats, name, rx, ry2, extra = {}) => {
             const [d2, n2, a2] = await Promise.all([
               loadTex(name + '_diff.jpg', true), loadTex(name + '_nor.jpg'), loadTex(name + '_arm.jpg').catch(() => null),
@@ -880,61 +949,54 @@ export default function SystemShowcase({
         }
       })();
 
-      // ================= دورة اليوم =================
-      const fogDay = new THREE.Color(0xcfe4f5), fogSet = new THREE.Color(0xe8b98a), fogNight = new THREE.Color(0x0d1522);
+      // ================= دورة اليوم (لوحات المواصفة الخمس) =================
       const R = 60, Rh = 46;
       const clock = new THREE.Clock();
       const sunDir = new THREE.Vector3();
+      const smoothTime = { v: 15.5 }; // انتقال ناعم بين الأوقات خلال ~ثانية-ثانيتين
       const animate = () => {
         if (disposed) return;
         rafRef.current = requestAnimationFrame(animate);
+        const dt = Math.min(0.25, clock.getDelta());
         const et = clock.getElapsedTime();
         windU.value = et;
-        const t = ((timeRef.current % 24) + 24) % 24;
+        // الوقت المعروض يلاحق السلايدر بنعومة خلال ~ثانية-ثانيتين (مستقل عن معدل الفريمات)
+        let target = timeRef.current;
+        if (Math.abs(target - smoothTime.v) > 12) smoothTime.v = target;
+        else smoothTime.v += (target - smoothTime.v) * Math.min(1, dt * 3.2);
+        const t = ((smoothTime.v % 24) + 24) % 24;
         const dayAngle = ((t - 6) / 12) * Math.PI;
         const sinE = Math.sin(dayAngle);
         const isDay = sinE > 0.015; const inten = Math.max(0, sinE);
 
-        // الشمس (للظلال دائماً) + السماء: HDRI حقيقية إذا محمّلة وإلا القبة المتدرجة
+        // لوحة الوقت الحالية (سماء + شمس + ضباب + تعريض) من جدول المواصفة
+        const P = skyAt(t);
+        if (Math.abs(t - lastSkyDraw) > 0.02) { drawSkyGrad(P.top, P.mid, P.bot); lastSkyDraw = t; }
+        scene.fog.color.copy(P.fogC);
+        renderer.toneMappingExposure = P.expo;
+        hemi.intensity = P.hemiI;
+        amb.intensity = P.hemiI * 0.3;
+        fillL.intensity = isDay ? 0.25 : 0.06;
+
+        // الشمس: اتجاهها من قوس الوقت، لونها وشدتها من اللوحة
         sunDir.set(Math.cos(dayAngle), Math.max(sinE, -0.18), -0.55).normalize();
         sunBall.position.set(sunDir.x * R, Math.max(sunDir.y, -0.05) * Rh, sunDir.z * R);
         sunHalo.position.copy(sunBall.position);
         sunLight.position.copy(sunBall.position);
-        sunLight.intensity = 0.1 + inten * 1.9;
+        sunLight.color.copy(P.sunC);
+        sunLight.intensity = P.sunI;
+        // قرص الشمس بالزوايا الجمالية الواطية فقط (صبح/مغرب)
+        const lowSun = isDay && sinE < 0.42;
+        sunBall.visible = lowSun; sunHalo.visible = lowSun;
         moonBall.position.set(-Math.cos(dayAngle) * R * 0.9, Math.max(0.25, -sinE) * Rh * 0.85, -HD / 2 - 26);
+        moonBall.visible = !isDay;
         moonLight.position.copy(moonBall.position); moonLight.intensity = isDay ? 0 : 0.25;
-        if (envSt.on) {
-          // سماء HDRI حقيقية بغيوم — نهار / غروب / ليل حسب شريط الوقت
-          const mode = !isDay ? 'night' : inten < 0.32 ? 'set' : 'day';
-          if (envSt.cur !== mode) {
-            envSt.cur = mode;
-            const e2 = envSt[mode];
-            scene.background = e2.bg; scene.environment = e2.env;
-            const rotY = mode === 'day' ? 3.2 : mode === 'set' ? 3.4 : 0.6;
-            if (scene.backgroundRotation) scene.backgroundRotation.set(0, rotY, 0);
-            if (scene.environmentRotation) scene.environmentRotation.set(0, rotY, 0);
-          }
-          scene.backgroundIntensity = mode === 'day' ? 0.8 : 1.0;
-          scene.environmentIntensity = mode === 'day' ? 0.65 : mode === 'set' ? 0.55 : 0.3;
-          sunBall.visible = false; sunHalo.visible = false; moonBall.visible = false;
-          starMat.opacity = 0;
-          renderer.toneMappingExposure = mode === 'day' ? 0.72 : mode === 'set' ? 0.8 : 1.05;
-        } else {
-          drawSky(isDay ? Math.min(1, (1 - inten) * 1.35) : 0, !isDay);
-          sunBall.visible = isDay; sunHalo.visible = isDay;
-          moonBall.visible = !isDay;
-          starMat.opacity = isDay ? 0 : Math.min(0.95, 0.4 + Math.max(0, -sinE) * 1.2);
-          renderer.toneMappingExposure = isDay ? 0.85 + inten * 0.12 : 0.75;
-          scene.environmentIntensity = isDay ? 0.35 : 0.12;
-        }
+        starMat.opacity = isDay ? 0 : Math.min(0.85, 0.3 + Math.max(0, -sinE) * 1.1);
 
-        const fogC = isDay ? lerpC(fogSet, fogDay, inten * 1.5) : fogNight;
-        scene.fog.color.copy(fogC);
-        // مع سماء HDRI نبعد الضباب حتى ما يغسل البيوت بلون فاتح
-        if (envSt.on) { scene.fog.near = 110; scene.fog.far = 320; }
-        hemi.intensity = isDay ? 0.3 + inten * 0.45 : 0.16;
-        amb.intensity = isDay ? 0.2 + inten * 0.15 : 0.12;
-        fillL.intensity = isDay ? 0.35 : 0.06;
+        // الغيوم: دوران بطيء جداً (دورة/20 دقيقة) وخفوت ليلي
+        cloudGroup.rotation.y = et * CLOUD_ROT;
+        const cloudOp = isDay ? 1 : 0.14;
+        cumulusMats.forEach((m, i) => { m.opacity = (i >= 11 ? 0.32 : 0.9) * cloudOp; });
 
         const winI = isDay ? 0.04 : 1.15;
         windowsGlow.forEach((m) => { m.emissiveIntensity = winI; });
@@ -982,8 +1044,9 @@ export default function SystemShowcase({
         });
         invLed.forEach((m2) => { m2.color.setHex(isDay ? 0x36e07a : 0xffb14a); });
 
-        bloom.strength = isDay ? 0.1 : 0.55;
-        bloom.threshold = isDay ? 1.15 : 0.75;
+        // Bloom بعتبة عالية (القسم 9): نهاراً شبه معدوم، ليلاً على الأضوية فقط
+        bloom.strength = isDay ? 0.08 : 0.4;
+        bloom.threshold = isDay ? 1.15 : 0.88;
         controls.update();
         composer.render();
       };
@@ -1038,7 +1101,7 @@ export default function SystemShowcase({
       <div className="showcase-timebar">
         <span className="tclock">🕐 {timeLabel}</span>
         <span className="tend">🌅</span>
-        <input type="range" min={6} max={30} step={0.25} defaultValue={13} onInput={onTime} onChange={onTime} />
+        <input type="range" min={6} max={30} step={0.25} defaultValue={15.5} onInput={onTime} onChange={onTime} />
         <span className="tend">🌙</span>
       </div>
       <div className="showcase-hint">🖱️ اسحب للتدوير • عجلة الماوس للتقريب • حرّك الشريط لوقت اليوم</div>
