@@ -1211,7 +1211,7 @@ h2.page-title::before {
 }
 .showcase-close:hover { background: #12305c; }
 .showcase-hud {
-  position: absolute; bottom: 66px; left: 0; right: 0; z-index: 2;
+  position: absolute; bottom: 118px; left: 0; right: 0; z-index: 2;
   display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; padding: 0 16px;
   pointer-events: none;
 }
@@ -1225,12 +1225,27 @@ h2.page-title::before {
 .showcase-chip .lb { color: #4a5c72; font-size: 0.82rem; }
 .showcase-chip .vl { color: #12305c; font-size: 0.98rem; font-weight: 800; }
 .showcase-hint {
-  position: absolute; bottom: 18px; left: 0; right: 0; z-index: 2; text-align: center;
-  color: #3a5372; font-family: 'Cairo', sans-serif; font-size: 0.88rem; font-weight: 700;
+  position: absolute; bottom: 16px; left: 0; right: 0; z-index: 2; text-align: center;
+  color: #3a5372; font-family: 'Cairo', sans-serif; font-size: 0.82rem; font-weight: 700;
   pointer-events: none; text-shadow: 0 1px 0 #fff;
 }
-.showcase-sun {
-  position: absolute; top: 58px; left: 66px; width: 92px; height: 92px; border-radius: 50%; z-index: 1;
-  background: radial-gradient(circle, #fff6cf 0%, #ffd451 55%, #ffbf2e 100%);
-  box-shadow: 0 0 60px 20px rgba(255,197,64,0.45); pointer-events: none;
+/* شريط الوقت (صباح → صباح اليوم الثاني) */
+.showcase-timebar {
+  position: absolute; bottom: 52px; left: 50%; transform: translateX(-50%); z-index: 3;
+  display: flex; align-items: center; gap: 10px; width: min(620px, 92vw);
+  background: rgba(255,255,255,0.92); border: 1px solid #cdd9e6; border-radius: 16px;
+  padding: 8px 16px; box-shadow: 0 6px 16px rgba(20,48,92,0.14); font-family: 'Cairo', sans-serif;
+}
+.showcase-timebar .tclock { color: #12305c; font-weight: 800; font-size: 0.92rem; white-space: nowrap; min-width: 150px; }
+.showcase-timebar .tend { font-size: 1.1rem; }
+.showcase-timebar input[type="range"] {
+  flex: 1; height: 8px; border-radius: 6px; -webkit-appearance: none; appearance: none; outline: none;
+  background: linear-gradient(90deg, #ffd451 0%, #ffbf2e 40%, #2c4a72 60%, #0e1830 100%);
+}
+.showcase-timebar input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 22px; height: 22px; border-radius: 50%;
+  background: #fff; border: 3px solid #f5a623; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+}
+.showcase-timebar input[type="range"]::-moz-range-thumb {
+  width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 3px solid #f5a623; cursor: pointer;
 }
