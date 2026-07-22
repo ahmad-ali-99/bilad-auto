@@ -26,6 +26,9 @@ export default function SystemShowcase({
   const rafRef = useRef(0);
   const timeRef = useRef(13);
   const [timeLabel, setTimeLabel] = useState(fmtTime(13));
+  // تحميل الأصول الواقعية (HDRI/خامات/موديلات) — تقدم بالنسبة المئوية
+  const [loadPct, setLoadPct] = useState(0);
+  const [loadingAssets, setLoadingAssets] = useState(true);
 
   useEffect(() => {
     let disposed = false;
@@ -479,11 +482,13 @@ export default function SystemShowcase({
       const grassN = 1800;
       const grass = new THREE.InstancedMesh(bladeGeo, grassMat, grassN);
       const dum = new THREE.Object3D(); const gcol = new THREE.Color(); let gi = 0;
+      const grassSpots = []; // مواقع الحديقة — تُعاد للاستخدام مع خصلات العشب الحقيقية (GLB)
       for (let k = 0; k < grassN; k++) {
         const gx = -2 + (Math.random() - 0.5) * (HW + 3.6);
         const gz = -HD / 2 - LOT_FRONT / 2 + 0.3 + (Math.random() - 0.5) * (LOT_FRONT - 1.2);
         if (gx > gateX - 2 && gx < gateX + 2) continue;
         if (gx > -HW / 2 + towerW + 0.1 && gx < -HW / 2 + towerW + 1.7) continue;
+        if (grassSpots.length < 160) grassSpots.push([gx, gz]);
         dum.position.set(gx, 0, gz); dum.rotation.y = Math.random() * Math.PI;
         const s = 0.75 + Math.random() * 0.7; dum.scale.set(s, 0.8 + Math.random() * 0.7, s);
         dum.updateMatrix(); grass.setMatrixAt(gi, dum.matrix);
@@ -497,6 +502,7 @@ export default function SystemShowcase({
       const trunkM = M({ color: 0x6b4a2c, roughness: 0.9 });
       const leafM1 = M({ color: 0x3f8b3a, roughness: 0.95 });
       const leafM2 = M({ color: 0x5aa04a, roughness: 0.95 });
+      const procTrees = [], procShrubs = []; // تُخفى عند تحميل الموديلات الحقيقية
       const mkTree = (x, z, sc = 1) => {
         const tg = new THREE.Group();
         const tr = new THREE.Mesh(track(new THREE.CylinderGeometry(0.09, 0.15, 1.3, 8)), trunkM); tr.position.y = 0.65; tr.castShadow = true; tg.add(tr);
@@ -504,14 +510,14 @@ export default function SystemShowcase({
         [[0, 1.55, 0.55, leafM1], [0.35, 1.75, 0.45, leafM2], [-0.33, 1.8, 0.44, leafM1], [0, 2.15, 0.4, leafM2], [0.15, 1.4, 0.35, leafM2]].forEach(([dx, dy, r, lm]) => {
           const c = new THREE.Mesh(plantJit(track(new THREE.IcosahedronGeometry(r, 1))), lm); c.position.set(dx, dy, (Math.random() - 0.5) * 0.3); c.castShadow = true; tg.add(c);
         });
-        tg.position.set(x, 0, z); tg.scale.setScalar(sc); scene.add(tg);
+        tg.position.set(x, 0, z); tg.scale.setScalar(sc); scene.add(tg); procTrees.push(tg);
       };
       mkTree(-HW / 2 - 2.2, -HD / 2 - 2, 1.15);
       mkTree(-HW / 2 + 1.4, -HD / 2 - LOT_FRONT + 1.2, 0.9);
       mkTree(13, WALL_Z - SIDEWALK - ROAD_W - SIDEWALK - 2.5, 1.25);
       mkTree(-14, WALL_Z - SIDEWALK - ROAD_W - SIDEWALK - 2.2, 1.1);
       const shrubG = track(new THREE.IcosahedronGeometry(0.3, 1));
-      for (let i = 0; i < 6; i++) { const s = new THREE.Mesh(shrubG, leafM2); s.position.set(-HW / 2 + 1 + i * 1.4, 0.28, WALL_Z + 0.65); s.scale.y = 1.25; scene.add(s); }
+      for (let i = 0; i < 6; i++) { const s = new THREE.Mesh(shrubG, leafM2); s.position.set(-HW / 2 + 1 + i * 1.4, 0.28, WALL_Z + 0.65); s.scale.y = 1.25; scene.add(s); procShrubs.push(s); }
 
       // ================= أوراق تتطاير بالرياح =================
       const leafGeo = track(new THREE.PlaneGeometry(0.09, 0.07));
@@ -651,6 +657,106 @@ export default function SystemShowcase({
       controls.addEventListener('start', () => { controls.autoRotate = false; });
       controls.update();
 
+      // ================= أصول واقعية (HDRI + PBR + GLB) — تحميل كسول بتقدم =================
+      // تُخزَّن بجهاز المستخدم دائمياً (CacheFirst بالـService Worker) — تنزل مرة وحدة فقط.
+      const envSt = { on: false, cur: '', day: null, set: null, night: null };
+      (async () => {
+        try {
+          const { RGBELoader } = await import('three/examples/jsm/loaders/RGBELoader.js');
+          const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+          const baseURL = new URL('showcase/', document.baseURI).href;
+          const manager = new THREE.LoadingManager();
+          manager.onProgress = (u, l, tot) => { if (!disposed) setLoadPct(Math.min(99, Math.round((l / Math.max(1, tot)) * 100))); };
+          const rgbe = new RGBELoader(manager);
+          const texL = new THREE.TextureLoader(manager);
+          const glbL = new GLTFLoader(manager);
+          const loadHdr = (f) => new Promise((res, rej) => rgbe.load(baseURL + 'hdr/' + f, res, undefined, rej));
+          const loadTex = (f, srgb) => new Promise((res, rej) => texL.load(baseURL + 'tex/' + f, (t2) => {
+            t2.wrapS = t2.wrapT = THREE.RepeatWrapping; t2.anisotropy = 8;
+            if (srgb) t2.colorSpace = THREE.SRGBColorSpace;
+            res(track(t2));
+          }, undefined, rej));
+          const loadGlb = (p) => new Promise((res, rej) => glbL.load(baseURL + 'glb/' + p, res, undefined, rej));
+
+          // 1) السماوات HDRI (خلفية بغيوم حقيقية + إضاءة بيئية)
+          const pm = new THREE.PMREMGenerator(renderer);
+          const mkEnv = (tex2) => { tex2.mapping = THREE.EquirectangularReflectionMapping; const rt = pm.fromEquirectangular(tex2); disp.push(rt); return { bg: tex2, env: rt.texture }; };
+          const [hDay, hSet, hNight] = await Promise.all([loadHdr('day.hdr'), loadHdr('sunset.hdr'), loadHdr('night.hdr')]);
+          [hDay, hSet, hNight].forEach((t2) => track(t2));
+          envSt.day = mkEnv(hDay); envSt.set = mkEnv(hSet); envSt.night = mkEnv(hNight);
+          disp.push(pm);
+          envSt.on = true; skyDome.visible = false;
+
+          // 2) خامات PBR حقيقية (diff+normal+arm) — الـarm: R=AO/G=خشونة/B=معدنية
+          const applyPBR = async (mats, name, rx, ry2, extra = {}) => {
+            const [d2, n2, a2] = await Promise.all([
+              loadTex(name + '_diff.jpg', true), loadTex(name + '_nor.jpg'), loadTex(name + '_arm.jpg').catch(() => null),
+            ]);
+            (Array.isArray(mats) ? mats : [mats]).forEach((mm) => {
+              const c = (t3) => { const cl = t3.clone(); track(cl); cl.repeat.set(rx, ry2); cl.needsUpdate = true; return cl; };
+              mm.map = c(d2); mm.normalMap = c(n2);
+              if (a2) { mm.roughnessMap = c(a2); mm.metalnessMap = mm.roughnessMap; mm.roughness = 1; mm.metalness = 1; }
+              mm.color = new THREE.Color(0xffffff);
+              Object.assign(mm, extra); mm.needsUpdate = true;
+            });
+          };
+          await Promise.all([
+            applyPBR(whiteWall, 'wall', 4, 2),
+            applyPBR(rWall, 'wall', 2, 1),
+            applyPBR(road.material, 'asphalt', 12, 2),
+            applyPBR(drive.material, 'asphalt', 1.2, 2, { color: new THREE.Color(0xbbbbbb) }),
+            applyPBR(walk.material, 'pavers', 18, 1),
+            applyPBR(lot.material, 'pavers', 6, 7),
+            applyPBR(slabMat, 'concrete', 4, 4),
+            applyPBR(woodSlat, 'wood', 1, 2),
+            applyPBR(poleM, 'wood', 1, 3),
+          ]);
+
+          // 3) نباتات حقيقية: خصلات عشب + شجيرات + شجرة فوتوغرامترية
+          const [gGrass, gShrub1, gShrub2, gTree] = await Promise.all([
+            loadGlb('grass_medium_01/grass_medium_01_1k.gltf'),
+            loadGlb('shrub_02/shrub_02_2k.gltf'),
+            loadGlb('shrub_04/shrub_04_2k.gltf'),
+            loadGlb('island_tree_02/island_tree_02_1k.gltf'),
+          ]);
+          if (disposed) return;
+          // عشب: InstancedMesh لكل ميش من الموديل على مواقع الحديقة
+          const spots = grassSpots;
+          gGrass.scene.updateMatrixWorld(true);
+          gGrass.scene.traverse((o) => {
+            if (!o.isMesh) return;
+            const im = new THREE.InstancedMesh(o.geometry, o.material, spots.length);
+            const d3 = new THREE.Object3D();
+            spots.forEach(([gx, gz], i) => {
+              d3.position.set(gx, 0, gz); d3.rotation.y = Math.random() * Math.PI * 2;
+              const sc = 0.85 + Math.random() * 0.6; d3.scale.setScalar(sc);
+              d3.updateMatrix(); im.setMatrixAt(i, d3.matrix);
+            });
+            im.instanceMatrix.needsUpdate = true; im.receiveShadow = true;
+            scene.add(im); disp.push({ dispose: () => { im.geometry.dispose?.(); } });
+          });
+          grass.visible = false;
+          // شجيرات على السياج والحديقة
+          const placeClone = (src, x, z, sc, ry = Math.random() * Math.PI * 2) => {
+            const cl = src.scene.clone(true);
+            cl.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+            cl.position.set(x, 0, z); cl.rotation.y = ry; cl.scale.setScalar(sc); scene.add(cl); return cl;
+          };
+          for (let i = 0; i < 6; i++) placeClone(i % 2 ? gShrub1 : gShrub2, -HW / 2 + 1 + i * 1.4, WALL_Z + 0.7, 1.4 + Math.random() * 0.5);
+          placeClone(gShrub1, HW / 2 + 1.6, -HD / 2 - 1.2, 1.8);
+          procShrubs.forEach((s2) => { s2.visible = false; });
+          // الشجرة الحقيقية: بالحديقة + كَبال الشارع
+          gTree.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+          placeClone(gTree, -HW / 2 - 2.6, -HD / 2 - 2.2, 0.85, 0.4);
+          placeClone(gTree, 14, WALL_Z - SIDEWALK - ROAD_W - SIDEWALK - 3, 1.0, 2.1);
+          procTrees.forEach((t3) => { t3.visible = false; });
+        } catch {
+          /* أوفلاين أو فشل تحميل — يبقى المظهر الإجرائي الحالي شغالاً */
+        } finally {
+          if (!disposed) { setLoadPct(100); setLoadingAssets(false); }
+        }
+      })();
+
       // ================= دورة اليوم =================
       const fogDay = new THREE.Color(0xcfe4f5), fogSet = new THREE.Color(0xe8b98a), fogNight = new THREE.Color(0x0d1522);
       const R = 60, Rh = 46;
@@ -666,23 +772,43 @@ export default function SystemShowcase({
         const sinE = Math.sin(dayAngle);
         const isDay = sinE > 0.015; const inten = Math.max(0, sinE);
 
-        // الشمس (كرة مرئية بقوس فوك الشارع) + الإضاءة + قبة السماء
+        // الشمس (للظلال دائماً) + السماء: HDRI حقيقية إذا محمّلة وإلا القبة المتدرجة
         sunDir.set(Math.cos(dayAngle), Math.max(sinE, -0.18), -0.55).normalize();
-        drawSky(isDay ? Math.min(1, (1 - inten) * 1.35) : 0, !isDay);
         sunBall.position.set(sunDir.x * R, Math.max(sunDir.y, -0.05) * Rh, sunDir.z * R);
         sunHalo.position.copy(sunBall.position);
-        sunBall.visible = isDay; sunHalo.visible = isDay;
         sunLight.position.copy(sunBall.position);
         sunLight.intensity = 0.1 + inten * 1.9;
         moonBall.position.set(-Math.cos(dayAngle) * R * 0.9, Math.max(0.25, -sinE) * Rh * 0.85, -HD / 2 - 26);
-        moonBall.visible = !isDay;
         moonLight.position.copy(moonBall.position); moonLight.intensity = isDay ? 0 : 0.25;
-        starMat.opacity = isDay ? 0 : Math.min(0.95, 0.4 + Math.max(0, -sinE) * 1.2);
-        renderer.toneMappingExposure = isDay ? 0.85 + inten * 0.12 : 0.75;
-        scene.environmentIntensity = isDay ? 0.35 : 0.12;
+        if (envSt.on) {
+          // سماء HDRI حقيقية بغيوم — نهار / غروب / ليل حسب شريط الوقت
+          const mode = !isDay ? 'night' : inten < 0.32 ? 'set' : 'day';
+          if (envSt.cur !== mode) {
+            envSt.cur = mode;
+            const e2 = envSt[mode];
+            scene.background = e2.bg; scene.environment = e2.env;
+            const rotY = mode === 'day' ? 2.4 : mode === 'set' ? 3.4 : 0.6;
+            if (scene.backgroundRotation) scene.backgroundRotation.set(0, rotY, 0);
+            if (scene.environmentRotation) scene.environmentRotation.set(0, rotY, 0);
+          }
+          scene.backgroundIntensity = mode === 'day' ? 0.9 : 1.0;
+          scene.environmentIntensity = mode === 'day' ? 0.65 : mode === 'set' ? 0.55 : 0.3;
+          sunBall.visible = false; sunHalo.visible = false; moonBall.visible = false;
+          starMat.opacity = 0;
+          renderer.toneMappingExposure = mode === 'day' ? 0.72 : mode === 'set' ? 0.8 : 1.05;
+        } else {
+          drawSky(isDay ? Math.min(1, (1 - inten) * 1.35) : 0, !isDay);
+          sunBall.visible = isDay; sunHalo.visible = isDay;
+          moonBall.visible = !isDay;
+          starMat.opacity = isDay ? 0 : Math.min(0.95, 0.4 + Math.max(0, -sinE) * 1.2);
+          renderer.toneMappingExposure = isDay ? 0.85 + inten * 0.12 : 0.75;
+          scene.environmentIntensity = isDay ? 0.35 : 0.12;
+        }
 
         const fogC = isDay ? lerpC(fogSet, fogDay, inten * 1.5) : fogNight;
         scene.fog.color.copy(fogC);
+        // مع سماء HDRI نبعد الضباب حتى ما يغسل البيوت بلون فاتح
+        if (envSt.on) { scene.fog.near = 110; scene.fog.far = 320; }
         hemi.intensity = isDay ? 0.3 + inten * 0.45 : 0.16;
         amb.intensity = isDay ? 0.2 + inten * 0.15 : 0.12;
         fillL.intensity = isDay ? 0.35 : 0.06;
@@ -776,6 +902,16 @@ export default function SystemShowcase({
         <div className="showcase-title">منظومتك الشمسية — عرض تفاعلي</div>
         <button className="showcase-close" onClick={onClose} title="إغلاق">✕</button>
       </div>
+      {loadingAssets && (
+        <div className="showcase-loading">
+          <div className="ld-box">
+            <div className="ld-spin" />
+            <b>جارٍ تجهيز المشهد الواقعي…</b>
+            <span className="ld-pct">{loadPct}%</span>
+            <small>ينزل مرة وحدة فقط ويُخزَّن بجهازك — الفتحات الجاية فورية</small>
+          </div>
+        </div>
+      )}
       <div className="showcase-hud">
         {chips.map((c, i) => (<div className="showcase-chip" key={i}><span className="ic">{c[0]}</span><span className="lb">{c[1]}</span><b className="vl">{c[2]}</b></div>))}
       </div>

@@ -16,7 +16,21 @@ export default defineConfig({
       includeAssets: ['icons/*.png'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,wasm,woff,woff2,png,svg}'],
+        globIgnores: ['showcase/**'], // أصول العرض التفاعلي الثقيلة لا تدخل بالتخزين المسبق
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, // sql-wasm + الحزمة الرئيسية
+        // أصول العرض التفاعلي (HDRI/خامات/موديلات ~160MB): تنزل مرة وحدة عند أول فتح
+        // للعرض وتُخزَّن بجهاز المستخدم دائمياً (CacheFirst) — ما تتغير بين النسخ
+        runtimeCaching: [
+          {
+            urlPattern: /showcase\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'showcase-assets-v1',
+              expiration: { maxEntries: 80 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
       manifest: {
         name: 'تسعير الطاقة الشمسية - بلاد اوتو',
