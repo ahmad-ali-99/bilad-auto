@@ -118,7 +118,8 @@ export default function SystemShowcase({
       const charcoalDark = fadeMat({ color: 0x3d4245, roughness: 0.85 });
       const innerWall = fadeMat({ color: 0xefe9df, roughness: 0.95 });
       const slabMat = fadeMat({ map: rep(roofT, 4, 4), bumpMap: rep(roofB, 4, 4), bumpScale: 0.4, roughness: 0.95 });
-      const glassMat = M({ color: 0x18242e, roughness: 0.08, metalness: 0.55, emissive: 0xffc97a, emissiveIntensity: 0.04, envMapIntensity: 1.2 });
+      // زجاج يعكس سماء الـHDRI فعلياً — هذا اللي يحوّل الشباك من «حفرة سودة» لزجاج حي
+      const glassMat = M({ color: 0x8fa3b3, roughness: 0.05, metalness: 1.0, emissive: 0xffc97a, emissiveIntensity: 0.04, envMapIntensity: 1.6 });
       const frameMat = M({ color: 0x1f2327, roughness: 0.45, metalness: 0.5 });
       const woodSlat = M({ map: rep(woodT, 1, 2), roughness: 0.7 });
       const floorWood = M({ color: 0xc9a876, roughness: 0.8 });
@@ -277,8 +278,9 @@ export default function SystemShowcase({
       }
       const gateX = (HW + 8) / 2 - gateW / 2 - 0.3;
       const barGeo = B(0.05, wallH - 0.15, 0.05);
-      for (let i = 0; i < 12; i++) { const bar = new THREE.Mesh(barGeo, metalGray); bar.position.set(gateX - gateW / 2 + 0.2 + i * (gateW - 0.4) / 11, wallH / 2, WALL_Z); scene.add(bar); }
-      const gateTop = new THREE.Mesh(B(gateW, 0.07, 0.07), metalGray); gateTop.position.set(gateX, wallH - 0.15, WALL_Z); scene.add(gateTop);
+      const procGate = []; // تنخفي إذا تحمّلت بوابة الحديد الفوتوريالستك
+      for (let i = 0; i < 12; i++) { const bar = new THREE.Mesh(barGeo, metalGray); bar.position.set(gateX - gateW / 2 + 0.2 + i * (gateW - 0.4) / 11, wallH / 2, WALL_Z); scene.add(bar); procGate.push(bar); }
+      const gateTop = new THREE.Mesh(B(gateW, 0.07, 0.07), metalGray); gateTop.position.set(gateX, wallH - 0.15, WALL_Z); scene.add(gateTop); procGate.push(gateTop);
 
       // ================= البيت (واجهة الصورة) =================
       const house = new THREE.Group();
@@ -580,10 +582,12 @@ export default function SystemShowcase({
       const polesX = [-22, -10, 18];
       const poleZ = WALL_Z - SIDEWALK - ROAD_W - 1.0;
       const wireM = M({ color: 0x1a1d20, roughness: 0.6 });
+      const procPoles = []; // تنخفي إذا تحمّل عمود الكهرباء الفوتوريالستك
       polesX.forEach((px) => {
         const pole = new THREE.Mesh(track(new THREE.CylinderGeometry(0.09, 0.11, 7.2, 10)), poleM);
         pole.position.set(px, 3.6, poleZ); pole.castShadow = true; scene.add(pole);
         const arm = new THREE.Mesh(B(1.6, 0.09, 0.09), poleM); arm.position.set(px, 6.6, poleZ); scene.add(arm);
+        procPoles.push(pole, arm);
       });
       const mkCatenary = (x1, x2, y, z, sag) => {
         const pts = [];
@@ -598,8 +602,11 @@ export default function SystemShowcase({
       // (الرسالة الذهبية — قسم 1: بيت البطل ما يوصله ولا سلك، لا مولدة ولا خدمة)
 
       // ================= أعمدة إنارة فانوسية =================
+      const procLamps = []; const lampSpots = [];
       const mkLamp = (x, z) => {
+        lampSpots.push([x, z]);
         const g = new THREE.Group();
+        procLamps.push(g);
         const pole = new THREE.Mesh(track(new THREE.CylinderGeometry(0.05, 0.07, 4.2, 10)), M({ color: 0x24282c, roughness: 0.5, metalness: 0.6 }));
         pole.position.y = 2.1; pole.castShadow = true; g.add(pole);
         const cap = new THREE.Mesh(track(new THREE.ConeGeometry(0.28, 0.3, 12)), M({ color: 0x24282c, roughness: 0.5 })); cap.position.y = 4.35; g.add(cap);
@@ -694,6 +701,7 @@ export default function SystemShowcase({
       // ---- النموذج المولّد: spawnVilla(النوع 1-4، الموقع، البذرة) ----
       const ACROSS_Z = WALL_Z - SIDEWALK - ROAD_W - SIDEWALK - 8.6;
       const villaBodyMats = []; // أجسام بيوت الجيران — تلبس خامة الجص PBR مع بقاء تينت اللوحة الرملية
+      const villaGroups = []; // ميتاداتا كل بيت — تستخدمها الإكسسوارات الفوتوريالستك (سبلتات..)
       const mkVilla = (arch, x, z, ry, seed, opts = {}) => {
         const rnd = mulberry(seed);
         const g = new THREE.Group();
@@ -786,6 +794,7 @@ export default function SystemShowcase({
           sg.position.set(-2.1, h + 0.42, -d * 0.15); g.add(sg);
         }
         g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g);
+        villaGroups.push({ g, w, h, d, arch, mir, seed });
         return g;
       };
       // ---- توزيع الحي: 13 بيت، ولا اثنين متطابقين ----
@@ -805,6 +814,18 @@ export default function SystemShowcase({
       mkVilla(2, 2, ACROSS_Z - 17, Math.PI, 122, { pigeons: true });
       mkVilla(1, 18, ACROSS_Z - 17, Math.PI, 133);
       mkVilla(3, 34, ACROSS_Z - 17, Math.PI, 144);
+      // ---- صفوف العمق: نسيج عمراني متواصل يسد الفراغ حتى خط الضباب (روح الرفرنس) ----
+      // خلف بيت البطل (الجهة المقابلة للشارع الرئيسي بعيونا) وعلى الجانبين
+      // (الكاميرا بـ z سالب تباوع نحو +z — فالعمق المرئي خلف بيت البطل كله z موجب)
+      const depthSeed = mulberry(500);
+      [[-30, 16], [-14, 17], [2, 15.5], [18, 16.5], [34, 15],
+       [-38, 34], [-20, 35], [-2, 33.5], [16, 34.5], [32, 33], [48, 35],
+       [-30, 52], [-8, 51], [12, 53], [36, 51.5],
+       [-46, 8], [50, 10], [-54, 28], [56, 30],
+       [-40, ACROSS_Z - 34], [-20, ACROSS_Z - 33], [0, ACROSS_Z - 35], [20, ACROSS_Z - 33], [40, ACROSS_Z - 34]].forEach(([dx, dz], i) => {
+        const arch = [1, 2, 3, 1, 2][Math.floor(depthSeed() * 5) % 5] || 1;
+        mkVilla(arch, dx, dz, depthSeed() < 0.5 ? 0 : Math.PI, 200 + i * 7);
+      });
 
       // ================= طبقة الأفق (القسم 2): خط نخيل + سيلويتات #9FB4C7 =================
       const hazeC = 0x9fb4c7;
@@ -898,8 +919,11 @@ export default function SystemShowcase({
       // ================= سيارات (3 ألوان) =================
       const glassM2 = M({ color: 0x18242e, roughness: 0.12, metalness: 0.5 });
       const wheelG = track(new THREE.CylinderGeometry(0.34, 0.34, 0.24, 18)); const wheelM = M({ color: 0x121212, roughness: 0.7 });
+      const procCars = []; const carSpots = [];
       const mkCar = (hex, x, z, ry = 0) => {
+        carSpots.push([x, z, ry]);
         const car = new THREE.Group();
+        procCars.push(car);
         const paint = M({ color: hex, roughness: 0.4, metalness: 0.55, envMapIntensity: 0.8 });
         const cb1 = new THREE.Mesh(B(1.75, 0.5, 4.0), paint); cb1.position.y = 0.55; cb1.castShadow = true; car.add(cb1);
         const cb2 = new THREE.Mesh(B(1.6, 0.48, 2.2), paint); cb2.position.set(0, 1.0, -0.2); cb2.castShadow = true; car.add(cb2);
@@ -921,6 +945,40 @@ export default function SystemShowcase({
       const sidrLeafM2 = M({ color: 0x6b8a52, roughness: 0.92 });
       const dateM = M({ color: 0x9c5a22, roughness: 0.8 });
       const windCrowns = []; // {grp, phase, speed, amp} — كل الحركات تقرأ ريحاً موحّدة (+x)
+      // ---- سعف نخيل حقيقي الشكل: نسيج ألفا ريشي + جيومتري منحنٍ (بدل الكتل الخضر) ----
+      const frondTexture = (base, tip) => {
+        const c = mkCanvas(2); c.width = 128; c.height = 512;
+        const g = c.getContext('2d');
+        g.strokeStyle = '#6b5836'; g.lineWidth = 5;
+        g.beginPath(); g.moveTo(64, 508); g.lineTo(64, 10); g.stroke(); // الجريدة
+        for (let t = 0.03; t < 1; t += 0.026) {
+          const y = 500 - t * 482;
+          const len = 60 * (1 - t * 0.38) + 10;
+          const spread = 1.0 - t * 0.38; // الوريقات تنفرج بالگاع وتضمّ بالراس
+          const cc = t < 0.75 ? base : tip;
+          g.strokeStyle = cc; g.lineWidth = 7 - t * 2.6;
+          [-1, 1].forEach((s2) => {
+            g.beginPath(); g.moveTo(64, y);
+            g.lineTo(64 + s2 * Math.sin(spread) * len, y - Math.cos(spread) * len * 0.7);
+            g.stroke();
+          });
+        }
+        const t2 = track(new THREE.CanvasTexture(c)); t2.colorSpace = THREE.SRGBColorSpace; t2.anisotropy = 8; return t2;
+      };
+      const mkFrondGeo = () => {
+        const geo = track(new THREE.PlaneGeometry(0.95, 2.6, 1, 10));
+        const pos = geo.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+          const u = (pos.getY(i) + 1.3) / 2.6; // 0 گاعدة → 1 راس
+          pos.setZ(i, -(u * u) * 1.05); // راس السعفة يطيح بقوس طبيعي
+          pos.setX(i, pos.getX(i) * (1 - u * 0.55)); // وتضيق نحو الراس
+        }
+        geo.translate(0, 1.3, 0); geo.computeVertexNormals(); return geo;
+      };
+      const frondGeo = mkFrondGeo();
+      const frondM = M({ map: frondTexture('#4a6b4d', '#5c7f55'), alphaTest: 0.35, transparent: true, side: THREE.DoubleSide, roughness: 0.9 });
+      const frondM2 = M({ map: frondTexture('#5c7f55', '#7a9b5e'), alphaTest: 0.35, transparent: true, side: THREE.DoubleSide, roughness: 0.9 });
+      const frondDryM = M({ map: frondTexture('#a8935c', '#b8a570'), alphaTest: 0.35, transparent: true, side: THREE.DoubleSide, roughness: 0.95 });
       // نخلة: تاج منفصل يتنفس + ميلان جذع عشوائي 1-4 درجات (قسم 7)
       const mkPalm = (x, z, hgt = 4.2, sc = 1) => {
         const pg = new THREE.Group();
@@ -932,15 +990,20 @@ export default function SystemShowcase({
         }
         const crown = new THREE.Group(); crown.position.y = hgt;
         let dryDone = false;
-        for (let i = 0; i < 10; i++) {
-          const ang = (i / 10) * Math.PI * 2;
+        // صفان من السعف: خارجي متدلٍ + داخلي منتصب — تاج مليان مثل نخل الشوارع
+        for (let i = 0; i < 19; i++) {
+          const outer = i < 11;
+          const ang = outer ? (i / 11) * Math.PI * 2 : ((i - 11) / 8) * Math.PI * 2 + 0.4;
           // عيب مقصود #12: سعفة يابسة وحدة متدلية (بنخلة الحديقة فقط — تُفعّل بالنداء)
           const dry = !dryDone && sc < 0.9 && i === 7; if (dry) dryDone = true;
-          const leaf = new THREE.Mesh(track(new THREE.IcosahedronGeometry(0.5, 1)), dry ? M({ color: 0xa8935c, roughness: 0.95 }) : (i % 2 ? palmLeafM : palmLeafM2));
-          leaf.scale.set(0.16, 0.055, 1.25);
-          leaf.position.set(Math.cos(ang) * 0.75, 0.18 - 0.16 * Math.abs(Math.sin(ang * 2)) - (dry ? 0.5 : 0), Math.sin(ang) * 0.75);
-          leaf.rotation.y = -ang; leaf.rotation.x = (dry ? -1.15 : -0.55 - Math.random() * 0.25);
-          leaf.castShadow = true; crown.add(leaf);
+          const fg = new THREE.Group(); fg.rotation.y = -ang;
+          const leaf = new THREE.Mesh(frondGeo, dry ? frondDryM : (i % 2 ? frondM : frondM2));
+          // السعفة تطلع مائلة للخارج وترتفع شوية ثم يطيح راسها (الانحناء مخبوز بالجيومتري)
+          leaf.rotation.x = dry ? -2.2 : (outer ? -(Math.PI / 2 - 0.32) - (i % 3) * 0.14 : -(Math.PI / 2 - 0.85) - (i % 2) * 0.12);
+          leaf.scale.setScalar((outer ? 1.15 : 0.85) + ((i * 0.29) % 1) * 0.3);
+          leaf.castShadow = true; fg.add(leaf);
+          fg.position.y = dry ? -0.1 : 0.06;
+          crown.add(fg);
         }
         for (let i = 0; i < 3; i++) { const dt = new THREE.Mesh(track(new THREE.IcosahedronGeometry(0.12, 0)), dateM); dt.position.set(Math.cos(i * 2.1) * 0.3, -0.15, Math.sin(i * 2.1) * 0.3); crown.add(dt); }
         pg.add(crown);
@@ -1439,6 +1502,174 @@ export default function SystemShowcase({
           placeClone(gTree, -HW / 2 - 2.6, -HD / 2 - 2.2, 0.85, 0.4);
           placeClone(gTree, 14, WALL_Z - SIDEWALK - ROAD_W - SIDEWALK - 3, 1.0, 2.1);
           procTrees.forEach((t3) => { t3.visible = false; });
+
+          // ================= 4) موديلات فوتوريالستك (Poly Haven CC0) =================
+          // كل موديل يفشل تحميله ينسكت عنه — يبقى بديله الإجرائي شغالاً (النقطة 13)
+          const loadOpt = (p) => loadGlb(p).then((g2) => {
+            g2.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+            return g2;
+          }).catch(() => null);
+          const bboxOf = (obj) => new THREE.Box3().setFromObject(obj);
+          const [gPole, gLampGlb, gCarGlb, gAC, gTrash, gTyre, gShutter, gGateGlb,
+            gPlanter, gPot, gShrubA, gShrubC, gNettle, gWeed, gBermuda, gBarrier, gFenceCl] = await Promise.all([
+            loadOpt('modular_electricity_poles/modular_electricity_poles_1k.gltf'),
+            loadOpt('street_lamp_01/street_lamp_01_1k.gltf'),
+            loadOpt('covered_car/covered_car_1k.gltf'),
+            loadOpt('exterior_aircon_unit/exterior_aircon_unit_1k.gltf'),
+            loadOpt('metal_trash_can/metal_trash_can_1k.gltf'),
+            loadOpt('old_tyre/old_tyre_1k.gltf'),
+            loadOpt('rollershutter_door/rollershutter_door_1k.gltf'),
+            loadOpt('large_iron_gate/large_iron_gate_1k.gltf'),
+            loadOpt('planter_box_01/planter_box_01_1k.gltf'),
+            loadOpt('potted_plant_01/potted_plant_01_1k.gltf'),
+            loadOpt('shrub_01/shrub_01_1k.gltf'),
+            loadOpt('shrub_03/shrub_03_1k.gltf'),
+            loadOpt('nettle_plant/nettle_plant_1k.gltf'),
+            loadOpt('weed_plant_02/weed_plant_02_1k.gltf'),
+            loadOpt('grass_bermuda_01/grass_bermuda_01_1k.gltf'),
+            loadOpt('concrete_road_barrier/concrete_road_barrier_1k.gltf'),
+            loadOpt('modular_chainlink_fence/modular_chainlink_fence_1k.gltf'),
+          ]);
+          if (disposed) return;
+          const world = (src, x, z, sc = 1, ry = 0) => {
+            const cl = src.scene.clone(true);
+            cl.position.set(x, 0, z); cl.rotation.y = ry; cl.scale.setScalar(sc);
+            scene.add(cl); return cl;
+          };
+          // أعمدة كهرباء حقيقية (محولات وعوازل) مكان الأسطوانات — الأسلاك بارتفاعها تبقى
+          if (gPole) {
+            procPoles.forEach((p2) => { p2.visible = false; });
+            polesX.forEach((px, i) => { const c2 = world(gPole, px, poleZ, 0.72, (i % 2 ? 0.06 : -0.04)); c2.rotation.z = (i % 2 ? 0.012 : -0.015); });
+          }
+          // أعمدة إنارة حديد حقيقية + گلوب متوهج ليلاً بنفس نظام الإضاءة
+          if (gLampGlb) {
+            procLamps.forEach((l2) => { l2.visible = false; });
+            const lh = bboxOf(gLampGlb.scene).max.y;
+            lampSpots.forEach(([lx, lz], i) => {
+              const c2 = world(gLampGlb, lx, lz, 1.12, i * 1.7);
+              const bm = M({ color: 0xfff1c8, emissive: 0xffd57a, emissiveIntensity: 0.05, roughness: 0.3 }); lampGlow.push(bm);
+              const bulb = new THREE.Mesh(track(new THREE.SphereGeometry(0.09, 10, 10)), bm);
+              bulb.position.set(lx, lh * 1.12 - 0.28, lz); scene.add(bulb);
+            });
+          }
+          // سيارة مغطاة بتربال (فوتوغرامتري) مكان سيارات المكعبات — بتنويع لون ودوران
+          if (gCarGlb) {
+            procCars.forEach((c2) => { c2.visible = false; });
+            const tints = [0xd9d4c8, 0xc9cdd4, 0xcfc4ae];
+            carSpots.forEach(([cx2, cz2, cry], i) => {
+              const c2 = world(gCarGlb, cx2, cz2, 0.98 + i * 0.02, cry + (i === 2 ? Math.PI : 0));
+              c2.traverse((o) => {
+                if (o.isMesh) { o.material = o.material.clone(); track(o.material); o.material.color.multiply(new THREE.Color(tints[i % 3])); }
+              });
+            });
+          }
+          // سبلتات خارجية حقيقية على واجهات الجيران (أيقونة عراقية) + بيت البطل
+          if (gAC) {
+            villaGroups.forEach((v2, i) => {
+              if (v2.arch === 2 || i % 3 === 2) return;
+              const c2 = gAC.scene.clone(true);
+              c2.position.set(v2.mir * (v2.w * 0.34), 2.35 + (i % 2) * 1.6, v2.d / 2 + 0.2);
+              c2.scale.setScalar(0.9); v2.g.add(c2);
+            });
+            const hc = gAC.scene.clone(true);
+            hc.position.set(HW / 2 + 0.2, 3.4, -HD * 0.12); hc.rotation.y = Math.PI / 2; scene.add(hc);
+          }
+          // ستارة معدنية (رول شتر) حقيقية على فتحة بقالة النور
+          if (gShutter) {
+            const v4 = villaGroups.find((v2) => v2.arch === 4);
+            if (v4) {
+              const sw = v4.w * 0.6 - 0.6;
+              const c2 = gShutter.scene.clone(true);
+              c2.scale.set(sw / 1.08, 1.85 / 2.4, 1);
+              c2.position.set(v4.mir * v4.w * 0.15, 0, v4.d / 2 + 0.3); v4.g.add(c2);
+            }
+          }
+          // بوابة حديد مشغول حقيقية لبيت البطل مكان القضبان
+          if (gGateGlb) {
+            procGate.forEach((p2) => { p2.visible = false; });
+            const c2 = gGateGlb.scene.clone(true);
+            c2.scale.set(gateW / 2.95, (wallH + 0.35) / 2.93, 1);
+            c2.position.set(gateX, 0, WALL_Z); scene.add(c2);
+          }
+          // فوضى الشارع الحية: حاويات، تاير مسنود، حواجز كونكريت بنهاية الفرعي
+          if (gTrash) {
+            const v4 = villaGroups.find((v2) => v2.arch === 4);
+            if (v4) { const c2 = gTrash.scene.clone(true); c2.position.set(v4.mir * (v4.w * 0.15 + v4.w * 0.3 + 1.3), 0, v4.d / 2 + 1.1); c2.rotation.y = 0.7; v4.g.add(c2); }
+            const t2 = world(gTrash, gateX + 3.1, WALL_Z - 0.75, 1, 2.3);
+            const t3 = world(gTrash, gateX + 3.75, WALL_Z - 0.9, 1, -0.4); t3.rotation.z = 0.06;
+          }
+          if (gTyre) { const c2 = world(gTyre, -HW / 2 - 1.1, WALL_Z - 0.42, 1, 0.5); c2.position.y = 0.05; c2.rotation.x = -0.28; }
+          if (gBarrier) {
+            world(gBarrier, 26.4, WALL_Z - SIDEWALK - ROAD_W - 33, 1, 0.12);
+            world(gBarrier, 28.3, WALL_Z - SIDEWALK - ROAD_W - 33.4, 1, -0.2);
+          }
+          // سياج شبك حول المولدة (محوطة مثل الواقع) — بميلان خفيف مقصود
+          if (gFenceCl) {
+            const f1 = world(gFenceCl, GEN_X - 0.4, GEN_Z - 1.6, 0.62, 0); f1.rotation.z = 0.02;
+            const f2 = world(gFenceCl, GEN_X - 2.15, GEN_Z - 0.3, 0.62, Math.PI / 2); f2.rotation.z = -0.015;
+          }
+          // أحواض ومزروعات قنائن عند مدخل البيت وأمام البقالة
+          if (gPlanter) { world(gPlanter, gateX - 2.2, WALL_Z - 0.55, 1.1, 0.1); world(gPlanter, gateX + 2.2, WALL_Z - 0.55, 1.1, -0.08); }
+          if (gPot) {
+            world(gPot, gateX - 1.55, WALL_Z - 0.5, 1.0, 0.6);
+            const v4 = villaGroups.find((v2) => v2.arch === 4);
+            if (v4) { const c2 = gPot.scene.clone(true); c2.position.set(v4.mir * (v4.w * 0.15 - v4.w * 0.3 - 1.4), 0, v4.d / 2 + 0.7); v4.g.add(c2); }
+          }
+          // ================= 5) تكثيف الخضرة (روح الرفرنس) =================
+          // أشجار إضافية على رصيف الجهة المقابلة وزوايا الحي — نفس الشجرة الفوتوغرامترية بمقاسات أكبر
+          // مظلة خضراء وسطية بين بيوت العمق (z موجب = خلف بيت البطل بالكادر) — نغل الرفرنس
+          // الجيومتري مشترك بين الاستنساخات فكلفتها رسمات إضافية فقط — تبقى حتى على الموبايل
+          placeClone(gTree, -28, 14, 2.0, 0.8);
+          placeClone(gTree, 16, 19, 1.75, 2.9);
+          placeClone(gTree, -6, 30, 2.25, 4.4);
+          placeClone(gTree, 30, 33, 1.9, 1.7);
+          placeClone(gTree, 46, 16, 1.6, 3.3);
+          placeClone(gTree, -44, 28, 2.1, 5.6);
+          placeClone(gTree, 8, 24, 1.5, 0.4);
+          placeClone(gTree, -27, -10.5, 1.3, 2.4);
+          if (!lowPerf) {
+            placeClone(gTree, -20, WALL_Z - SIDEWALK - ROAD_W - SIDEWALK - 2.6, 1.55, 1.2);
+            placeClone(gTree, 0.5, WALL_Z - SIDEWALK - ROAD_W - SIDEWALK - 3.2, 1.85, 3.6);
+            placeClone(gTree, 27, WALL_Z - SIDEWALK - ROAD_W - SIDEWALK - 2.4, 1.4, 5.1);
+          }
+          // شجيرات منتشرة + قنّب حواف الجدران (عيب مقصود: نمو برّي عند الأساسات)
+          const scatter = (src, spots, sMin, sMax) => {
+            if (!src) return;
+            spots.forEach(([sx2, sz2], i) => {
+              const c2 = src.scene.clone(true);
+              c2.position.set(sx2, 0, sz2); c2.rotation.y = i * 1.31;
+              c2.scale.setScalar(sMin + ((i * 0.37) % 1) * (sMax - sMin)); scene.add(c2);
+            });
+          };
+          scatter(gShrubA, [[-HW / 2 - 3.8, -HD / 2 - 4], [HW / 2 + 4.2, -HD / 2 - 5.5], [24, WALL_Z - SIDEWALK - ROAD_W - SIDEWALK - 1.8]], 0.9, 1.3);
+          scatter(gShrubC, [[gateX - 3.1, WALL_Z - 0.5], [-HW / 2 + 0.8, WALL_Z - 0.6], [12, WALL_Z - 0.7], [-16.5, WALL_Z - 0.6]], 1.6, 2.4);
+          scatter(gNettle, [[gateX + 4.3, WALL_Z - 0.28], [-9.5, WALL_Z - 0.3], [6.2, WALL_Z - 0.32], [-19, WALL_Z - 0.3], [20.5, WALL_Z - 0.34], [GEN_X + 2.6, GEN_Z - 0.4]], 2.2, 3.4);
+          scatter(gWeed, [[gateX - 4.6, WALL_Z - 0.3], [2.4, WALL_Z - 0.33], [-13.5, WALL_Z - 0.3], [16.8, WALL_Z - 0.3], [27.2, WALL_Z - SIDEWALK - 0.4]], 1.8, 2.8);
+          // ثيل برمودا: خصل كثيفة داخل حديقة البيت وأحواض الشجر (InstancedMesh)
+          if (gBermuda && !lowPerf) {
+            const tufts = [];
+            for (let i = 0; i < 130; i++) {
+              const gx = -HW / 2 + 0.6 + ((i * 0.617) % 1) * (HW - 1.2);
+              const gz = -HD / 2 - 1.2 - ((i * 0.383) % 1) * (LOT_FRONT - 2.4);
+              tufts.push([gx, gz]);
+            }
+            [[-14, WALL_Z - 1.1], [-5, WALL_Z - 1.1], [10.5, WALL_Z - 1.1]].forEach(([bx, bz]) => {
+              for (let k = 0; k < 8; k++) tufts.push([bx - 0.5 + (k % 3) * 0.45, bz - 0.4 + Math.floor(k / 3) * 0.42]);
+            });
+            gBermuda.scene.updateMatrixWorld(true);
+            gBermuda.scene.traverse((o) => {
+              if (!o.isMesh) return;
+              const im = new THREE.InstancedMesh(o.geometry, o.material, tufts.length);
+              const d3 = new THREE.Object3D();
+              tufts.forEach(([tx, tz], i) => {
+                d3.position.set(tx, 0, tz); d3.rotation.y = i * 2.399;
+                d3.scale.setScalar(2.2 + ((i * 0.71) % 1) * 1.6);
+                d3.updateMatrix(); im.setMatrixAt(i, d3.matrix);
+              });
+              im.instanceMatrix.needsUpdate = true; im.receiveShadow = true;
+              scene.add(im); disp.push({ dispose: () => { im.dispose?.(); } });
+            });
+          }
         } catch {
           /* أوفلاين أو فشل تحميل — يبقى المظهر الإجرائي الحالي شغالاً */
         } finally {

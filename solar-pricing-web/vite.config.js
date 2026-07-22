@@ -26,7 +26,7 @@ export default defineConfig({
             handler: 'CacheFirst',
             options: {
               cacheName: 'showcase-assets-v1',
-              expiration: { maxEntries: 80 },
+              expiration: { maxEntries: 400 }, // ~160 ملف أصول (HDRI + خامات + موديلات) — لا يُطرد منها شي
               cacheableResponse: { statuses: [0, 200] },
             },
           },
