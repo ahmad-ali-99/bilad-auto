@@ -1,5 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import SecondaryPickerModal from '../components/SecondaryPickerModal.jsx';
+// العرض التفاعلي 3D يُحمّل عند الطلب فقط (يجرّ three.js) حتى ما يثقل فتح الصفحة
+const SystemShowcase = lazy(() => import('../components/SystemShowcase.jsx'));
 import { buildEditPrefill } from '../lib/editPrefill.js';
 import { getIsAdmin, getCurrentUsername, ADMIN_USERS } from '../lib/agent.js';
 import { computeSecondaryDefaults } from '../lib/secondaryDefaults.js';
@@ -57,6 +59,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   const [extraUnits, setExtraUnits] = useState(savedDraft?.extraUnits ?? { panel: 0, battery: 0, inverter: 0 });
   // قسم الزيادة/الخصم/التقسيط مطوي افتراضياً حتى الشاشة تبقى مرتبة
   const [pricingOpen, setPricingOpen] = useState(savedDraft?.pricingOpen ?? false);
+  // العرض التفاعلي 3D (يفتح ملء الشاشة للزبون)
+  const [showcaseOpen, setShowcaseOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   // «العرض من طرف»: المشرف يسند العرض لموظف آخر — '' تعني حساب المشرف نفسه (أو إبقاء المنشئ عند التعديل)
   const [createdBy, setCreatedBy] = useState(savedDraft?.createdBy ?? '');
@@ -869,6 +873,9 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
               <button className="btn btn-secondary" disabled={saving || hasBlockingErrors} onClick={handleExportPdf}>
                 📄 PDF
               </button>
+              <button className="btn btn-secondary" disabled={hasBlockingErrors} onClick={() => setShowcaseOpen(true)} title="عرض تفاعلي ثلاثي الأبعاد للزبون">
+                🎬 عرض تفاعلي
+              </button>
               {editingQuote ? (
                 <>
                   <button className="btn btn-primary" disabled={saving || hasBlockingErrors} onClick={handleUpdate}>
@@ -885,6 +892,21 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
               )}
             </div>
           </div>
+
+          {showcaseOpen && (
+            <Suspense fallback={null}>
+              <SystemShowcase
+                panels={draft.counts?.panel ?? (draft.panelBreakdown ? draft.panelBreakdown.feedPanels + draft.panelBreakdown.chargePanels : 0)}
+                batteries={draft.counts?.battery ?? 0}
+                inverters={draft.counts?.inverter ?? 1}
+                nightHours={draft.capability?.nightHours ?? null}
+                dayAmps={draft.capability?.dayAmps ?? null}
+                ampDay={Number(ampDay) || 0}
+                ampNight={Number(ampNight) || 0}
+                onClose={() => setShowcaseOpen(false)}
+              />
+            </Suspense>
+          )}
         </>
       )}
     </div>
