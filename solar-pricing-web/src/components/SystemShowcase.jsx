@@ -290,7 +290,7 @@ export default function SystemShowcase({
       const curb = new THREE.Mesh(B(70, 0.14, 0.22), curbM); curb.position.set(0, 0.07, WALL_Z - SIDEWALK - 0.05); scene.add(curb);
       const road = new THREE.Mesh(track(new THREE.PlaneGeometry(70, ROAD_W)), M({ map: rep(asphaltT, 20, 3), roughness: 0.98, envMapIntensity: 0.04 }));
       road.rotation.x = -Math.PI / 2; road.position.set(0, 0.004, WALL_Z - SIDEWALK - ROAD_W / 2 - 0.1); road.receiveShadow = true; scene.add(road);
-      const dashGeo = B(1.4, 0.012, 0.16); const dashMat = M({ color: 0xd8d8cf, roughness: 0.8 });
+      const dashGeo = B(1.4, 0.012, 0.16); const dashMat = M({ color: 0xc4bfb2, roughness: 0.9 }); // أبيض متآكل ~70%
       for (let x = -32; x <= 32; x += 3.4) { const d = new THREE.Mesh(dashGeo, dashMat); d.position.set(x, 0.012, WALL_Z - SIDEWALK - ROAD_W / 2 - 0.1); scene.add(d); }
       const walk2 = walk.clone(); walk2.position.z = WALL_Z - SIDEWALK - ROAD_W - SIDEWALK / 2 - 0.1; scene.add(walk2);
       const curb2 = curb.clone(); curb2.position.z = WALL_Z - SIDEWALK - ROAD_W - 0.15; scene.add(curb2);
@@ -651,71 +651,288 @@ export default function SystemShowcase({
       mkLamp(3.4, WALL_Z - 0.9); mkLamp(-11, WALL_Z - 0.9); mkLamp(16, WALL_Z - 0.9);
       mkLamp(-2, WALL_Z - SIDEWALK - ROAD_W - 1.4);
 
-      // ================= حي سكني كامل — فلل جيران بتفاصيل حقيقية =================
-      // لوحة ألوان رملية هادئة (بلا أبيض محروق) + خزان ماي + دش + سبلتات + سياج
-      const villaPal = [0xe8dfc9, 0xdcd2ba, 0xd9cfc0, 0xcfc6b2, 0xe2d5c0];
+      // ================= الجيران: محرك النماذج الأربعة + التنويع (المواصفة قسم 6) =================
+      // لوحة القسم 9: رملي دافئ #D9C7A8 وتدرجاته (بيج/رملي/عاجي/ترابي فاتح)
+      const villaPal = [0xd9c7a8, 0xcfc0a0, 0xe0d4b8, 0xc4b294, 0xd4c8ae];
+      const dirtCol = new THREE.Color(0x8a7f6e); // لون العمر/الاتساخ (قاعدة dirtAmount)
       const tankBlackM = M({ color: 0x23292f, roughness: 0.65 });
-      const tankBlueM = M({ color: 0x2d5f8a, roughness: 0.6 });
+      const tankWhiteM = M({ color: 0xe4e0d2, roughness: 0.6 }); // أبيض مصفر متسخ 10% (جدول الخامات)
       const dishM = M({ color: 0xe8eaec, roughness: 0.4, metalness: 0.2, side: THREE.DoubleSide });
       const condNM = M({ color: 0xd9dcdf, roughness: 0.5 });
       const doorNM = M({ color: 0x3a2c1e, roughness: 0.6 });
+      const oldIronM = M({ color: 0x4a3c30, roughness: 0.7, metalness: 0.3 });
       const garageNM = M({ color: 0x9aa0a6, roughness: 0.5, metalness: 0.3 });
-      const mkVilla = (x, z, w, h, d, ti, ry = 0, opts = {}) => {
-        const g = new THREE.Group();
-        const tone = villaPal[ti % villaPal.length];
-        const bodyM = M({ color: tone, roughness: 0.92 });
-        const bd = new THREE.Mesh(B(w, h, d), bodyM); bd.position.y = h / 2; bd.castShadow = true; bd.receiveShadow = true; g.add(bd);
-        // دروة سطح
-        const par = new THREE.Mesh(B(w + 0.12, 0.45, d + 0.12), M({ color: 0xbfb5a0, roughness: 0.9 }));
-        par.position.y = h + 0.12; g.add(par);
-        const parIn = new THREE.Mesh(B(w - 0.35, 0.5, d - 0.35), bodyM); parIn.position.y = h + 0.1; g.add(parIn);
-        // شريط معماري: رمادي غامق أو خشبي (تنويع)
-        const accM = opts.wood ? woodSlat : charcoalDark;
-        const acc = new THREE.Mesh(B(w * 0.24, h + 0.4, 0.18), accM);
-        acc.position.set(-w * 0.28, (h + 0.4) / 2, d / 2 + 0.06); g.add(acc);
-        // شبابيك بإطارات غامقة غاطسة
-        const wg = B(1.15, 1.05, 0.06);
-        const floors = Math.max(1, Math.floor(h / 3));
-        for (let r = 0; r < floors; r++) for (let c = 0; c < 2; c++) {
-          const wx = w * 0.1 + c * 1.75;
-          const fr = new THREE.Mesh(B(1.32, 1.22, 0.06), frameMat); fr.position.set(wx, 1.65 + r * 3, d / 2 + 0.02); g.add(fr);
-          const wm = glassMat.clone(); track(wm); windowsGlow.push(wm);
-          const win = new THREE.Mesh(wg, wm); win.position.set(wx, 1.65 + r * 3, d / 2 + 0.04); g.add(win);
-          const sill = new THREE.Mesh(B(1.45, 0.07, 0.14), M({ color: 0xb8b2a6, roughness: 0.8 })); sill.position.set(wx, 1.02 + r * 3, d / 2 + 0.06); g.add(sill);
+      const stoneDarkM = M({ color: 0x5c564e, roughness: 0.7 }); // حجر داكن دافئ (جدول الخامات)
+      const ladderM = metalGray;
+      const laundrySway = []; // غسيل يتموج بالنسيم (جدول الحركة 16)
+      const laundryPal = [0xe8e4d0, 0xa8cbe8, 0xd9c7a8]; // ألوان فاتحة من اللوحة
+      // مولد عشوائي حتمي (نفس الحي بكل تحميل)
+      const mulberry = (seed) => () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let z2 = Math.imul(seed ^ (seed >>> 15), 1 | seed); z2 = (z2 + Math.imul(z2 ^ (z2 >>> 7), 61 | z2)) ^ z2; return ((z2 ^ (z2 >>> 14)) >>> 0) / 4294967296; };
+
+      // قاعدة الأسطح (قسم 6): كل سطح 3+ عناصر — تانكي/ستلايت/غسيل/سلم/مبردة/قفص حمام
+      const addRoofStuff = (g, w, h, d, rnd, opts = {}) => {
+        let count = 0;
+        const spots = [[-w * 0.3, -d * 0.25], [w * 0.28, -d * 0.3], [-w * 0.15, d * 0.2], [w * 0.2, d * 0.25]];
+        let si = 0; const spot = () => spots[si++ % spots.length];
+        // تانكي (1-2) — عيب مقصود #4: تانكي مايل على سطح واحد بالحي
+        const nT = 1 + (rnd() < 0.4 ? 1 : 0);
+        for (let i = 0; i < nT; i++) {
+          const [sx, sz] = spot();
+          const tk = new THREE.Mesh(track(new THREE.CylinderGeometry(0.42, 0.42, 0.8, 12)), rnd() < 0.5 ? tankWhiteM : tankBlackM);
+          tk.position.set(sx, h + 0.55, sz); if (opts.tiltTank && i === 0) tk.rotation.z = 0.06;
+          tk.castShadow = true; g.add(tk); count++;
         }
-        // باب + كراج (للبيوت الأمامية)
-        const dr = new THREE.Mesh(B(1.0, 2.1, 0.07), doorNM); dr.position.set(-w * 0.06, 1.05, d / 2 + 0.02); g.add(dr);
-        if (opts.garage) { const ga = new THREE.Mesh(B(2.4, 2.0, 0.07), garageNM); ga.position.set(w * 0.32 - 0.4, 1.0, d / 2 + 0.02); g.add(ga); }
-        // خزان ماي (أسود أو أزرق) + صحن دش على السطح
-        const tk = new THREE.Mesh(track(new THREE.CylinderGeometry(0.42, 0.42, 0.8, 14)), ti % 2 ? tankBlueM : tankBlackM);
-        tk.position.set(-w * 0.3, h + 0.55, -d * 0.25); tk.castShadow = true; g.add(tk);
-        const dishPole = new THREE.Mesh(B(0.05, 0.9, 0.05), metalGray); dishPole.position.set(w * 0.32, h + 0.55, -d * 0.3); g.add(dishPole);
-        const dish = new THREE.Mesh(track(new THREE.CircleGeometry(0.42, 18)), dishM);
-        dish.position.set(w * 0.32, h + 0.85, -d * 0.3 + 0.1); dish.rotation.x = -0.7; g.add(dish);
-        // كومبرسرات سبلت على الجدار الجانبي
-        for (let k = 0; k < 2; k++) { const cd = new THREE.Mesh(B(0.8, 0.55, 0.3), condNM); cd.position.set(w / 2 + 0.18, 1.1 + k * 1.1, -d * 0.1); cd.rotation.y = Math.PI / 2; g.add(cd); }
-        // سياج أمامي قصير أبيض
-        const fw = new THREE.Mesh(B(w + 1.6, 1.3, 0.18), whiteWall); fw.position.set(0, 0.65, d / 2 + 2.6); fw.castShadow = true; g.add(fw);
-        const fcap = new THREE.Mesh(B(w + 1.7, 0.07, 0.26), M({ color: 0xb8b2a6, roughness: 0.8 })); fcap.position.set(0, 1.33, d / 2 + 2.6); g.add(fcap);
-        g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g);
+        if (rnd() < 0.8) { // ستلايت
+          const [sx, sz] = spot();
+          const p2 = new THREE.Mesh(B(0.05, 0.9, 0.05), metalGray); p2.position.set(sx, h + 0.55, sz); g.add(p2);
+          const dh = new THREE.Mesh(track(new THREE.CircleGeometry(0.4, 16)), dishM);
+          dh.position.set(sx, h + 0.85, sz + 0.1); dh.rotation.x = -0.7; g.add(dh); count++;
+        }
+        if (opts.laundry || (count < 3 && rnd() < 0.5)) { // حبل غسيل — وحدة بغسيل ملون (نقطة لونية)
+          const y2 = h + 0.9;
+          const lp1 = new THREE.Mesh(B(0.05, 1.0, 0.05), metalGray); lp1.position.set(-w * 0.32, h + 0.5, d * 0.1); g.add(lp1);
+          const lp2 = lp1.clone(); lp2.position.x = w * 0.32; g.add(lp2);
+          const line = new THREE.Mesh(B(w * 0.64, 0.015, 0.015), frameMat); line.position.set(0, y2, d * 0.1); g.add(line);
+          if (opts.laundry) for (let i = 0; i < 3; i++) {
+            const cloth = new THREE.Mesh(B(0.42, 0.55, 0.02), M({ color: laundryPal[i % 3], roughness: 0.95, side: THREE.DoubleSide }));
+            cloth.position.set(-w * 0.2 + i * w * 0.2, y2 - 0.29, d * 0.1); g.add(cloth); laundrySway.push(cloth);
+          }
+          count++;
+        }
+        if (count < 3 || rnd() < 0.4) { // مبردة هواء قديمة
+          const [sx, sz] = spot();
+          const cool = new THREE.Mesh(B(0.7, 0.7, 0.7), M({ color: 0xb0a894, roughness: 0.8, metalness: 0.2 }));
+          cool.position.set(sx, h + 0.5, sz); cool.castShadow = true; g.add(cool); count++;
+        }
+        if (rnd() < 0.5) { // سلم حديد على الدروة
+          const lad = new THREE.Group();
+          for (let i = 0; i < 2; i++) { const r2 = new THREE.Mesh(B(0.04, 1.6, 0.04), ladderM); r2.position.set(i * 0.36 - 0.18, 0, 0); lad.add(r2); }
+          for (let i = 0; i < 4; i++) { const st = new THREE.Mesh(B(0.36, 0.03, 0.03), ladderM); st.position.set(0, -0.6 + i * 0.4, 0); lad.add(st); }
+          lad.position.set(w / 2 - 0.1, h - 0.3, d * 0.35); g.add(lad);
+        }
+        if (opts.pigeons) { // قفص حمام — التفصيلة البغدادية التوقيع (واحد بالحي)
+          const coop = new THREE.Group();
+          const box2 = new THREE.Mesh(B(1.1, 1.3, 0.9), M({ color: 0x8a6a45, roughness: 0.9 })); box2.position.y = 0.65; box2.castShadow = true; coop.add(box2);
+          const roof2 = new THREE.Mesh(B(1.25, 0.06, 1.05), stoneDarkM); roof2.position.y = 1.33; coop.add(roof2);
+          for (let i = 0; i < 3; i++) { const hole = new THREE.Mesh(B(0.16, 0.2, 0.02), M({ color: 0x1d1810 })); hole.position.set(-0.3 + i * 0.3, 0.85, 0.46); coop.add(hole); }
+          for (let i = 0; i < 3; i++) { const bird = new THREE.Mesh(track(new THREE.SphereGeometry(0.07, 8, 8)), M({ color: i ? 0xcfd4d8 : 0x6a7076, roughness: 0.9 })); bird.position.set(-0.4 + i * 0.38, 1.42, 0.2); coop.add(bird); }
+          coop.position.set(-w * 0.25, h, d * 0.28); g.add(coop);
+        }
       };
-      // صفّنا (نفس الجهة) — واجهاتها للشارع مثلنا
-      mkVilla(-17.5, -HD / 2 + 2.2, 9, 6.4, 11, 0, 0, { garage: true });
-      mkVilla(17.5, -HD / 2 + 2.2, 9, 6.2, 11, 1, 0, { wood: true });
-      mkVilla(-31, -HD / 2 + 2.2, 8.5, 6.2, 10.5, 2, 0);
-      mkVilla(31, -HD / 2 + 2.2, 8.5, 6.6, 10.5, 3, 0, { garage: true });
-      // كَبال الشارع — واجهاتها إلنا (السياج بينها وبين الرصيف المقابل)
+
+      // لافتة عربية (كانفاس) — كحلي بلاد أوتو + نص أبيض
+      const arSign = (text) => {
+        const c = mkCanvas(2); c.width = 512; c.height = 128;
+        const gx = c.getContext('2d');
+        gx.fillStyle = '#1B2A4A'; gx.fillRect(0, 0, 512, 128);
+        gx.strokeStyle = '#D4A947'; gx.lineWidth = 6; gx.strokeRect(6, 6, 500, 116);
+        gx.fillStyle = '#F2EDE0'; gx.font = '700 58px Cairo, "Noto Naskh Arabic", sans-serif';
+        gx.textAlign = 'center'; gx.textBaseline = 'middle'; gx.direction = 'rtl';
+        gx.fillText(text, 256, 68);
+        const t2 = track(new THREE.CanvasTexture(c)); t2.colorSpace = THREE.SRGBColorSpace; t2.anisotropy = 4; return t2;
+      };
+
+      // ---- النموذج المولّد: spawnVilla(النوع 1-4، الموقع، البذرة) ----
       const ACROSS_Z = WALL_Z - SIDEWALK - ROAD_W - SIDEWALK - 8.6;
-      mkVilla(-22, ACROSS_Z, 9, 6.0, 10, 2, Math.PI, { garage: true });
-      mkVilla(-8, ACROSS_Z, 8, 5.8, 10, 3, Math.PI, { wood: true });
-      mkVilla(6, ACROSS_Z, 8.5, 6.4, 10, 4, Math.PI);
-      mkVilla(20, ACROSS_Z, 9, 6.2, 10, 0, Math.PI, { garage: true });
-      // صف خلفي بعيد — كتل صامتة للعمق البصري
-      const farM = M({ color: 0xc9bfa9, roughness: 0.95 });
-      [[-16, 7.4], [1, 6.6], [17, 7.8]].forEach(([fx, fh]) => {
-        const fb = new THREE.Mesh(B(11, fh, 10), farM); fb.position.set(fx, fh / 2, ACROSS_Z - 16); fb.castShadow = true; scene.add(fb);
-        const fpar = new THREE.Mesh(B(11.15, 0.4, 10.15), M({ color: 0xb5ab95, roughness: 0.95 })); fpar.position.set(fx, fh + 0.1, ACROSS_Z - 16); scene.add(fpar);
+      const mkVilla = (arch, x, z, ry, seed, opts = {}) => {
+        const rnd = mulberry(seed);
+        const g = new THREE.Group();
+        // محرك التنويع: عرض ±1م، ارتفاع ±30سم، لون من اللوحة، عمر 0-30%، mirror
+        const w = (opts.w || 9) + (rnd() - 0.5) * 2;
+        const baseH = arch === 2 ? 3.6 : 6.2;
+        const h = baseH + (rnd() - 0.5) * 0.6;
+        const d = (opts.d || 10.5) + (rnd() - 0.5) * 1.5;
+        const dirt = arch === 2 ? 0.2 + rnd() * 0.15 : rnd() * 0.2;
+        const mir = rnd() < 0.5 ? -1 : 1;
+        const tone = new THREE.Color(villaPal[Math.floor(rnd() * villaPal.length)]).lerp(dirtCol, dirt * 0.6);
+        const bodyM = arch === 3 ? stoneDarkM : M({ color: tone, roughness: 0.92 });
+        const bd = new THREE.Mesh(B(w, h, d), bodyM); bd.position.y = h / 2; bd.castShadow = true; bd.receiveShadow = true; g.add(bd);
+        // دروة + غطاء (coping)
+        const par = new THREE.Mesh(B(w + 0.12, 0.45, d + 0.12), M({ color: 0xbfb5a0, roughness: 0.9 })); par.position.y = h + 0.12; g.add(par);
+        const cop = new THREE.Mesh(B(w + 0.24, 0.07, d + 0.24), M({ color: 0xa89d88, roughness: 0.85 })); cop.position.y = h + 0.38; g.add(cop);
+        // واجهة حسب النموذج
+        if (arch === 1 || arch === 4) { // حديث بيادر: شريط رمادي/خشبي
+          const accM = rnd() < 0.5 ? woodSlat : charcoalDark;
+          const acc = new THREE.Mesh(B(w * 0.22, h + 0.35, 0.18), accM);
+          acc.position.set(mir * -w * 0.28, (h + 0.35) / 2, d / 2 + 0.06); g.add(acc);
+        }
+        if (arch === 3) { // حجر داكن بخطوط أفقية فاتحة
+          for (let yy = 1.4; yy < h - 0.4; yy += 1.2) {
+            const strip = new THREE.Mesh(B(w + 0.06, 0.1, 0.05), M({ color: 0xd9c7a8, roughness: 0.8 }));
+            strip.position.set(0, yy, d / 2 + 0.03); g.add(strip);
+          }
+        }
+        // شبابيك: حالات متنوعة (عادية/ستارة/مبردة بالشباك)
+        const floors2 = arch === 2 ? 1 : 2;
+        for (let r = 0; r < floors2; r++) for (let c = 0; c < 2; c++) {
+          const wx = mir * (w * 0.1 + c * 1.75);
+          const wy = 1.65 + r * 2.9;
+          const fr = new THREE.Mesh(B(1.32, 1.22, 0.06), frameMat); fr.position.set(wx, wy, d / 2 + 0.02); g.add(fr);
+          const state = rnd();
+          if (state < 0.2) { // مبردة جوة الشباك (چيلر)
+            const cool = new THREE.Mesh(B(0.75, 0.75, 0.5), M({ color: 0xb0a894, roughness: 0.8 })); cool.position.set(wx, wy - 0.1, d / 2 + 0.2); g.add(cool);
+          } else {
+            const wm = glassMat.clone(); track(wm); windowsGlow.push(wm);
+            const win = new THREE.Mesh(B(1.15, 1.05, 0.06), wm); win.position.set(wx, wy, d / 2 + 0.04); g.add(win);
+            if (state < 0.5) { // ستارة (وحدة منها نص مسحوبة — عيب #11 يجي طبيعياً من العشوائية)
+              const cw = state < 0.32 ? 1.1 : 0.55;
+              const cur = new THREE.Mesh(B(cw, 1.0, 0.03), M({ color: 0xe0d4b8, roughness: 0.95 }));
+              cur.position.set(wx + (1.1 - cw) / 2, wy, d / 2 + 0.055); g.add(cur);
+            }
+          }
+          const sill = new THREE.Mesh(B(1.45, 0.07, 0.14), M({ color: 0xb8b2a6, roughness: 0.8 })); sill.position.set(wx, wy - 0.63, d / 2 + 0.06); g.add(sill);
+        }
+        // باب + كراج
+        const dr = new THREE.Mesh(B(1.0, 2.1, 0.07), arch === 2 ? oldIronM : doorNM); dr.position.set(mir * -w * 0.06, 1.05, d / 2 + 0.02); g.add(dr);
+        if (arch !== 2 && rnd() < 0.6) {
+          const halfOpen = opts.garageHalfOpen; // عيب #7: باب گراج نص مفتوح (واحد بالحي)
+          const gh = halfOpen ? 1.0 : 2.0;
+          const ga = new THREE.Mesh(B(2.4, gh, 0.07), garageNM); ga.position.set(mir * (w * 0.32 - 0.4), halfOpen ? 1.5 : 1.0, d / 2 + 0.02); g.add(ga);
+        }
+        // سياج: النموذج 2 بناء كامل، والبقية قصير أبيض
+        if (arch === 2) {
+          const fw = new THREE.Mesh(B(w + 1.6, 2.0, 0.2), M({ color: tone.clone().lerp(dirtCol, 0.25), roughness: 0.95 }));
+          fw.position.set(0, 1.0, d / 2 + 2.6); fw.castShadow = true; g.add(fw);
+        } else if (arch !== 4) {
+          const fw = new THREE.Mesh(B(w + 1.6, 1.3, 0.18), whiteWall); fw.position.set(0, 0.65, d / 2 + 2.6); fw.castShadow = true; g.add(fw);
+          const fcap = new THREE.Mesh(B(w + 1.7, 0.07, 0.26), M({ color: 0xb8b2a6, roughness: 0.8 })); fcap.position.set(0, 1.33, d / 2 + 2.6); g.add(fcap);
+        }
+        // النموذج 4: محل زاوية — بقالية بلافتة + ثلاجة پيبسي + كراسي بيض
+        if (arch === 4) {
+          const shopW = w * 0.6;
+          const shop = new THREE.Mesh(B(shopW, 2.3, 0.35), stoneDarkM); shop.position.set(mir * w * 0.15, 1.15, d / 2 + 0.15); g.add(shop);
+          const opening = new THREE.Mesh(B(shopW - 0.6, 1.8, 0.1), M({ color: 0x14100c, roughness: 0.9 })); opening.position.set(mir * w * 0.15, 1.05, d / 2 + 0.34); g.add(opening);
+          const sign = new THREE.Mesh(B(shopW, 0.7, 0.08), M({ map: arSign('بقالة النور'), roughness: 0.6, emissive: 0xf2ede0, emissiveMap: arSign('بقالة النور'), emissiveIntensity: 0.05 }));
+          sign.position.set(mir * w * 0.15, 2.75, d / 2 + 0.28); g.add(sign); windowsGlow.push(sign.material); track(sign.material);
+          const awn = new THREE.Mesh(B(shopW + 0.3, 0.06, 1.1), M({ color: 0xd4a947, roughness: 0.9 })); awn.position.set(mir * w * 0.15, 2.3, d / 2 + 0.8); awn.rotation.x = 0.12; g.add(awn);
+          const fridge = new THREE.Mesh(B(0.7, 1.7, 0.6), M({ color: 0x2d5f8a, roughness: 0.4 })); fridge.position.set(mir * (w * 0.15 + shopW / 2 + 0.5), 0.85, d / 2 + 0.6); g.add(fridge);
+          const fridgeTop = new THREE.Mesh(B(0.7, 0.4, 0.6), M({ color: 0xe8eaec, roughness: 0.4 })); fridgeTop.position.set(mir * (w * 0.15 + shopW / 2 + 0.5), 1.95, d / 2 + 0.6); g.add(fridgeTop);
+          for (let i = 0; i < 2; i++) { // كراسي بلاستيك بيض — أيقونة
+            const ch = new THREE.Group();
+            const seat = new THREE.Mesh(B(0.42, 0.05, 0.42), M({ color: 0xeceade, roughness: 0.7 })); seat.position.y = 0.45; ch.add(seat);
+            const back = new THREE.Mesh(B(0.42, 0.5, 0.05), M({ color: 0xeceade, roughness: 0.7 })); back.position.set(0, 0.72, -0.2); ch.add(back);
+            [[-0.17, -0.17], [0.17, -0.17], [-0.17, 0.17], [0.17, 0.17]].forEach(([lx, lz]) => { const lg = new THREE.Mesh(B(0.04, 0.45, 0.04), M({ color: 0xdedcd0 })); lg.position.set(lx, 0.22, lz); ch.add(lg); });
+            ch.position.set(mir * (w * 0.15 - shopW / 2 - 0.6), 0, d / 2 + 1.2 + i * 0.7); ch.rotation.y = rnd() * 0.6; g.add(ch);
+          }
+          const crate = new THREE.Mesh(B(0.5, 0.35, 0.4), M({ color: 0xc94f7c, roughness: 0.8 })); crate.position.set(mir * w * 0.02, 0.18, d / 2 + 0.9); g.add(crate);
+        }
+        // كومبرسرات جانبية + قاعدة الأسطح
+        for (let k = 0; k < 2; k++) { const cd = new THREE.Mesh(B(0.8, 0.55, 0.3), condNM); cd.position.set(w / 2 + 0.18, 1.1 + k * 1.1, -d * 0.1); cd.rotation.y = Math.PI / 2; g.add(cd); }
+        addRoofStuff(g, w, h, d, rnd, opts);
+        // جار عنده منظومة شمسية صغيرة (8 ألواح) — الحي گاعد يتحول
+        if (opts.solar) {
+          const sg = buildStructure(4, 0.35);
+          sg.position.set(-2.1, h + 0.42, -d * 0.15); g.add(sg);
+        }
+        g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g);
+        return g;
+      };
+      // ---- توزيع الحي: 13 بيت، ولا اثنين متطابقين ----
+      // صفّنا
+      mkVilla(1, -17.5, -HD / 2 + 2.2, 0, 11, { laundry: true });
+      mkVilla(3, 17.5, -HD / 2 + 2.2, 0, 22);
+      mkVilla(2, -31, -HD / 2 + 2.2, 0, 33, { tiltTank: true });
+      mkVilla(1, 31, -HD / 2 + 2.2, 0, 44, { garageHalfOpen: true });
+      // كَبال الشارع
+      mkVilla(1, -22, ACROSS_Z, Math.PI, 55, { solar: true });
+      mkVilla(4, -8, ACROSS_Z, Math.PI, 66, { d: 10 });   // بقالة النور بالزاوية
+      mkVilla(3, 6, ACROSS_Z, Math.PI, 77);
+      mkVilla(2, 20, ACROSS_Z, Math.PI, 88, { laundry: true });
+      mkVilla(2, 34, ACROSS_Z, Math.PI, 99);
+      // صف خلفي (أسطحه باينة من فوق — مشغولة)
+      mkVilla(1, -15, ACROSS_Z - 17, Math.PI, 111, { solar: true });
+      mkVilla(2, 2, ACROSS_Z - 17, Math.PI, 122, { pigeons: true });
+      mkVilla(1, 18, ACROSS_Z - 17, Math.PI, 133);
+      mkVilla(3, 34, ACROSS_Z - 17, Math.PI, 144);
+
+      // ================= طبقة الأفق (القسم 2): خط نخيل + سيلويتات #9FB4C7 =================
+      const hazeC = 0x9fb4c7;
+      const hazeM = track(new THREE.MeshBasicMaterial({ color: hazeC, fog: true }));
+      // خط نخيل بعيد (billboards بنسيج كانفاس)
+      const palmLineTex = () => {
+        const c = mkCanvas(2); c.width = 1024; c.height = 128;
+        const gx = c.getContext('2d');
+        gx.fillStyle = 'rgba(159,180,199,0.92)';
+        for (let x2 = 12; x2 < 1024; x2 += 26 + Math.random() * 34) {
+          const ph = 52 + Math.random() * 44, tw = 3 + Math.random() * 2;
+          gx.fillRect(x2 - tw / 2, 128 - ph, tw, ph);
+          for (let f = 0; f < 7; f++) {
+            const ang = (f / 6) * Math.PI - Math.PI / 2 + (Math.random() - 0.5) * 0.4;
+            gx.save(); gx.translate(x2, 128 - ph); gx.rotate(ang);
+            gx.fillRect(0, -2, 16 + Math.random() * 8, 3.5); gx.restore();
+          }
+        }
+        const t2 = track(new THREE.CanvasTexture(c)); t2.colorSpace = THREE.SRGBColorSpace; return t2;
+      };
+      const plTex = palmLineTex();
+      for (let i = 0; i < 8; i++) {
+        const ang = (i / 8) * Math.PI * 2 + 0.35;
+        const pl = new THREE.Mesh(
+          track(new THREE.PlaneGeometry(150, 15)),
+          track(new THREE.MeshBasicMaterial({ map: plTex, transparent: true, fog: true, side: THREE.DoubleSide, depthWrite: false }))
+        );
+        pl.position.set(Math.cos(ang) * 205, 6, Math.sin(ang) * 205);
+        pl.lookAt(0, 6, 0); scene.add(pl);
+      }
+      // كتل بنايات ضبابية + معالم الأفق: منارة جامع، تانكي الحي المرتفع، برج اتصالات
+      const bgSeed = mulberry(7);
+      for (let i = 0; i < 14; i++) {
+        const ang = (i / 14) * Math.PI * 2 + 0.1;
+        const rr = 175 + bgSeed() * 30;
+        const bw2 = 10 + bgSeed() * 16, bh2 = 6 + bgSeed() * 12;
+        const bm = new THREE.Mesh(B(bw2, bh2, 10), hazeM);
+        bm.position.set(Math.cos(ang) * rr, bh2 / 2, Math.sin(ang) * rr);
+        bm.rotation.y = bgSeed() * Math.PI; scene.add(bm);
+      }
+      { // منارة بعيدة (silhouette فقط — هوية)
+        const mnr = new THREE.Group();
+        const shaft = new THREE.Mesh(track(new THREE.CylinderGeometry(1.1, 1.5, 26, 10)), hazeM); shaft.position.y = 13; mnr.add(shaft);
+        const balc = new THREE.Mesh(track(new THREE.CylinderGeometry(2.0, 2.0, 1.2, 10)), hazeM); balc.position.y = 21; mnr.add(balc);
+        const tip = new THREE.Mesh(track(new THREE.ConeGeometry(1.3, 4.5, 10)), hazeM); tip.position.y = 28; mnr.add(tip);
+        mnr.position.set(-120, 0, -155); scene.add(mnr);
+      }
+      { // تانكي ماء الحي المرتفع
+        const wt = new THREE.Group();
+        for (let i = 0; i < 4; i++) { const leg = new THREE.Mesh(B(0.7, 18, 0.7), hazeM); leg.position.set(Math.cos(i * 1.57) * 3, 9, Math.sin(i * 1.57) * 3); wt.add(leg); }
+        const bowl = new THREE.Mesh(track(new THREE.SphereGeometry(5, 12, 10)), hazeM); bowl.position.y = 21; wt.add(bowl);
+        wt.position.set(150, 0, -120); scene.add(wt);
+      }
+      { // برج اتصالات
+        const tw2 = new THREE.Mesh(track(new THREE.CylinderGeometry(0.3, 1.6, 34, 6)), hazeM); tw2.position.set(95, 17, 165); scene.add(tw2);
+        const ant = new THREE.Mesh(B(0.2, 6, 0.2), hazeM); ant.position.set(95, 37, 165); scene.add(ant);
+      }
+
+      // ================= تفاصيل الشارع (القسم 4) =================
+      // منهولات معدنية
+      const manholeM = M({ color: 0x3a3d40, roughness: 0.7, metalness: 0.5 });
+      [-14, -3, 8, 19].forEach((mx) => {
+        const mh = new THREE.Mesh(track(new THREE.CircleGeometry(0.36, 18)), manholeM);
+        mh.rotation.x = -Math.PI / 2; mh.position.set(mx, 0.015, WALL_Z - SIDEWALK - ROAD_W / 2 + (mx % 2 ? 1.4 : -1.1)); scene.add(mh);
       });
+      // رقع صيانة أغمق
+      [[-9, 2.6, 1.8], [15, 2.2, 2.8]].forEach(([px2, pw2, pd2]) => {
+        const patch = new THREE.Mesh(track(new THREE.PlaneGeometry(pw2, pd2)), M({ color: 0x33373a, roughness: 0.98 }));
+        patch.rotation.x = -Math.PI / 2; patch.rotation.z = 0.1;
+        patch.position.set(px2, 0.008, WALL_Z - SIDEWALK - ROAD_W / 2 - 0.5); scene.add(patch);
+      });
+      // مقاطع حجر الحافة أصفر/أسود متآكل (ستايل عراقي)
+      const curbYellowM = M({ color: 0xc9a437, roughness: 0.85 });
+      const curbBlackM = M({ color: 0x2e3134, roughness: 0.85 });
+      for (let i = 0; i < 8; i++) {
+        const cx2 = gateX - 5 + i * 1.3;
+        const cs = new THREE.Mesh(B(1.2, 0.145, 0.23), i % 2 ? curbBlackM : curbYellowM);
+        cs.position.set(cx2, 0.075, WALL_Z - SIDEWALK - 0.05); scene.add(cs);
+      }
+      // أحواض شجر بالرصيف (تحت النخلات)
+      [-14, -5, 10.5].forEach((px2) => {
+        const pit = new THREE.Mesh(track(new THREE.PlaneGeometry(1.3, 1.3)), M({ color: 0x6b5a44, roughness: 1 }));
+        pit.rotation.x = -Math.PI / 2; pit.position.set(px2, 0.025, WALL_Z - 1.1); scene.add(pit);
+      });
+      // شارع فرعي ثاني يمين + إغلاق بصري لنهايات الشوارع (قاعدة الحافة)
+      const crossRoad2 = new THREE.Mesh(track(new THREE.PlaneGeometry(ROAD_W - 1.5, 40)), road.material);
+      crossRoad2.rotation.x = -Math.PI / 2; crossRoad2.position.set(27.5, 0.003, WALL_Z - SIDEWALK - ROAD_W - 18);
+      crossRoad2.receiveShadow = true; scene.add(crossRoad2);
+      // (نخلات إغلاق نهايات الشوارع تُضاف بعد تعريف mkPalm أدناه)
 
       // ================= سيارات (3 ألوان) =================
       const glassM2 = M({ color: 0x18242e, roughness: 0.12, metalness: 0.5 });
@@ -768,12 +985,16 @@ export default function SystemShowcase({
       mkPalm(12, WALL_Z - SIDEWALK - ROAD_W - 1.2, 4.8);
       mkPalm(26, WALL_Z - SIDEWALK - ROAD_W - 1.2, 4.0, 0.9);
       mkPalm(-HW / 2 + 1.2, -HD / 2 - 1.4, 3.6, 0.85); // نخلة بحديقتنا
+      // إغلاق نهايات الشوارع بصرياً (قاعدة الحافة — قسم 2)
+      mkPalm(-36.5, WALL_Z - SIDEWALK - 1, 4.5, 1.05);
+      mkPalm(37, WALL_Z - SIDEWALK - ROAD_W - 1.2, 4.3, 0.95);
 
       // ================= ممر مشاة (زيبرا) + شارع متقاطع + تفاصيل =================
       const zebraM = M({ color: 0xe6e6de, roughness: 0.85 });
       for (let i = 0; i < 6; i++) {
-        const zb = new THREE.Mesh(B(0.55, 0.014, ROAD_W - 1), zebraM);
-        zb.position.set(gateX - 1.4 + i * 0.95, 0.014, WALL_Z - SIDEWALK - ROAD_W / 2 - 0.1);
+        const worn = i === 2; // شريط ممسوح ثلثه من الاستخدام (عيب مقصود #9)
+        const zb = new THREE.Mesh(B(0.55, 0.014, worn ? (ROAD_W - 1) * 0.62 : ROAD_W - 1), worn ? M({ color: 0xd0cfc4, roughness: 0.9 }) : zebraM);
+        zb.position.set(gateX - 1.4 + i * 0.95, 0.014, WALL_Z - SIDEWALK - ROAD_W / 2 - 0.1 + (worn ? 1.2 : 0));
         scene.add(zb);
       }
       // شارع متقاطع يسار يكسر الرتابة
@@ -1020,6 +1241,9 @@ export default function SystemShowcase({
           dum.updateMatrix(); leaves.setMatrixAt(i, dum.matrix);
         }
         leaves.instanceMatrix.needsUpdate = true;
+
+        // غسيل يتموج بالنسيم — دورة/3 ثوان، 5-10 درجات (جدول الحركة 16)
+        laundrySway.forEach((cl, i) => { cl.rotation.x = Math.sin(et * 2.1 + i * 1.7) * 0.13; });
 
         // تدفق الطاقة
         for (const w2 of wires) {
