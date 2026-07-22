@@ -141,14 +141,40 @@ export async function renderStructurePng(panelCount, { width = 1000, height = 62
   scene.add(new THREE.HemisphereLight(0xcfe6ff, 0xbcc3ad, 0.9));
   scene.add(new THREE.AmbientLight(0xffffff, 0.35));
 
-  // كاميرا آيزومترية أمامية (ارتفاع منخفض حتى تبين وجوه الألواح كبيرة مثل الرفرنس)
-  const span = Math.max(maxW, totalDepth) * 1.15 + 3;
+  // كاميرا آيزومترية أمامية بزاوية الرفرنس، مع ملاءمة تلقائية لحدود المشهد
+  // حتى ما ينكصّ أي ستركجر مرفوع (مهما زاد عدد الطوابق).
   const aspect = width / height;
-  const cam = new THREE.OrthographicCamera(-span * aspect / 2, span * aspect / 2, span / 2, -span / 2, -100, 200);
-  // موضع الكاميرا: قدّام الألواح (z سالب = جهة الحافة الواطية حيث يطلّع الوجه) + يمين + فوق
-  cam.position.set(span * 0.85, span * 0.6, -span * 0.85);
-  cam.lookAt(0, 0.7, 0);
-  cam.zoom = 1.6;
+  const dir = new THREE.Vector3(0.85, 0.6, -0.85).normalize(); // اتجاه من المركز للكاميرا (z سالب = الوجه)
+  const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, -500, 500);
+
+  // حدود المشهد الفعلية بعد البناء
+  const box = new THREE.Box3().setFromObject(group);
+  const center = box.getCenter(new THREE.Vector3());
+  cam.position.copy(center).addScaledVector(dir, 100);
+  cam.up.set(0, 1, 0);
+  cam.lookAt(center);
+  cam.updateMatrixWorld(true);
+  cam.matrixWorldInverse.copy(cam.matrixWorld).invert();
+
+  // إسقاط زوايا الصندوق لفضاء الكاميرا لإيجاد الإطار الذي يلمّ كل شيء
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (let i = 0; i < 8; i++) {
+    const v = new THREE.Vector3(
+      i & 1 ? box.max.x : box.min.x,
+      i & 2 ? box.max.y : box.min.y,
+      i & 4 ? box.max.z : box.min.z,
+    ).applyMatrix4(cam.matrixWorldInverse);
+    minX = Math.min(minX, v.x); maxX = Math.max(maxX, v.x);
+    minY = Math.min(minY, v.y); maxY = Math.max(maxY, v.y);
+  }
+  const pad = 1.1; // هامش بسيط حول التصميم
+  let halfW = (maxX - minX) / 2 * pad;
+  let halfH = (maxY - minY) / 2 * pad;
+  if (halfW / halfH < aspect) halfW = halfH * aspect; else halfH = halfW / aspect;
+  const ccx = (minX + maxX) / 2, ccy = (minY + maxY) / 2;
+  cam.left = ccx - halfW; cam.right = ccx + halfW;
+  cam.top = ccy + halfH; cam.bottom = ccy - halfH;
+  cam.zoom = 1;
   cam.updateProjectionMatrix();
 
   renderer.render(scene, cam);
