@@ -97,10 +97,12 @@ export default function SystemShowcase({
 
       // ================= خامات البناء =================
       const fadeMats = [];
-      const fadeMat = (opt) => { const m = M({ ...opt, transparent: true }); fadeMats.push(m); return m; };
+      // ميزة الدخول للبيت ملغاة حالياً — الجدران صلبة دائماً (الزوم يبقى سكرول عادي)
+      const fadeMat = (opt) => { const m = M(opt); fadeMats.push(m); return m; };
       const whiteWall = fadeMat({ map: rep(plasterT, 4, 2), bumpMap: rep(plasterB, 4, 2), bumpScale: 0.6, roughness: 0.9 });
-      const charcoal = fadeMat({ map: rep(charcoalT, 3, 2), bumpMap: rep(charcoalB, 3, 2), bumpScale: 0.5, roughness: 0.85 });
-      const charcoalDark = fadeMat({ map: rep(charcoalT, 2, 3), bumpMap: rep(charcoalB, 2, 3), bumpScale: 0.5, color: 0xcfcfcf, roughness: 0.85 });
+      // رمادي غامق صافٍ (النقشة المخططة كانت تسبب تشويش موارية على البرج)
+      const charcoal = fadeMat({ color: 0x4a4f52, roughness: 0.85 });
+      const charcoalDark = fadeMat({ color: 0x3d4245, roughness: 0.85 });
       const innerWall = fadeMat({ color: 0xefe9df, roughness: 0.95 });
       const slabMat = fadeMat({ map: rep(roofT, 4, 4), bumpMap: rep(roofB, 4, 4), bumpScale: 0.4, roughness: 0.95 });
       const glassMat = M({ color: 0x18242e, roughness: 0.08, metalness: 0.55, emissive: 0xffc97a, emissiveIntensity: 0.04, envMapIntensity: 1.2 });
@@ -359,6 +361,8 @@ export default function SystemShowcase({
       mkBed(-HW * 0.24, HD * 0.26); mkBed(HW * 0.26, HD * 0.26);
       const ward = new THREE.Mesh(B(2.0, 2.2, 0.6), M({ color: 0x7c623f, roughness: 0.7 }));
       ward.position.set(0.2, FLOOR + 1.2, HD * 0.42); interior.add(ward);
+      // الغلاف الخارجي فقط حالياً — الداخل مخفي (ميزة الدخول للبيت مؤجلة)
+      interior.visible = false;
       scene.add(interior);
 
       // سبلتات + كومبرسرات
@@ -463,6 +467,15 @@ export default function SystemShowcase({
       // ================= الحديقة والعشب والأشجار =================
       const lawn = new THREE.Mesh(track(new THREE.PlaneGeometry(HW + 4, LOT_FRONT - 0.8)), M({ map: rep(lawnT, 6, 3), roughness: 1, envMapIntensity: 0.05 }));
       lawn.rotation.x = -Math.PI / 2; lawn.position.set(-2, 0.01, -HD / 2 - LOT_FRONT / 2 + 0.3); lawn.receiveShadow = true; scene.add(lawn);
+      // إطار حجري مشذب حول الثيل
+      const borderM = M({ color: 0xb8b2a6, roughness: 0.85 });
+      const lw = HW + 4, ld = LOT_FRONT - 0.8, lcx = -2, lcz = -HD / 2 - LOT_FRONT / 2 + 0.3;
+      [[lcx, lcz - ld / 2, lw + 0.3, 0.18], [lcx, lcz + ld / 2, lw + 0.3, 0.18]].forEach(([bx, bz, bw2, bd3]) => {
+        const bs = new THREE.Mesh(B(bw2, 0.09, bd3), borderM); bs.position.set(bx, 0.045, bz); scene.add(bs);
+      });
+      [[lcx - lw / 2, lcz, 0.18, ld + 0.3], [lcx + lw / 2, lcz, 0.18, ld + 0.3]].forEach(([bx, bz, bw2, bd3]) => {
+        const bs = new THREE.Mesh(B(bw2, 0.09, bd3), borderM); bs.position.set(bx, 0.045, bz); scene.add(bs);
+      });
       const path = new THREE.Mesh(track(new THREE.PlaneGeometry(1.4, LOT_FRONT)), M({ map: rep(sideT, 1, 4), roughness: 0.9 }));
       path.rotation.x = -Math.PI / 2; path.position.set(-HW / 2 + towerW + 0.9, 0.02, -HD / 2 - LOT_FRONT / 2); scene.add(path);
       const drive = new THREE.Mesh(track(new THREE.PlaneGeometry(3.2, LOT_FRONT)), M({ map: rep(asphaltT, 2, 3), color: 0x9a9a9a, roughness: 0.96, envMapIntensity: 0.04 }));
@@ -522,12 +535,12 @@ export default function SystemShowcase({
       // ================= أوراق تتطاير بالرياح =================
       const leafGeo = track(new THREE.PlaneGeometry(0.09, 0.07));
       const leafMat = track(new THREE.MeshBasicMaterial({ color: 0x7aa84f, side: THREE.DoubleSide, transparent: true, opacity: 0.85 }));
-      const LEAVES = 46;
+      const LEAVES = 22;
       const leaves = new THREE.InstancedMesh(leafGeo, leafMat, LEAVES);
       const leafState = [];
       for (let i = 0; i < LEAVES; i++) {
         leafState.push({
-          x: (Math.random() - 0.5) * 30, y: Math.random() * 2.2 + 0.2, z: WALL_Z + (Math.random() - 0.5) * 9,
+          x: (Math.random() - 0.5) * 30, y: Math.random() * 1.6 + 0.2, z: WALL_Z - 2 - Math.random() * 8,
           vx: 0.5 + Math.random() * 0.8, ph: Math.random() * 6.28, spin: Math.random() * 3,
         });
       }
@@ -574,39 +587,148 @@ export default function SystemShowcase({
       mkLamp(3.4, WALL_Z - 0.9); mkLamp(-11, WALL_Z - 0.9); mkLamp(16, WALL_Z - 0.9);
       mkLamp(-2, WALL_Z - SIDEWALK - ROAD_W - 1.4);
 
-      // ================= بيوت الجيران =================
-      const nWallT = [noiseTex('#efe9dc', 8), noiseTex('#e7ddc9', 8), noiseTex('#f1ece1', 8), noiseTex('#e3dbcb', 8)];
-      const mkNeighbor = (x, z, w, h, d, ti, ry = 0) => {
+      // ================= حي سكني كامل — فلل جيران بتفاصيل حقيقية =================
+      // لوحة ألوان رملية هادئة (بلا أبيض محروق) + خزان ماي + دش + سبلتات + سياج
+      const villaPal = [0xe8dfc9, 0xdcd2ba, 0xd9cfc0, 0xcfc6b2, 0xe2d5c0];
+      const tankBlackM = M({ color: 0x23292f, roughness: 0.65 });
+      const tankBlueM = M({ color: 0x2d5f8a, roughness: 0.6 });
+      const dishM = M({ color: 0xe8eaec, roughness: 0.4, metalness: 0.2, side: THREE.DoubleSide });
+      const condNM = M({ color: 0xd9dcdf, roughness: 0.5 });
+      const doorNM = M({ color: 0x3a2c1e, roughness: 0.6 });
+      const garageNM = M({ color: 0x9aa0a6, roughness: 0.5, metalness: 0.3 });
+      const mkVilla = (x, z, w, h, d, ti, ry = 0, opts = {}) => {
         const g = new THREE.Group();
-        const bodyM = M({ map: rep(nWallT[ti % 4], 3, 2), bumpMap: rep(plasterB, 3, 2), bumpScale: 0.4, roughness: 0.9 });
+        const tone = villaPal[ti % villaPal.length];
+        const bodyM = M({ color: tone, roughness: 0.92 });
         const bd = new THREE.Mesh(B(w, h, d), bodyM); bd.position.y = h / 2; bd.castShadow = true; bd.receiveShadow = true; g.add(bd);
-        const acc = new THREE.Mesh(B(w * 0.3, h + 0.5, 0.2), charcoal.clone()); track(acc.material);
-        acc.position.set(-w * 0.25, (h + 0.5) / 2, d / 2 + 0.05); g.add(acc);
-        const parN = new THREE.Mesh(B(w + 0.1, 0.4, 0.1), bodyM); parN.position.set(0, h + 0.2, d / 2); g.add(parN);
-        const wg = B(1.2, 1.1, 0.06);
-        for (let r = 0; r < Math.floor(h / 3); r++) for (let c = 0; c < 2; c++) {
-          const fr = new THREE.Mesh(B(1.34, 1.24, 0.05), frameMat); fr.position.set(w * 0.12 + c * 1.8, 1.6 + r * 3, d / 2 + 0.03); g.add(fr);
+        // دروة سطح
+        const par = new THREE.Mesh(B(w + 0.12, 0.45, d + 0.12), M({ color: 0xbfb5a0, roughness: 0.9 }));
+        par.position.y = h + 0.12; g.add(par);
+        const parIn = new THREE.Mesh(B(w - 0.35, 0.5, d - 0.35), bodyM); parIn.position.y = h + 0.1; g.add(parIn);
+        // شريط معماري: رمادي غامق أو خشبي (تنويع)
+        const accM = opts.wood ? woodSlat : charcoalDark;
+        const acc = new THREE.Mesh(B(w * 0.24, h + 0.4, 0.18), accM);
+        acc.position.set(-w * 0.28, (h + 0.4) / 2, d / 2 + 0.06); g.add(acc);
+        // شبابيك بإطارات غامقة غاطسة
+        const wg = B(1.15, 1.05, 0.06);
+        const floors = Math.max(1, Math.floor(h / 3));
+        for (let r = 0; r < floors; r++) for (let c = 0; c < 2; c++) {
+          const wx = w * 0.1 + c * 1.75;
+          const fr = new THREE.Mesh(B(1.32, 1.22, 0.06), frameMat); fr.position.set(wx, 1.65 + r * 3, d / 2 + 0.02); g.add(fr);
           const wm = glassMat.clone(); track(wm); windowsGlow.push(wm);
-          const win = new THREE.Mesh(wg, wm); win.position.set(w * 0.12 + c * 1.8, 1.6 + r * 3, d / 2 + 0.05); g.add(win);
+          const win = new THREE.Mesh(wg, wm); win.position.set(wx, 1.65 + r * 3, d / 2 + 0.04); g.add(win);
+          const sill = new THREE.Mesh(B(1.45, 0.07, 0.14), M({ color: 0xb8b2a6, roughness: 0.8 })); sill.position.set(wx, 1.02 + r * 3, d / 2 + 0.06); g.add(sill);
         }
+        // باب + كراج (للبيوت الأمامية)
+        const dr = new THREE.Mesh(B(1.0, 2.1, 0.07), doorNM); dr.position.set(-w * 0.06, 1.05, d / 2 + 0.02); g.add(dr);
+        if (opts.garage) { const ga = new THREE.Mesh(B(2.4, 2.0, 0.07), garageNM); ga.position.set(w * 0.32 - 0.4, 1.0, d / 2 + 0.02); g.add(ga); }
+        // خزان ماي (أسود أو أزرق) + صحن دش على السطح
+        const tk = new THREE.Mesh(track(new THREE.CylinderGeometry(0.42, 0.42, 0.8, 14)), ti % 2 ? tankBlueM : tankBlackM);
+        tk.position.set(-w * 0.3, h + 0.55, -d * 0.25); tk.castShadow = true; g.add(tk);
+        const dishPole = new THREE.Mesh(B(0.05, 0.9, 0.05), metalGray); dishPole.position.set(w * 0.32, h + 0.55, -d * 0.3); g.add(dishPole);
+        const dish = new THREE.Mesh(track(new THREE.CircleGeometry(0.42, 18)), dishM);
+        dish.position.set(w * 0.32, h + 0.85, -d * 0.3 + 0.1); dish.rotation.x = -0.7; g.add(dish);
+        // كومبرسرات سبلت على الجدار الجانبي
+        for (let k = 0; k < 2; k++) { const cd = new THREE.Mesh(B(0.8, 0.55, 0.3), condNM); cd.position.set(w / 2 + 0.18, 1.1 + k * 1.1, -d * 0.1); cd.rotation.y = Math.PI / 2; g.add(cd); }
+        // سياج أمامي قصير أبيض
+        const fw = new THREE.Mesh(B(w + 1.6, 1.3, 0.18), whiteWall); fw.position.set(0, 0.65, d / 2 + 2.6); fw.castShadow = true; g.add(fw);
+        const fcap = new THREE.Mesh(B(w + 1.7, 0.07, 0.26), M({ color: 0xb8b2a6, roughness: 0.8 })); fcap.position.set(0, 1.33, d / 2 + 2.6); g.add(fcap);
         g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g);
       };
-      mkNeighbor(-16.5, -HD / 2 + 2, 9, 6.4, 11, 0);
-      mkNeighbor(16.5, -HD / 2 + 2, 9, 6.2, 11, 1);
-      mkNeighbor(-12, WALL_Z - SIDEWALK - ROAD_W - SIDEWALK - 6, 9, 6, 10, 2, Math.PI);
-      mkNeighbor(1, WALL_Z - SIDEWALK - ROAD_W - SIDEWALK - 6, 8, 5.6, 10, 3, Math.PI);
-      mkNeighbor(13.5, WALL_Z - SIDEWALK - ROAD_W - SIDEWALK - 6, 9, 6.6, 10, 0, Math.PI);
+      // صفّنا (نفس الجهة) — واجهاتها للشارع مثلنا
+      mkVilla(-17.5, -HD / 2 + 2.2, 9, 6.4, 11, 0, 0, { garage: true });
+      mkVilla(17.5, -HD / 2 + 2.2, 9, 6.2, 11, 1, 0, { wood: true });
+      mkVilla(-31, -HD / 2 + 2.2, 8.5, 6.2, 10.5, 2, 0);
+      mkVilla(31, -HD / 2 + 2.2, 8.5, 6.6, 10.5, 3, 0, { garage: true });
+      // كَبال الشارع — واجهاتها إلنا (السياج بينها وبين الرصيف المقابل)
+      const ACROSS_Z = WALL_Z - SIDEWALK - ROAD_W - SIDEWALK - 8.6;
+      mkVilla(-22, ACROSS_Z, 9, 6.0, 10, 2, Math.PI, { garage: true });
+      mkVilla(-8, ACROSS_Z, 8, 5.8, 10, 3, Math.PI, { wood: true });
+      mkVilla(6, ACROSS_Z, 8.5, 6.4, 10, 4, Math.PI);
+      mkVilla(20, ACROSS_Z, 9, 6.2, 10, 0, Math.PI, { garage: true });
+      // صف خلفي بعيد — كتل صامتة للعمق البصري
+      const farM = M({ color: 0xc9bfa9, roughness: 0.95 });
+      [[-16, 7.4], [1, 6.6], [17, 7.8]].forEach(([fx, fh]) => {
+        const fb = new THREE.Mesh(B(11, fh, 10), farM); fb.position.set(fx, fh / 2, ACROSS_Z - 16); fb.castShadow = true; scene.add(fb);
+        const fpar = new THREE.Mesh(B(11.15, 0.4, 10.15), M({ color: 0xb5ab95, roughness: 0.95 })); fpar.position.set(fx, fh + 0.1, ACROSS_Z - 16); scene.add(fpar);
+      });
 
-      // ================= سيارة =================
-      const car = new THREE.Group();
-      const carPaint = M({ color: 0x8e9aa5, roughness: 0.4, metalness: 0.55, envMapIntensity: 0.8 });
-      const cb1 = new THREE.Mesh(B(1.75, 0.5, 4.0), carPaint); cb1.position.y = 0.55; cb1.castShadow = true; car.add(cb1);
-      const cb2 = new THREE.Mesh(B(1.6, 0.48, 2.2), carPaint); cb2.position.set(0, 1.0, -0.2); cb2.castShadow = true; car.add(cb2);
+      // ================= سيارات (3 ألوان) =================
       const glassM2 = M({ color: 0x18242e, roughness: 0.12, metalness: 0.5 });
-      const cw1 = new THREE.Mesh(B(1.5, 0.36, 0.06), glassM2); cw1.position.set(0, 1.0, 0.95); car.add(cw1);
       const wheelG = track(new THREE.CylinderGeometry(0.34, 0.34, 0.24, 18)); const wheelM = M({ color: 0x121212, roughness: 0.7 });
-      [[0.82, 1.35], [-0.82, 1.35], [0.82, -1.35], [-0.82, -1.35]].forEach(([wx, wz]) => { const w2 = new THREE.Mesh(wheelG, wheelM); w2.rotation.z = Math.PI / 2; w2.position.set(wx, 0.34, wz); car.add(w2); });
-      car.position.set(gateX, 0, -HD / 2 - 2.6); scene.add(car);
+      const mkCar = (hex, x, z, ry = 0) => {
+        const car = new THREE.Group();
+        const paint = M({ color: hex, roughness: 0.4, metalness: 0.55, envMapIntensity: 0.8 });
+        const cb1 = new THREE.Mesh(B(1.75, 0.5, 4.0), paint); cb1.position.y = 0.55; cb1.castShadow = true; car.add(cb1);
+        const cb2 = new THREE.Mesh(B(1.6, 0.48, 2.2), paint); cb2.position.set(0, 1.0, -0.2); cb2.castShadow = true; car.add(cb2);
+        const cw1 = new THREE.Mesh(B(1.5, 0.36, 0.06), glassM2); cw1.position.set(0, 1.0, 0.95); car.add(cw1);
+        const cw2 = new THREE.Mesh(B(1.5, 0.34, 0.06), glassM2); cw2.position.set(0, 1.0, -1.28); car.add(cw2);
+        [[0.82, 1.35], [-0.82, 1.35], [0.82, -1.35], [-0.82, -1.35]].forEach(([wx, wz]) => { const w2 = new THREE.Mesh(wheelG, wheelM); w2.rotation.z = Math.PI / 2; w2.position.set(wx, 0.34, wz); car.add(w2); });
+        car.position.set(x, 0, z); car.rotation.y = ry; scene.add(car);
+      };
+      mkCar(0x8e9aa5, gateX, -HD / 2 - 2.6);                                     // فضية على الدرايف
+      mkCar(0xe8e6e0, -7, WALL_Z - SIDEWALK - 1.6, Math.PI / 2);                 // بيضاء واقفة على الرصيف
+      mkCar(0x1f3a5c, 12.5, WALL_Z - SIDEWALK - ROAD_W + 1.4, Math.PI / 2);      // كحلية بالجهة الثانية
+
+      // ================= نخلات عراقية 🌴 =================
+      const palmTrunkM = M({ color: 0x8a6a45, roughness: 0.95 });
+      const palmLeafM = M({ color: 0x3e7d35, roughness: 0.9 });
+      const palmLeafM2 = M({ color: 0x4f9440, roughness: 0.9 });
+      const dateM = M({ color: 0x9c5a22, roughness: 0.8 });
+      const mkPalm = (x, z, hgt = 4.2, sc = 1) => {
+        const pg = new THREE.Group();
+        const tr = new THREE.Mesh(track(new THREE.CylinderGeometry(0.13, 0.22, hgt, 8, 3)), palmTrunkM);
+        tr.position.y = hgt / 2; tr.castShadow = true; pg.add(tr);
+        // حلقات الجذع
+        for (let r = 0.5; r < hgt - 0.4; r += 0.55) {
+          const ring = new THREE.Mesh(track(new THREE.TorusGeometry(0.16 + 0.05 * (1 - r / hgt), 0.03, 6, 10)), palmTrunkM);
+          ring.position.y = r; ring.rotation.x = Math.PI / 2; pg.add(ring);
+        }
+        // سعفات متدلية بتاجين لونين
+        for (let i = 0; i < 10; i++) {
+          const ang = (i / 10) * Math.PI * 2;
+          const leaf = new THREE.Mesh(track(new THREE.IcosahedronGeometry(0.5, 1)), i % 2 ? palmLeafM : palmLeafM2);
+          leaf.scale.set(0.16, 0.055, 1.25);
+          leaf.position.set(Math.cos(ang) * 0.75, hgt + 0.18 - 0.16 * Math.abs(Math.sin(ang * 2)), Math.sin(ang) * 0.75);
+          leaf.rotation.y = -ang; leaf.rotation.x = -0.55 - Math.random() * 0.25;
+          leaf.castShadow = true; pg.add(leaf);
+        }
+        // عذوق تمر
+        for (let i = 0; i < 3; i++) { const dt = new THREE.Mesh(track(new THREE.IcosahedronGeometry(0.12, 0)), dateM); dt.position.set(Math.cos(i * 2.1) * 0.3, hgt - 0.15, Math.sin(i * 2.1) * 0.3); pg.add(dt); }
+        pg.position.set(x, 0, z); pg.scale.setScalar(sc); scene.add(pg);
+      };
+      mkPalm(-14, WALL_Z - 1.1, 4.4);
+      mkPalm(-5, WALL_Z - 1.1, 3.9, 0.92);
+      mkPalm(10.5, WALL_Z - 1.1, 4.6);
+      mkPalm(-19, WALL_Z - SIDEWALK - ROAD_W - 1.2, 4.2, 0.95);
+      mkPalm(12, WALL_Z - SIDEWALK - ROAD_W - 1.2, 4.8);
+      mkPalm(26, WALL_Z - SIDEWALK - ROAD_W - 1.2, 4.0, 0.9);
+      mkPalm(-HW / 2 + 1.2, -HD / 2 - 1.4, 3.6, 0.85); // نخلة بحديقتنا
+
+      // ================= ممر مشاة (زيبرا) + شارع متقاطع + تفاصيل =================
+      const zebraM = M({ color: 0xe6e6de, roughness: 0.85 });
+      for (let i = 0; i < 6; i++) {
+        const zb = new THREE.Mesh(B(0.55, 0.014, ROAD_W - 1), zebraM);
+        zb.position.set(gateX - 1.4 + i * 0.95, 0.014, WALL_Z - SIDEWALK - ROAD_W / 2 - 0.1);
+        scene.add(zb);
+      }
+      // شارع متقاطع يسار يكسر الرتابة
+      const crossRoad = new THREE.Mesh(track(new THREE.PlaneGeometry(ROAD_W - 1, 40)), road.material);
+      crossRoad.rotation.x = -Math.PI / 2; crossRoad.position.set(-27.5, 0.003, WALL_Z - SIDEWALK - ROAD_W - 18);
+      crossRoad.receiveShadow = true; scene.add(crossRoad);
+      // حاوية نفايات خضراء يمّ البوابة + مصطبة
+      const bin = new THREE.Mesh(B(0.7, 0.85, 0.55), M({ color: 0x2e6b34, roughness: 0.7 }));
+      bin.position.set(gateX + 2.4, 0.45, WALL_Z - 0.8); bin.castShadow = true; scene.add(bin);
+      const bench = new THREE.Mesh(B(1.6, 0.1, 0.45), M({ color: 0x8a6a45, roughness: 0.8 }));
+      bench.position.set(-9.5, 0.45, WALL_Z - 0.9); scene.add(bench);
+      [[-10.1, 0.2], [-8.9, 0.2]].forEach(([bx, bh2]) => { const bl2 = new THREE.Mesh(B(0.12, 0.42, 0.4), metalGray); bl2.position.set(bx, bh2, WALL_Z - 0.9); scene.add(bl2); });
+
+      // ================= سطحنا: خزان ماي + دش =================
+      const ourTank = new THREE.Mesh(track(new THREE.CylinderGeometry(0.45, 0.45, 0.85, 14)), tankBlackM);
+      ourTank.position.set(HW / 2 - 1.2, HH + 0.65, HD / 2 - 1.2); ourTank.castShadow = true; scene.add(ourTank);
+      const ourDishPole = new THREE.Mesh(B(0.05, 1.0, 0.05), metalGray); ourDishPole.position.set(-HW / 2 + 0.6, towerH + 0.5, -HD / 2 + 0.6); scene.add(ourDishPole);
+      const ourDish = new THREE.Mesh(track(new THREE.CircleGeometry(0.45, 18)), dishM);
+      ourDish.position.set(-HW / 2 + 0.6, towerH + 0.85, -HD / 2 + 0.72); ourDish.rotation.x = -0.7; scene.add(ourDish);
 
       // ================= أسلاك الطاقة والنبضات =================
       const wires = [];
@@ -729,7 +851,7 @@ export default function SystemShowcase({
             const d3 = new THREE.Object3D();
             spots.forEach(([gx, gz], i) => {
               d3.position.set(gx, 0, gz); d3.rotation.y = Math.random() * Math.PI * 2;
-              const sc = 0.85 + Math.random() * 0.6; d3.scale.setScalar(sc);
+              const sc = 0.5 + Math.random() * 0.22; d3.scale.setScalar(sc); // خصلات صغيرة مشذبة
               d3.updateMatrix(); im.setMatrixAt(i, d3.matrix);
             });
             im.instanceMatrix.needsUpdate = true; im.receiveShadow = true;
@@ -742,8 +864,9 @@ export default function SystemShowcase({
             cl.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
             cl.position.set(x, 0, z); cl.rotation.y = ry; cl.scale.setScalar(sc); scene.add(cl); return cl;
           };
-          for (let i = 0; i < 6; i++) placeClone(i % 2 ? gShrub1 : gShrub2, -HW / 2 + 1 + i * 1.4, WALL_Z + 0.7, 1.4 + Math.random() * 0.5);
-          placeClone(gShrub1, HW / 2 + 1.6, -HD / 2 - 1.2, 1.8);
+          // صف شجيرات منتظم صغير على السياج من الداخل
+          for (let i = 0; i < 6; i++) placeClone(i % 2 ? gShrub1 : gShrub2, -HW / 2 + 1.2 + i * 1.35, WALL_Z + 0.75, 1.0 + (i % 3) * 0.08);
+          placeClone(gShrub1, HW / 2 + 1.6, -HD / 2 - 1.2, 1.2);
           procShrubs.forEach((s2) => { s2.visible = false; });
           // الشجرة الحقيقية: بالحديقة + كَبال الشارع
           gTree.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
@@ -787,11 +910,11 @@ export default function SystemShowcase({
             envSt.cur = mode;
             const e2 = envSt[mode];
             scene.background = e2.bg; scene.environment = e2.env;
-            const rotY = mode === 'day' ? 2.4 : mode === 'set' ? 3.4 : 0.6;
+            const rotY = mode === 'day' ? 3.2 : mode === 'set' ? 3.4 : 0.6;
             if (scene.backgroundRotation) scene.backgroundRotation.set(0, rotY, 0);
             if (scene.environmentRotation) scene.environmentRotation.set(0, rotY, 0);
           }
-          scene.backgroundIntensity = mode === 'day' ? 0.9 : 1.0;
+          scene.backgroundIntensity = mode === 'day' ? 0.8 : 1.0;
           scene.environmentIntensity = mode === 'day' ? 0.65 : mode === 'set' ? 0.55 : 0.3;
           sunBall.visible = false; sunHalo.visible = false; moonBall.visible = false;
           starMat.opacity = 0;
@@ -821,10 +944,7 @@ export default function SystemShowcase({
         const pGlow = isDay ? 0.02 + inten * 0.07 : 0;
         panelSurfaces.forEach((m) => { m.emissiveIntensity = pGlow; });
 
-        // شفافية الجدران عند التقريب
-        const dist = camera.position.distanceTo(controls.target);
-        const op = Math.max(0.14, Math.min(1, (dist - 7) / 12));
-        fadeMats.forEach((m) => { m.opacity = op; });
+        // (شفافية الجدران ملغاة — الغلاف الخارجي فقط)
 
         // أوراق تتطاير
         for (let i = 0; i < LEAVES; i++) {
@@ -921,7 +1041,7 @@ export default function SystemShowcase({
         <input type="range" min={6} max={30} step={0.25} defaultValue={13} onInput={onTime} onChange={onTime} />
         <span className="tend">🌙</span>
       </div>
-      <div className="showcase-hint">🖱️ اسحب للتدوير • قرّب بعجلة الماوس (الجدران تصير شفافة ويبين الأثاث والأجهزة) • حرّك الشريط لوقت اليوم</div>
+      <div className="showcase-hint">🖱️ اسحب للتدوير • عجلة الماوس للتقريب • حرّك الشريط لوقت اليوم</div>
     </div>
   );
 }
