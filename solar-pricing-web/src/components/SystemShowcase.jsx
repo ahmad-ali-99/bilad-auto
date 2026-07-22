@@ -261,6 +261,44 @@ export default function SystemShowcase({
       const walk2 = walk.clone(); walk2.position.z = WALL_Z - SIDEWALK - ROAD_W - SIDEWALK / 2 - 0.1; scene.add(walk2);
       const curb2 = curb.clone(); curb2.position.z = WALL_Z - SIDEWALK - ROAD_W - 0.15; scene.add(curb2);
 
+      // ---- ظل تلامس (AO مزيف رخيص): بقعة مظللة ناعمة تحت كل جسم — يلحم الأجسام بالأرض ----
+      const aoTex = (() => {
+        const c = mkCanvas(128); const g = c.getContext('2d');
+        const gr = g.createRadialGradient(64, 64, 6, 64, 64, 62);
+        gr.addColorStop(0, 'rgba(20,16,10,0.55)'); gr.addColorStop(0.65, 'rgba(20,16,10,0.28)'); gr.addColorStop(1, 'rgba(20,16,10,0)');
+        g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+        const t2 = track(new THREE.CanvasTexture(c)); return t2;
+      })();
+      const aoGeo = track(new THREE.PlaneGeometry(1, 1));
+      const aoM = track(new THREE.MeshBasicMaterial({ map: aoTex, transparent: true, depthWrite: false }));
+      const mkAO = (x, z, rx, rz, op = 1, ry = 0) => {
+        const p = new THREE.Mesh(aoGeo, op === 1 ? aoM : track(new THREE.MeshBasicMaterial({ map: aoTex, transparent: true, depthWrite: false, opacity: op })));
+        p.rotation.x = -Math.PI / 2; p.rotation.z = ry; p.scale.set(rx, rz, 1);
+        p.position.set(x, 0.016, z); p.renderOrder = 1; scene.add(p); return p;
+      };
+      // ---- نسيج سواقي المطر (خطوط اتساخ نازلة) + حزام التراب بقاعدة الجدار ----
+      const streakTex = (() => {
+        const c = mkCanvas(128); const g = c.getContext('2d');
+        for (let i = 0; i < 16; i++) {
+          const x = 4 + Math.random() * 118, w2 = 1.5 + Math.random() * 3.5, h2 = 45 + Math.random() * 80;
+          const gr = g.createLinearGradient(0, 0, 0, h2);
+          gr.addColorStop(0, 'rgba(58,50,38,0.5)'); gr.addColorStop(1, 'rgba(58,50,38,0)');
+          g.fillStyle = gr; g.fillRect(x, 0, w2, h2);
+        }
+        const t2 = track(new THREE.CanvasTexture(c)); t2.colorSpace = THREE.SRGBColorSpace; return t2;
+      })();
+      const baseDirtTex = (() => {
+        const c = mkCanvas(64); const g = c.getContext('2d');
+        const gr = g.createLinearGradient(0, 64, 0, 0);
+        gr.addColorStop(0, 'rgba(74,64,48,0.45)'); gr.addColorStop(1, 'rgba(74,64,48,0)');
+        g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+        // بقع رشّ ترابي خفيفة
+        for (let i = 0; i < 40; i++) { g.fillStyle = 'rgba(70,60,44,0.22)'; g.fillRect(Math.random() * 64, 44 + Math.random() * 18, 2, 2); }
+        const t2 = track(new THREE.CanvasTexture(c)); t2.colorSpace = THREE.SRGBColorSpace; return t2;
+      })();
+      const streakM = track(new THREE.MeshBasicMaterial({ map: streakTex, transparent: true, depthWrite: false }));
+      const baseDirtM = track(new THREE.MeshBasicMaterial({ map: baseDirtTex, transparent: true, depthWrite: false }));
+
       // ================= السياج + اللوحة + البوابة =================
       const wallH = 1.7;
       const fenceFront1 = new THREE.Mesh(B(HW + 8 - 3.4, wallH, 0.22), whiteWall);
@@ -826,6 +864,31 @@ export default function SystemShowcase({
         const arch = [1, 2, 3, 1, 2][Math.floor(depthSeed() * 5) % 5] || 1;
         mkVilla(arch, dx, dz, depthSeed() < 0.5 ? 0 : Math.PI, 200 + i * 7);
       });
+      // ---- باس العمر (القسم 19): مزاريب + سواقي اتساخ تحت الدروة + حزام ترابي بالقاعدة ----
+      const pipeM = M({ color: 0x8a8478, roughness: 0.7, metalness: 0.25 });
+      villaGroups.forEach((v2) => {
+        const wr = mulberry(v2.seed * 13 + 7);
+        // مزراب نازل بزاوية الواجهة + ساقية اتساخ وراه
+        if (wr() < 0.75) {
+          const px = v2.mir * (v2.w / 2 - 0.3);
+          const pipe = new THREE.Mesh(track(new THREE.CylinderGeometry(0.045, 0.045, v2.h, 6)), pipeM);
+          pipe.position.set(px, v2.h / 2, v2.d / 2 + 0.09); v2.g.add(pipe);
+          const elbow = new THREE.Mesh(track(new THREE.CylinderGeometry(0.045, 0.045, 0.24, 6)), pipeM);
+          elbow.rotation.x = Math.PI / 2 - 0.5; elbow.position.set(px, 0.1, v2.d / 2 + 0.18); v2.g.add(elbow);
+          const st = new THREE.Mesh(track(new THREE.PlaneGeometry(0.5, v2.h * 0.6)), streakM);
+          st.position.set(px + v2.mir * 0.12, v2.h * 0.62, v2.d / 2 + 0.035); v2.g.add(st);
+        }
+        // سواقي تحت حافة الدروة (1-2 مواضع عشوائية)
+        const nStreak = 1 + Math.floor(wr() * 2);
+        for (let s2 = 0; s2 < nStreak; s2++) {
+          const sx = (wr() - 0.5) * v2.w * 0.8;
+          const st = new THREE.Mesh(track(new THREE.PlaneGeometry(0.6 + wr() * 0.5, 1.0 + wr() * 0.8)), streakM);
+          st.position.set(sx, v2.h - 0.7 - wr() * 0.3, v2.d / 2 + 0.032); v2.g.add(st);
+        }
+        // حزام التراب بقاعدة الواجهة
+        const bb = new THREE.Mesh(track(new THREE.PlaneGeometry(v2.w + 0.1, 0.55)), baseDirtM);
+        bb.position.set(0, 0.28, v2.d / 2 + 0.03); v2.g.add(bb);
+      });
 
       // ================= طبقة الأفق (القسم 2): خط نخيل + سيلويتات #9FB4C7 =================
       const hazeC = 0x9fb4c7;
@@ -1012,6 +1075,7 @@ export default function SystemShowcase({
         pg.rotation.y = Math.random() * Math.PI * 2;
         pg.rotation.z = (0.017 + Math.random() * 0.05) * (Math.random() < 0.5 ? -1 : 1); // ميلان 1-4°
         scene.add(pg);
+        mkAO(x, z, 1.7 * sc, 1.7 * sc, 0.8);
       };
       // سدرة (نبگ): تاج كثيف مدوّر بدرجتي السدر الدافئ
       const mkSidr = (x, z, sc = 1) => {
@@ -1032,6 +1096,7 @@ export default function SystemShowcase({
         sg.rotation.y = Math.random() * Math.PI * 2;
         sg.rotation.z = (0.017 + Math.random() * 0.04) * (Math.random() < 0.5 ? -1 : 1);
         scene.add(sg);
+        mkAO(x, z, 2.6 * sc, 2.6 * sc, 0.65);
       };
       mkPalm(-14, WALL_Z - 1.1, 4.4);
       mkPalm(-5, WALL_Z - 1.1, 3.9, 0.92);
@@ -1561,6 +1626,7 @@ export default function SystemShowcase({
               c2.traverse((o) => {
                 if (o.isMesh) { o.material = o.material.clone(); track(o.material); o.material.color.multiply(new THREE.Color(tints[i % 3])); }
               });
+              mkAO(cx2, cz2, 2.7, 5.3, 0.85, cry);
             });
           }
           // سبلتات خارجية حقيقية على واجهات الجيران (أيقونة عراقية) + بيت البطل
@@ -1597,6 +1663,7 @@ export default function SystemShowcase({
             if (v4) { const c2 = gTrash.scene.clone(true); c2.position.set(v4.mir * (v4.w * 0.15 + v4.w * 0.3 + 1.3), 0, v4.d / 2 + 1.1); c2.rotation.y = 0.7; v4.g.add(c2); }
             const t2 = world(gTrash, gateX + 3.1, WALL_Z - 0.75, 1, 2.3);
             const t3 = world(gTrash, gateX + 3.75, WALL_Z - 0.9, 1, -0.4); t3.rotation.z = 0.06;
+            mkAO(gateX + 3.4, WALL_Z - 0.82, 2.1, 1.4, 0.8);
           }
           if (gTyre) { const c2 = world(gTyre, -HW / 2 - 1.1, WALL_Z - 0.42, 1, 0.5); c2.position.y = 0.05; c2.rotation.x = -0.28; }
           if (gBarrier) {
@@ -1619,14 +1686,11 @@ export default function SystemShowcase({
           // أشجار إضافية على رصيف الجهة المقابلة وزوايا الحي — نفس الشجرة الفوتوغرامترية بمقاسات أكبر
           // مظلة خضراء وسطية بين بيوت العمق (z موجب = خلف بيت البطل بالكادر) — نغل الرفرنس
           // الجيومتري مشترك بين الاستنساخات فكلفتها رسمات إضافية فقط — تبقى حتى على الموبايل
-          placeClone(gTree, -28, 14, 2.0, 0.8);
-          placeClone(gTree, 16, 19, 1.75, 2.9);
-          placeClone(gTree, -6, 30, 2.25, 4.4);
-          placeClone(gTree, 30, 33, 1.9, 1.7);
-          placeClone(gTree, 46, 16, 1.6, 3.3);
-          placeClone(gTree, -44, 28, 2.1, 5.6);
-          placeClone(gTree, 8, 24, 1.5, 0.4);
-          placeClone(gTree, -27, -10.5, 1.3, 2.4);
+          [[-28, 14, 2.0, 0.8], [16, 19, 1.75, 2.9], [-6, 30, 2.25, 4.4], [30, 33, 1.9, 1.7],
+           [46, 16, 1.6, 3.3], [-44, 28, 2.1, 5.6], [8, 24, 1.5, 0.4], [-27, -10.5, 1.3, 2.4]].forEach(([tx, tz, ts, tr]) => {
+            placeClone(gTree, tx, tz, ts, tr);
+            mkAO(tx, tz, 4.2 * ts, 4.2 * ts, 0.45);
+          });
           if (!lowPerf) {
             placeClone(gTree, -20, WALL_Z - SIDEWALK - ROAD_W - SIDEWALK - 2.6, 1.55, 1.2);
             placeClone(gTree, 0.5, WALL_Z - SIDEWALK - ROAD_W - SIDEWALK - 3.2, 1.85, 3.6);
