@@ -4,6 +4,26 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { PDFDocument } from 'pdf-lib';
 import { buildInvoiceInnerHtml } from './invoiceHtml.js';
+import { buildStructurePageHtml, panelCountFromItems } from './structureDiagram.js';
+
+// يرسم HTML لعنصر مخفي → canvas ويضيفه صفحة جديدة بالـPDF (لمخطط الهيكل)
+async function addHtmlPage(pdf, html) {
+  const host = document.createElement('div');
+  host.style.cssText = 'position:fixed;left:-2000px;top:0;width:794px;background:#fff;z-index:-1;';
+  host.innerHTML = html;
+  document.body.appendChild(host);
+  try {
+    await document.fonts.ready;
+    const el = host.firstElementChild;
+    const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+    const pageW = 210;
+    const imgH = (canvas.height * pageW) / canvas.width;
+    pdf.addPage();
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageW, Math.min(imgH, 297));
+  } finally {
+    document.body.removeChild(host);
+  }
+}
 
 // يضيف مرفق التصميم لنهاية ملف العرض: صورة → صفحة جديدة بمقاسها، وPDF → دمج صفحاته كاملة
 async function appendAttachment(pdf, attachment) {
@@ -164,7 +184,7 @@ export async function deliverPdf(blob, fileName) {
   return { canceled: false, shared: false };
 }
 
-export async function exportInvoicePdf({ quote, items, notes, company, fileName, attachment = null, installment = null }) {
+export async function exportInvoicePdf({ quote, items, notes, company, fileName, attachment = null, installment = null, structure = true }) {
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-2000px;top:0;width:794px;background:#fff;z-index:-1;';
   host.innerHTML = buildInvoiceInnerHtml({ quote, items, notes, company, installment });
@@ -221,6 +241,13 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
         first = false;
         y = next;
       }
+    }
+
+    // مخطط هيكل الألواح التلقائي — صفحة مستقلة تُضاف لكل عرض بيه ألواح
+    if (structure) {
+      const panelCount = panelCountFromItems(items);
+      const structHtml = buildStructurePageHtml(panelCount, company);
+      if (structHtml) await addHtmlPage(pdf, structHtml);
     }
 
     // إذا اكو مرفق تصميم (صورة/PDF) نلحقه بنهاية الملف
