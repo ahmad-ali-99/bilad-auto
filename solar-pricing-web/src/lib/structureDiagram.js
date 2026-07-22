@@ -2,12 +2,11 @@
 // طاولتان تنزاحان قطرياً للخلف (أعلى-يسار)، الألواح بميل يُظهر وجوهها للقارئ،
 // قوالب بالاست كونكريتية بصف أمامي، أرجل ودعامات، ومنصّة كونكريت تحت الكل.
 
-const PANEL_W_M = 1.05; // عرض عمود اللوح (أفقي على الصف)
-const TIER_H_M = 0.62; // ارتفاع الطابق الواحد على الميل (لاندسكيب → أوسع من أطول)
-const SLOPE_DEPTH = 1.9; // إسقاط عمق السطح المائل (طابقان)
-const RISE = 1.15; // ارتفاع الحافة الخلفية عن الأمامية (ميل ~31°)
-const FRONT_H = 0.45; // ارتفاع أرجل الطاولة الأمامية
-const BACK_LIFT = 0.7; // زيادة ارتفاع الطاولة الخلفية
+const PANEL_W_M = 1.16; // عرض عمود اللوح (أفقي على الصف)
+const TIER_H_M = 0.62; // ارتفاع الطابق الواحد على الميل
+const SLOPE_DEPTH = 2.15; // إسقاط عمق السطح المائل (طابقان)
+const RISE = 1.0; // ارتفاع الحافة الخلفية عن الأمامية
+const FRONT_H = 0.5; // ارتفاع أرجل الطاولة (نفسه للطاولتين — حقل مستوٍ مثل الرفرنس)
 
 export function panelCountFromItems(items) {
   let n = 0;
@@ -74,10 +73,10 @@ function table(ox, oy, baseH, cols) {
   // ظل أرضي
   svg += `<polygon points="${A(proj(FL.x, FL.y, 0))} ${A(proj(FR.x, FR.y, 0))} ${A(proj(BR.x, BR.y, 0))} ${A(proj(BL.x, BL.y, 0))}" fill="#000" opacity="0.07"/>`;
 
-  // قوالب بالاست كونكريتية بصف أمامي (واحد لكل عمود)
+  // قوالب بالاست كونكريتية بصف أمامي (واحد لكل عمود) — بارزة مثل الرفرنس
   for (let c = 0; c <= cols; c++) {
-    const x = ox + (c / cols) * W - 0.24;
-    svg += box(x, oy - 0.66, 0.48, 0.48, 0.42, 0, '#e4e7eb', '#c3c8ce', '#d2d6db');
+    const x = ox + (c / cols) * W - 0.29;
+    svg += box(x, oy - 0.78, 0.58, 0.58, 0.5, 0, '#e6e9ed', '#c0c5cc', '#d4d8dd');
   }
 
   // أرجل + دعامات (كل ~3 أعمدة)
@@ -119,9 +118,10 @@ export function buildStructureSvg(panelCount) {
 
   const drawn = [];
   const pts = [];
-  // الطاولة الخلفية أعمق (أعلى-يسار) وأعلى قليلاً — ترسم أولاً
+  // الطاولة الخلفية: نفس الارتفاع، خلف الأمامية مع ممر صغير وإزاحة يسار — حقل مرصوص مثل الرفرنس
+  const backOx = -1.6, backOy = SLOPE_DEPTH + 0.75;
   if (backCols) {
-    const t = table(-1.2, SLOPE_DEPTH + 1.4, FRONT_H + BACK_LIFT, backCols);
+    const t = table(backOx, backOy, FRONT_H, backCols);
     drawn.push(t.svg); t.pts.forEach((p) => pts.push(p));
   }
   const f = table(0, 0, FRONT_H, frontCols);
@@ -129,8 +129,8 @@ export function buildStructureSvg(panelCount) {
 
   // منصّة كونكريت تحت الكل (ترسم أولاً)
   const backW = backCols ? backCols * PANEL_W_M : frontW;
-  const minPx = Math.min(0, -1.2) - 0.9, maxPx = Math.max(frontW, -1.2 + backW) + 0.9;
-  const minPy = -0.9, maxPy = (backCols ? SLOPE_DEPTH + 1.4 : 0) + SLOPE_DEPTH + 0.9;
+  const minPx = Math.min(0, backOx) - 0.9, maxPx = Math.max(frontW, backOx + backW) + 0.9;
+  const minPy = -0.95, maxPy = (backCols ? backOy : 0) + SLOPE_DEPTH + 0.95;
   const platform = box(minPx, minPy, maxPx - minPx, maxPy - minPy, 0.3, -0.3, '#d6dade', '#aeb4bb', '#c1c6cc');
   [proj(minPx, minPy, 0), proj(maxPx, minPy, 0), proj(maxPx, maxPy, 0), proj(minPx, maxPy, 0)].forEach((p) => pts.push(p));
 
