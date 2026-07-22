@@ -14,8 +14,12 @@ async function addHtmlPage(pdf, html) {
   document.body.appendChild(host);
   try {
     await document.fonts.ready;
-    const el = host.firstElementChild;
+    // نختار عنصر المحتوى الفعلي: الـHTML يبدأ بوسم <style> فلا نلتقط أول عنصر
+    // (يطلع 0×0 ويكسر الحساب)، بل عنصر الصفحة نفسه.
+    const el = host.querySelector('.mkt-sheet') || Array.from(host.children).find((c) => c.tagName !== 'STYLE') || host.firstElementChild;
+    if (!el) return;
     const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+    if (!canvas.width || !canvas.height) return; // لا نضيف صفحة فارغة/تالفة
     const pageW = 210;
     const imgH = (canvas.height * pageW) / canvas.width;
     pdf.addPage();
