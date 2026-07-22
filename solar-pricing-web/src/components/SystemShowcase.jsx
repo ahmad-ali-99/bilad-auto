@@ -951,32 +951,63 @@ export default function SystemShowcase({
       mkCar(0xe8e6e0, -7, WALL_Z - SIDEWALK - 1.6, Math.PI / 2);                 // بيضاء واقفة على الرصيف
       mkCar(0x1f3a5c, 12.5, WALL_Z - SIDEWALK - ROAD_W + 1.4, Math.PI / 2);      // كحلية بالجهة الثانية
 
-      // ================= نخلات عراقية 🌴 =================
+      // ================= الخضرة (القسم 7): ثلاث درجات أخضر + نسيم موحّد =================
+      // اللوحة: نخيلي مزرق #4A6B4D • سدر دافئ #7A9B5E • عشب مصفر (بالشيدر)
       const palmTrunkM = M({ color: 0x8a6a45, roughness: 0.95 });
-      const palmLeafM = M({ color: 0x3e7d35, roughness: 0.9 });
-      const palmLeafM2 = M({ color: 0x4f9440, roughness: 0.9 });
+      const palmLeafM = M({ color: 0x4a6b4d, roughness: 0.9 });
+      const palmLeafM2 = M({ color: 0x5c7f55, roughness: 0.9 }); // درجة أفتح من النخيلي
+      const sidrLeafM = M({ color: 0x7a9b5e, roughness: 0.92 });
+      const sidrLeafM2 = M({ color: 0x6b8a52, roughness: 0.92 });
       const dateM = M({ color: 0x9c5a22, roughness: 0.8 });
+      const windCrowns = []; // {grp, phase, speed, amp} — كل الحركات تقرأ ريحاً موحّدة (+x)
+      // نخلة: تاج منفصل يتنفس + ميلان جذع عشوائي 1-4 درجات (قسم 7)
       const mkPalm = (x, z, hgt = 4.2, sc = 1) => {
         const pg = new THREE.Group();
         const tr = new THREE.Mesh(track(new THREE.CylinderGeometry(0.13, 0.22, hgt, 8, 3)), palmTrunkM);
         tr.position.y = hgt / 2; tr.castShadow = true; pg.add(tr);
-        // حلقات الجذع
         for (let r = 0.5; r < hgt - 0.4; r += 0.55) {
           const ring = new THREE.Mesh(track(new THREE.TorusGeometry(0.16 + 0.05 * (1 - r / hgt), 0.03, 6, 10)), palmTrunkM);
           ring.position.y = r; ring.rotation.x = Math.PI / 2; pg.add(ring);
         }
-        // سعفات متدلية بتاجين لونين
+        const crown = new THREE.Group(); crown.position.y = hgt;
+        let dryDone = false;
         for (let i = 0; i < 10; i++) {
           const ang = (i / 10) * Math.PI * 2;
-          const leaf = new THREE.Mesh(track(new THREE.IcosahedronGeometry(0.5, 1)), i % 2 ? palmLeafM : palmLeafM2);
+          // عيب مقصود #12: سعفة يابسة وحدة متدلية (بنخلة الحديقة فقط — تُفعّل بالنداء)
+          const dry = !dryDone && sc < 0.9 && i === 7; if (dry) dryDone = true;
+          const leaf = new THREE.Mesh(track(new THREE.IcosahedronGeometry(0.5, 1)), dry ? M({ color: 0xa8935c, roughness: 0.95 }) : (i % 2 ? palmLeafM : palmLeafM2));
           leaf.scale.set(0.16, 0.055, 1.25);
-          leaf.position.set(Math.cos(ang) * 0.75, hgt + 0.18 - 0.16 * Math.abs(Math.sin(ang * 2)), Math.sin(ang) * 0.75);
-          leaf.rotation.y = -ang; leaf.rotation.x = -0.55 - Math.random() * 0.25;
-          leaf.castShadow = true; pg.add(leaf);
+          leaf.position.set(Math.cos(ang) * 0.75, 0.18 - 0.16 * Math.abs(Math.sin(ang * 2)) - (dry ? 0.5 : 0), Math.sin(ang) * 0.75);
+          leaf.rotation.y = -ang; leaf.rotation.x = (dry ? -1.15 : -0.55 - Math.random() * 0.25);
+          leaf.castShadow = true; crown.add(leaf);
         }
-        // عذوق تمر
-        for (let i = 0; i < 3; i++) { const dt = new THREE.Mesh(track(new THREE.IcosahedronGeometry(0.12, 0)), dateM); dt.position.set(Math.cos(i * 2.1) * 0.3, hgt - 0.15, Math.sin(i * 2.1) * 0.3); pg.add(dt); }
-        pg.position.set(x, 0, z); pg.scale.setScalar(sc); scene.add(pg);
+        for (let i = 0; i < 3; i++) { const dt = new THREE.Mesh(track(new THREE.IcosahedronGeometry(0.12, 0)), dateM); dt.position.set(Math.cos(i * 2.1) * 0.3, -0.15, Math.sin(i * 2.1) * 0.3); crown.add(dt); }
+        pg.add(crown);
+        windCrowns.push({ grp: crown, phase: Math.random() * 6.28, speed: 2 * Math.PI / (4 + Math.random() * 2), amp: 0.035 + Math.random() * 0.02 }); // 2-4° / 4-6ث
+        pg.position.set(x, 0, z); pg.scale.setScalar(sc);
+        pg.rotation.y = Math.random() * Math.PI * 2;
+        pg.rotation.z = (0.017 + Math.random() * 0.05) * (Math.random() < 0.5 ? -1 : 1); // ميلان 1-4°
+        scene.add(pg);
+      };
+      // سدرة (نبگ): تاج كثيف مدوّر بدرجتي السدر الدافئ
+      const mkSidr = (x, z, sc = 1) => {
+        const sg = new THREE.Group();
+        const tr = new THREE.Mesh(track(new THREE.CylinderGeometry(0.14, 0.2, 1.5, 8)), trunkM);
+        tr.position.y = 0.75; tr.castShadow = true; sg.add(tr);
+        const crown = new THREE.Group(); crown.position.y = 1.9;
+        for (let i = 0; i < 8; i++) {
+          const ang = (i / 8) * Math.PI * 2;
+          const rr = i < 6 ? 0.75 : 0.3;
+          const blob = new THREE.Mesh(plantJit(track(new THREE.IcosahedronGeometry(0.62 + Math.random() * 0.25, 1))), i % 2 ? sidrLeafM : sidrLeafM2);
+          blob.position.set(Math.cos(ang) * rr, (i < 6 ? 0.15 : 0.75) + Math.random() * 0.2, Math.sin(ang) * rr);
+          blob.castShadow = true; crown.add(blob);
+        }
+        sg.add(crown);
+        windCrowns.push({ grp: crown, phase: Math.random() * 6.28, speed: 2 * Math.PI / (5 + Math.random() * 3), amp: 0.02 }); // 1-2° / 5-8ث
+        sg.position.set(x, 0, z); sg.scale.setScalar(sc);
+        sg.rotation.y = Math.random() * Math.PI * 2;
+        sg.rotation.z = (0.017 + Math.random() * 0.04) * (Math.random() < 0.5 ? -1 : 1);
+        scene.add(sg);
       };
       mkPalm(-14, WALL_Z - 1.1, 4.4);
       mkPalm(-5, WALL_Z - 1.1, 3.9, 0.92);
@@ -984,6 +1015,116 @@ export default function SystemShowcase({
       mkPalm(-19, WALL_Z - SIDEWALK - ROAD_W - 1.2, 4.2, 0.95);
       mkPalm(12, WALL_Z - SIDEWALK - ROAD_W - 1.2, 4.8);
       mkPalm(26, WALL_Z - SIDEWALK - ROAD_W - 1.2, 4.0, 0.9);
+      // سدر بحدائق الجيران (4-5 حسب القسم 7)
+      mkSidr(-21.5, 2.5, 1.1);
+      mkSidr(22, 2.8, 0.95);
+      mkSidr(-16, ACROSS_Z + 7.2, 1.2);
+      mkSidr(12.5, ACROSS_Z + 7.5, 1.0);
+      mkSidr(-30, WALL_Z - SIDEWALK - ROAD_W - 3, 1.15);
+
+      // ===== جهنمية (Bougainvillea) — أقوى نقطة لون، موضعان فقط (القسم 7 + حد القسم 20) =====
+      const bougM = M({ color: 0xc94f7c, roughness: 0.9 });
+      const bougGreenM = M({ color: 0x6b8a52, roughness: 0.9 });
+      const mkBoug = (x, z, wSpan, hTop, ry = 0) => {
+        const bg = new THREE.Group();
+        for (let i = 0; i < 14; i++) {
+          const fx = (Math.random() - 0.5) * wSpan;
+          const fy = hTop * (0.45 + Math.random() * 0.6);
+          const blob = new THREE.Mesh(plantJit(track(new THREE.IcosahedronGeometry(0.16 + Math.random() * 0.14, 1))), Math.random() < 0.7 ? bougM : bougGreenM);
+          blob.position.set(fx, fy, (Math.random() - 0.5) * 0.24);
+          blob.castShadow = true; bg.add(blob);
+        }
+        bg.position.set(x, 0, z); bg.rotation.y = ry; scene.add(bg);
+      };
+      mkBoug(-5.5, WALL_Z + 0.28, 4.5, 1.9);            // على سياجنا من الداخل
+      mkBoug(20, ACROSS_Z + 7.8, 3.5, 2.2, Math.PI);    // على جدار بيت الجار القديم
+
+      // ===== أصص فخارية (8) — واحد مگلوب فارغ (عيب مقصود #8) =====
+      const potM = M({ color: 0xc4a97d, roughness: 0.9 });
+      const potPlantM = sidrLeafM;
+      const mkPot = (x, z, sc = 1, tipped = false) => {
+        const pot = new THREE.Group();
+        const body2 = new THREE.Mesh(track(new THREE.CylinderGeometry(0.16, 0.11, 0.26, 10)), potM);
+        body2.position.y = 0.13; pot.add(body2);
+        if (!tipped) {
+          const pl = new THREE.Mesh(plantJit(track(new THREE.IcosahedronGeometry(0.16, 1))), potPlantM);
+          pl.scale.y = 1.5; pl.position.y = 0.4; pot.add(pl);
+        } else { pot.rotation.z = Math.PI / 2 - 0.15; pot.position.y = 0.1; }
+        pot.position.x = x; pot.position.z = pot.position.z || 0; pot.position.set(x, tipped ? 0.12 : 0, z);
+        pot.scale.setScalar(sc); scene.add(pot);
+      };
+      mkPot(-HW / 2 + towerW + 1.8, -HD / 2 - 0.6);        // يمّ باب بيتنا
+      mkPot(-HW / 2 + towerW + 0.1, -HD / 2 - 0.6, 0.85);
+      mkPot(-16.5, 3.6, 1.1); mkPot(-18.5, 3.6, 0.9);
+      mkPot(16.8, 3.6, 1.0);
+      mkPot(-8.5, ACROSS_Z + 8.2, 1.1); mkPot(-6, ACROSS_Z + 8.2, 0.9);
+      mkPot(18.4, 3.6, 0.9, true);                          // المگلوب الفارغ
+
+      // ===== عشب بري بحواف الأرصفة والجدران (12 كتلة — «التفصيلة اللي تفرق») =====
+      const wildGrass = new THREE.InstancedMesh(bladeGeo, grassMat, 70);
+      {
+        const wgSpots = [];
+        for (let i = 0; i < 12; i++) {
+          const along = Math.random();
+          if (i < 7) wgSpots.push([-15 + along * 30 + (Math.random() - 0.5) * 3, WALL_Z - SIDEWALK + 0.15 + Math.random() * 0.2]);
+          else wgSpots.push([-(HW + 8) / 2 + 0.35, -8 + along * 14]);
+        }
+        const d4 = new THREE.Object3D(); const gc2 = new THREE.Color(); let wi = 0;
+        wgSpots.forEach(([gx, gz]) => {
+          for (let k = 0; k < 5; k++) {
+            d4.position.set(gx + (Math.random() - 0.5) * 0.3, 0, gz + (Math.random() - 0.5) * 0.3);
+            d4.rotation.y = Math.random() * Math.PI;
+            const s2 = 0.5 + Math.random() * 0.5; d4.scale.set(s2, 0.6 + Math.random() * 0.6, s2);
+            d4.updateMatrix(); wildGrass.setMatrixAt(wi, d4.matrix);
+            gc2.setHSL(0.21 + Math.random() * 0.04, 0.45, 0.34 + Math.random() * 0.1); // مصفر بري
+            wildGrass.setColorAt(wi, gc2); wi++;
+          }
+        });
+        wildGrass.count = wi; wildGrass.instanceMatrix.needsUpdate = true;
+        if (wildGrass.instanceColor) wildGrass.instanceColor.needsUpdate = true;
+        scene.add(wildGrass);
+      }
+
+      // ===== سرب حمام يدور بالسماء (جدول الحركة: دورة 25-35ث، ارتفاع يتنفس ±3م) =====
+      const pigeons = [];
+      const pigeonBodyM = M({ color: 0x8a8f96, roughness: 0.9 });
+      const pigeonWingM = M({ color: 0xb8bcc2, roughness: 0.9, side: THREE.DoubleSide });
+      for (let i = 0; i < 6; i++) {
+        const bird = new THREE.Group();
+        const body3 = new THREE.Mesh(B(0.1, 0.08, 0.3), pigeonBodyM); bird.add(body3);
+        const wL = new THREE.Mesh(track(new THREE.PlaneGeometry(0.34, 0.16)), pigeonWingM);
+        wL.position.x = -0.2; wL.rotation.y = 0.1; bird.add(wL);
+        const wR = new THREE.Mesh(track(new THREE.PlaneGeometry(0.34, 0.16)), pigeonWingM);
+        wR.position.x = 0.2; wR.rotation.y = -0.1; bird.add(wR);
+        scene.add(bird);
+        pigeons.push({ g: bird, wL, wR, off: i * 1.05, flap: 2 + Math.random() });
+      }
+      const PIG_CYC = 2 * Math.PI / 30; // دورة/30 ثانية
+      // عصفوران واگفان على سلك الكهرباء
+      [[-12, 6.35], [-11.4, 6.35]].forEach(([sx, sy]) => {
+        const sp = new THREE.Mesh(track(new THREE.ConeGeometry(0.06, 0.16, 6)), M({ color: 0x5a5248, roughness: 0.9 }));
+        sp.position.set(sx, sy, WALL_Z - SIDEWALK - ROAD_W - 1.55); sp.rotation.x = 0.2; scene.add(sp);
+      });
+
+      // ===== بقعة ماي تعكس السماء («مراية الرفرنس» — جدول الخامات) =====
+      const puddleM = M({ color: 0xa8cbe8, roughness: 0.06, metalness: 0.35, envMapIntensity: 1.3 });
+      const puddle = new THREE.Mesh(track(new THREE.CircleGeometry(1.15, 26)), puddleM);
+      puddle.rotation.x = -Math.PI / 2; puddle.scale.set(1.7, 1, 1);
+      puddle.position.set(gateX - 6.5, 0.018, WALL_Z - SIDEWALK - 1.2);
+      scene.add(puddle);
+
+      // ===== قطة على السياج (ستاتيك — موضعها يخلي الناس تبتسم) + طابة بالحديقة =====
+      {
+        const cat = new THREE.Group();
+        const catM = M({ color: 0x2e3134, roughness: 0.9 });
+        const cb = new THREE.Mesh(B(0.34, 0.15, 0.13), catM); cb.position.y = 0.1; cat.add(cb);
+        const ch2 = new THREE.Mesh(B(0.12, 0.12, 0.12), catM); ch2.position.set(0.2, 0.2, 0); cat.add(ch2);
+        [[-0.035], [0.035]].forEach(([ex]) => { const ear = new THREE.Mesh(track(new THREE.ConeGeometry(0.03, 0.06, 4)), catM); ear.position.set(0.2 + ex, 0.29, 0); cat.add(ear); });
+        const tail = new THREE.Mesh(B(0.26, 0.035, 0.035), catM); tail.position.set(-0.26, 0.16, 0); tail.rotation.z = 0.5; cat.add(tail);
+        cat.position.set(14.5, 1.37, WALL_Z + 0.02); cat.rotation.y = 0.3; scene.add(cat);
+      }
+      const ball = new THREE.Mesh(track(new THREE.SphereGeometry(0.13, 12, 12)), M({ color: 0xe8e4d0, roughness: 0.6 }));
+      ball.position.set(-4.2, 0.13, -HD / 2 - 3.4); scene.add(ball);
       mkPalm(-HW / 2 + 1.2, -HD / 2 - 1.4, 3.6, 0.85); // نخلة بحديقتنا
       // إغلاق نهايات الشوارع بصرياً (قاعدة الحافة — قسم 2)
       mkPalm(-36.5, WALL_Z - SIDEWALK - 1, 4.5, 1.05);
@@ -1244,6 +1385,22 @@ export default function SystemShowcase({
 
         // غسيل يتموج بالنسيم — دورة/3 ثوان، 5-10 درجات (جدول الحركة 16)
         laundrySway.forEach((cl, i) => { cl.rotation.x = Math.sin(et * 2.1 + i * 1.7) * 0.13; });
+
+        // تيجان النخيل والسدر تتنفس بالنسيم الموحّد (+x) — جدول الحركة 16
+        for (const wc of windCrowns) { wc.grp.rotation.z = Math.sin(et * wc.speed + wc.phase) * wc.amp; }
+
+        // سرب الحمام: مسار إهليلجي دورة/30ث، ارتفاع يتنفس ±3م، رفة جناح
+        for (const pg2 of pigeons) {
+          const a2 = et * PIG_CYC + pg2.off;
+          const px3 = Math.cos(a2) * 26, pz3 = -14 + Math.sin(a2) * 16;
+          const py3 = 26 + Math.sin(et * 0.5 + pg2.off) * 3;
+          pg2.g.position.set(px3, py3, pz3);
+          pg2.g.rotation.y = -a2 - Math.PI / 2;
+          const fl = Math.sin(et * 8 + pg2.off * 3) * 0.55;
+          pg2.wL.rotation.z = fl; pg2.wR.rotation.z = -fl;
+        }
+        // بقعة الماي تعكس لون سماء الوقت الحالي
+        puddleM.color.copy(P.mid);
 
         // تدفق الطاقة
         for (const w2 of wires) {
