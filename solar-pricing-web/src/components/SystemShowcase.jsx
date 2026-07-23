@@ -110,7 +110,7 @@ export default function SystemShowcase({
       const scene = new THREE.Scene();
       // ضباب جوي (القسم 9): بلون الأفق، يبدأ 80م ويكتمل 300م — يصنع طبقات العمق
       // ضباب جوي: بالعرض الهندسي يقرب حتى الأرض تذوب بالسماء قبل ما «تخلص» — بلا حافة أفق
-      scene.fog = ENG_MODE ? new THREE.Fog(0xc8d4dc, 45, 160) : new THREE.Fog(0xc8d4dc, 60, 220);
+      scene.fog = ENG_MODE ? new THREE.Fog(0xd4ccba, 55, 210) : new THREE.Fog(0xc8d4dc, 60, 220);
 
       // ================= خامات البناء =================
       const fadeMats = [];
@@ -1120,17 +1120,41 @@ export default function SystemShowcase({
       const dateM = M({ color: 0x9c5a22, roughness: 0.8 });
       const windCrowns = []; // {grp, phase, speed, amp} — كل الحركات تقرأ ريحاً موحّدة (+x)
       // ---- سعف نخيل حقيقي الشكل: نسيج ألفا ريشي + جيومتري منحنٍ (بدل الكتل الخضر) ----
+      // جذع النخلة: نسيج «كرب» حقيقي — معينات قواعد السعف المقصوصة بصفوف متعاكسة
+      const palmBarkTex = (() => {
+        const c = mkCanvas(2); c.width = 128; c.height = 256;
+        const g = c.getContext('2d');
+        g.fillStyle = '#7d6242'; g.fillRect(0, 0, 128, 256);
+        for (let row = 0; row < 10; row++) {
+          const off = (row % 2) * 16;
+          for (let col = -1; col < 5; col++) {
+            const x = col * 32 + off, y = row * 26;
+            g.fillStyle = ['#8a6d4a', '#75593c', '#93764f'][(row + col + 30) % 3];
+            g.beginPath();
+            g.moveTo(x + 16, y); g.lineTo(x + 32, y + 13); g.lineTo(x + 16, y + 26); g.lineTo(x, y + 13);
+            g.closePath(); g.fill();
+            g.strokeStyle = 'rgba(52,38,24,0.55)'; g.lineWidth = 2; g.stroke();
+            // ظل داخلي خفيف أسفل كل كربة — عمق
+            g.fillStyle = 'rgba(40,28,16,0.25)';
+            g.beginPath(); g.moveTo(x, y + 13); g.lineTo(x + 16, y + 26); g.lineTo(x + 16, y + 20); g.closePath(); g.fill();
+          }
+        }
+        const t2 = track(new THREE.CanvasTexture(c));
+        t2.wrapS = t2.wrapT = THREE.RepeatWrapping; t2.colorSpace = THREE.SRGBColorSpace; t2.anisotropy = 8;
+        return t2;
+      })();
+      const palmBarkM = M({ map: palmBarkTex, roughness: 0.95, bumpMap: palmBarkTex, bumpScale: 0.4 });
       const frondTexture = (base, tip) => {
         const c = mkCanvas(2); c.width = 128; c.height = 512;
         const g = c.getContext('2d');
         g.strokeStyle = '#6b5836'; g.lineWidth = 5;
         g.beginPath(); g.moveTo(64, 508); g.lineTo(64, 10); g.stroke(); // الجريدة
-        for (let t = 0.03; t < 1; t += 0.026) {
+        for (let t = 0.03; t < 1; t += 0.018) {
           const y = 500 - t * 482;
           const len = 60 * (1 - t * 0.38) + 10;
           const spread = 1.0 - t * 0.38; // الوريقات تنفرج بالگاع وتضمّ بالراس
           const cc = t < 0.75 ? base : tip;
-          g.strokeStyle = cc; g.lineWidth = 7 - t * 2.6;
+          g.strokeStyle = cc; g.lineWidth = 5.5 - t * 2.0;
           [-1, 1].forEach((s2) => {
             g.beginPath(); g.moveTo(64, y);
             g.lineTo(64 + s2 * Math.sin(spread) * len, y - Math.cos(spread) * len * 0.7);
@@ -1156,12 +1180,12 @@ export default function SystemShowcase({
       // نخلة: تاج منفصل يتنفس + ميلان جذع عشوائي 1-4 درجات (قسم 7)
       const mkPalm = (x, z, hgt = 4.2, sc = 1) => {
         const pg = new THREE.Group();
-        const tr = new THREE.Mesh(track(new THREE.CylinderGeometry(0.13, 0.22, hgt, 8, 3)), palmTrunkM);
+        // جذع بنسيج الكرب (بدل الحلقات البلاستيكية) — تكرار عمودي حسب الطول
+        const trM = palmBarkM.clone(); track(trM);
+        trM.map = palmBarkTex.clone(); track(trM.map); trM.map.repeat.set(2, hgt * 0.85); trM.map.needsUpdate = true;
+        trM.bumpMap = trM.map;
+        const tr = new THREE.Mesh(track(new THREE.CylinderGeometry(0.15, 0.24, hgt, 10, 4)), trM);
         tr.position.y = hgt / 2; tr.castShadow = true; pg.add(tr);
-        for (let r = 0.5; r < hgt - 0.4; r += 0.55) {
-          const ring = new THREE.Mesh(track(new THREE.TorusGeometry(0.16 + 0.05 * (1 - r / hgt), 0.03, 6, 10)), palmTrunkM);
-          ring.position.y = r; ring.rotation.x = Math.PI / 2; pg.add(ring);
-        }
         const crown = new THREE.Group(); crown.position.y = hgt;
         let dryDone = false;
         // صفان من السعف: خارجي متدلٍ + داخلي منتصب — تاج مليان مثل نخل الشوارع
@@ -1179,7 +1203,18 @@ export default function SystemShowcase({
           fg.position.y = dry ? -0.1 : 0.06;
           crown.add(fg);
         }
-        for (let i = 0; i < 3; i++) { const dt = new THREE.Mesh(track(new THREE.IcosahedronGeometry(0.12, 0)), dateM); dt.position.set(Math.cos(i * 2.1) * 0.3, -0.15, Math.sin(i * 2.1) * 0.3); crown.add(dt); }
+        // عذوق تمر متدلية (عنقودان برتقاليان بساق قصيرة) — توقيع النخلة العراقية
+        for (let cl = 0; cl < 2; cl++) {
+          const ang2 = cl * 2.6 + 0.7;
+          const cx3 = Math.cos(ang2) * 0.42, cz3 = Math.sin(ang2) * 0.42;
+          const stalk = new THREE.Mesh(B(0.03, 0.35, 0.03), palmTrunkM);
+          stalk.position.set(cx3, -0.18, cz3); stalk.rotation.z = 0.3; crown.add(stalk);
+          for (let i = 0; i < 7; i++) {
+            const dt2 = new THREE.Mesh(track(new THREE.SphereGeometry(0.055, 8, 8)), dateM);
+            dt2.position.set(cx3 + ((i * 0.37) % 1 - 0.5) * 0.22, -0.34 - (i % 3) * 0.09, cz3 + ((i * 0.61) % 1 - 0.5) * 0.22);
+            crown.add(dt2);
+          }
+        }
         pg.add(crown);
         windCrowns.push({ grp: crown, phase: Math.random() * 6.28, speed: 2 * Math.PI / (4 + Math.random() * 2), amp: 0.035 + Math.random() * 0.02 }); // 2-4° / 4-6ث
         pg.position.set(x, 0, z); pg.scale.setScalar(sc);
@@ -1500,6 +1535,8 @@ export default function SystemShowcase({
             const fogC2 = new THREE.Color(tone(cr), tone(cg), tone(cb));
             // ليلاً: توهج أفق الصورة يطلع فاتح بعد الرفع الغامي — نسحبه صوب النيلي (لوحة الليل)
             if (slot.noSun) fogC2.lerp(new THREE.Color(0x1b2a4a), 0.65);
+            // بالعرض الهندسي: نسحب الضباب صوب رملي دافئ — يلطف حدة الحزام الأبيض بالأفق
+            if (ENG_MODE) fogC2.lerp(new THREE.Color(0xd9cdb4), 0.45);
             // المحاذاة: نثبّت أزيموث شمس المشهد على قوس الوقت بمنتصف الفترة، وندوّر الـHDRI ليطابق
             const midT = (slot.from + Math.min(slot.to, 24)) / 2;
             const dA = ((midT - 6) / 12) * Math.PI;
@@ -1638,6 +1675,8 @@ export default function SystemShowcase({
             applyPBR(slabMat, 'concrete', 4, 4),
             applyPBR(woodSlat, 'wood', 1, 2),
             applyPBR(poleM, 'wood', 1, 3),
+            // أرضية ترابية جوية حقيقية (dirt_aerial_02 2K) بتينت رملي دافئ من اللوحة
+            applyPBR(groundAll.material, 'ground', 30, 30, { color: new THREE.Color(0xd6c9ae) }),
             // بيوت الجيران: خامة جص حقيقية مع الاحتفاظ بتينت اللوحة الرملية لكل بيت
             applyPBR(villaBodyMats, 'wall', 3, 2, { keepColor: true }),
             applyPBR(stoneDarkM, 'wall', 2.5, 1.5, { keepColor: true }),
@@ -1802,9 +1841,22 @@ export default function SystemShowcase({
           // أشجار إضافية على رصيف الجهة المقابلة وزوايا الحي — نفس الشجرة الفوتوغرامترية بمقاسات أكبر
           // مظلة خضراء وسطية بين بيوت العمق (z موجب = خلف بيت البطل بالكادر) — نغل الرفرنس
           // الجيومتري مشترك بين الاستنساخات فكلفتها رسمات إضافية فقط — تبقى حتى على الموبايل
-          [[-28, 14, 2.0, 0.8], [16, 19, 1.75, 2.9], [-6, 30, 2.25, 4.4], [30, 33, 1.9, 1.7],
-           [46, 16, 1.6, 3.3], [-44, 28, 2.1, 5.6], [8, 24, 1.5, 0.4], [-27, -10.5, 1.3, 2.4]].forEach(([tx, tz, ts, tr]) => {
-            placeClone(gTree, tx, tz, ts, tr);
+          // تنويع الأشجار: نفس الموديل الفوتوغرامتري بثلاث درجات خضرة + مقاسات مختلفة
+          // (تينت مادة الأوراق فقط — الجيومتري يظل مشتركاً)
+          const treeTints = [null, 0xdfe8b8, 0xa8d49a, null, 0xcbe0a0, 0x9cc890, null, 0xd4dea8];
+          const tintLeaves = (cl, tint) => {
+            if (!tint) return;
+            cl.traverse((o) => {
+              if (o.isMesh && /leaf|leaves|branch/i.test(o.material?.name || '')) {
+                o.material = o.material.clone(); track(o.material);
+                o.material.color.multiply(new THREE.Color(tint));
+              }
+            });
+          };
+          [[-28, 14, 2.0, 0.8], [16, 19, 1.6, 2.9], [-6, 30, 2.25, 4.4], [30, 33, 1.35, 1.7],
+           [46, 16, 1.85, 3.3], [-44, 28, 2.1, 5.6], [8, 24, 1.1, 0.4], [-27, -10.5, 1.45, 2.4]].forEach(([tx, tz, ts, tr], ti) => {
+            const cl = placeClone(gTree, tx, tz, ts, tr);
+            tintLeaves(cl, treeTints[ti % treeTints.length]);
             mkAO(tx, tz, 4.2 * ts, 4.2 * ts, 0.45);
           });
           if (!lowPerf) {
