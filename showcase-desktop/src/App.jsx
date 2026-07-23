@@ -1,17 +1,20 @@
 import React, { useState } from 'react';
 import SystemShowcase from './SystemShowcase.jsx';
+import CityScene from './CityScene.jsx';
 
-// نسخة سطح المكتب: شاشة إدخال أرقام الأفر ← العرض الهندسي بجودة قصوى.
-// بيت المدينة (City pack 7) ينركب لاحقاً بمجلد public/city — لحد وصوله
-// يشتغل العرض ببيت البطل المبني بالكود، فالتطبيق كامل من هسه.
+// نسخة سطح المكتب: شاشة إدخال أرقام الأفر ← مدينة المسوحات الفوتوغرامترية
+// ببيت البطل والمنظومة. العرض الهندسي القديم باقٍ خلف ?classic=1
 export default function App() {
-  const [running, setRunning] = useState(false);
+  const classic = new URLSearchParams(location.search).has('classic');
+  const autoShot = new URLSearchParams(location.search).has('shot');
+  const [running, setRunning] = useState(autoShot);
   const [form, setForm] = useState({ panels: 24, batteries: 4, inverters: 1, nightHours: 8, ampDay: 20 });
   const set = (k) => (e) => setForm({ ...form, [k]: Number(e.target.value) || 0 });
 
   if (running) {
+    const Scene = classic ? SystemShowcase : CityScene;
     return (
-      <SystemShowcase
+      <Scene
         panels={form.panels}
         batteries={form.batteries}
         inverters={form.inverters}
