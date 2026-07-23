@@ -80,6 +80,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   const creatorOptions = useMemo(() => [...new Set([...ADMIN_USERS, ...pastCreators])], [pastCreators]);
   // إسناد العرض لموظف آخر: صلاحية حصرية لحساب أحمد فقط (مو كل المشرفين)
   const canAttribute = isAdmin && (myName || '').replace(/[أإآ]/g, 'ا').trim() === 'احمد';
+  // العرض التفاعلي موقوف مؤقتاً عن الجميع عدا حساب أحمد الشخصي — إلى أن يكتمل ترتيبه
+  const showcaseAllowed = isAdmin && (myName || '').replace(/[أإآ]/g, 'ا').trim() === 'احمد';
   // الحسابات المرقمة تظهر بالرقم فقط — نفس تنسيق عمود «أنشأه» بصفحة العروض
   const displayCreator = (n) => (n || '').replace(/^مستخدم(?=[0-9])/, '');
   const [overrides, setOverrides] = useState(savedDraft?.overrides ?? {});
@@ -873,9 +875,11 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
               <button className="btn btn-secondary" disabled={saving || hasBlockingErrors} onClick={handleExportPdf}>
                 📄 PDF
               </button>
-              <button className="btn btn-secondary" disabled={hasBlockingErrors} onClick={() => setShowcaseOpen(true)} title="عرض تفاعلي ثلاثي الأبعاد للزبون">
-                🎬 عرض تفاعلي
-              </button>
+              {showcaseAllowed && (
+                <button className="btn btn-secondary" disabled={hasBlockingErrors} onClick={() => setShowcaseOpen(true)} title="عرض تفاعلي ثلاثي الأبعاد للزبون">
+                  🎬 عرض تفاعلي
+                </button>
+              )}
               {editingQuote ? (
                 <>
                   <button className="btn btn-primary" disabled={saving || hasBlockingErrors} onClick={handleUpdate}>
@@ -893,7 +897,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
             </div>
           </div>
 
-          {showcaseOpen && (
+          {showcaseOpen && showcaseAllowed && (
             <Suspense fallback={null}>
               <SystemShowcase
                 panels={draft.counts?.panel ?? (draft.panelBreakdown ? draft.panelBreakdown.feedPanels + draft.panelBreakdown.chargePanels : 0)}
