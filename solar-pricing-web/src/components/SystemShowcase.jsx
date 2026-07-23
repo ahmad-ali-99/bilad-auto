@@ -114,7 +114,7 @@ export default function SystemShowcase({
       const scene = new THREE.Scene();
       // ضباب جوي (القسم 9): بلون الأفق، يبدأ 80م ويكتمل 300م — يصنع طبقات العمق
       // ضباب جوي: بالعرض الهندسي يقرب حتى الأرض تذوب بالسماء قبل ما «تخلص» — بلا حافة أفق
-      scene.fog = ENG_MODE ? new THREE.Fog(0xd4ccba, 55, 210) : new THREE.Fog(0xc8d4dc, 60, 220);
+      scene.fog = TECH_MODE ? new THREE.Fog(0xd2d6da, 55, 210) : (ENG_MODE ? new THREE.Fog(0xd4ccba, 55, 210) : new THREE.Fog(0xc8d4dc, 60, 220));
 
       // ================= خامات البناء =================
       const fadeMats = [];
@@ -202,7 +202,9 @@ export default function SystemShowcase({
       // شمس المواصفة: #FFE8C4 عصراً، ظلال PCF ناعمة 2048 مركزة على بيت البطل ومحيطه
       const sunLight = new THREE.DirectionalLight(0xffe8c4, 1.8);
       // وضع الحاسوب الأقصى: ظلال 4096 (الموبايل يبقى 1024)
-      sunLight.castShadow = true; sunLight.shadow.mapSize.set(lowPerf ? 1024 : 4096, lowPerf ? 1024 : 4096); sunLight.shadow.bias = -0.0004;
+      // normalBias يقتل نقشة الترميش المنقطة (shadow acne) على الجدران الغامقة
+      sunLight.castShadow = true; sunLight.shadow.mapSize.set(lowPerf ? 1024 : 4096, lowPerf ? 1024 : 4096); sunLight.shadow.bias = -0.0002;
+      sunLight.shadow.normalBias = 0.5;
       sunLight.shadow.radius = 4; // نعومة حواف الظل
       Object.assign(sunLight.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 0.5, far: 160 });
       scene.add(sunLight);
@@ -227,7 +229,7 @@ export default function SystemShowcase({
       };
       const PANEL_W = 1.05, TIER_L = 1.1, TILT = THREE.MathUtils.degToRad(22);
       const LEG = 0.38, LIFT = 0.75, GAPS = 1.0, POST = 0.055;
-      const panelBase = M({ map: panelTexture(), roughness: 0.25, metalness: 0.2, emissive: 0x24406e, emissiveIntensity: 0, envMapIntensity: 1.1 });
+      const panelBase = M({ map: panelTexture(), roughness: 0.42, metalness: 0.2, emissive: 0x24406e, emissiveIntensity: 0, envMapIntensity: 0.7 });
       const panelSurfaces = [];
       const buildStructure = (cols, baseH) => {
         const grp = new THREE.Group();
@@ -259,7 +261,7 @@ export default function SystemShowcase({
       // ================= الأرضيات والشارع =================
       // الأرضية 560م: توصل ورة اكتمال الضباب — ماكو نقطة تشوف بيها «نهاية الأرض»
       const groundAll = new THREE.Mesh(track(new THREE.PlaneGeometry(560, 560)),
-        TECH_MODE ? M({ color: 0xdfe1e3, roughness: 1, envMapIntensity: 0.05 }) // أرضية استوديو محايدة
+        TECH_MODE ? M({ color: 0xbfc3c6, roughness: 1, envMapIntensity: 0.05 }) // أرضية استوديو محايدة (مو صاطعة)
                   : M({ map: rep(dirtT, 112, 112), roughness: 1, envMapIntensity: 0.05 }));
       groundAll.rotation.x = -Math.PI / 2; groundAll.position.y = -0.02; groundAll.receiveShadow = true; scene.add(groundAll);
       const lot = new THREE.Mesh(track(new THREE.PlaneGeometry(HW + 8, HD + LOT_FRONT + 4)), M({ map: rep(sideT, 9, 11), roughness: 0.96, envMapIntensity: 0.05 }));
@@ -1599,6 +1601,8 @@ export default function SystemShowcase({
             if (slot.noSun) fogC2.lerp(new THREE.Color(0x1b2a4a), 0.65);
             // بالعرض الهندسي: نسحب الضباب صوب رملي دافئ — يلطف حدة الحزام الأبيض بالأفق
             if (ENG_MODE) fogC2.lerp(new THREE.Color(0xd9cdb4), 0.45);
+            // بالوضع الهندسي البحت: الضباب بلون الأرضية المحايدة نفسه — الأرض تذوب بلا حزام
+            if (TECH_MODE) fogC2.set(0xd2d6da);
             // المحاذاة: نثبّت أزيموث شمس المشهد على قوس الوقت بمنتصف الفترة، وندوّر الـHDRI ليطابق
             const midT = (slot.from + Math.min(slot.to, 24)) / 2;
             const dA = ((midT - 6) / 12) * Math.PI;
@@ -1656,26 +1660,24 @@ export default function SystemShowcase({
       // ================= رحلة السكرول السينمائية (القسم 17) =================
       // السكرول = تقدم الرحلة 0..1 بكيفريمات الجدول، ويا damping ~0.08 وeasing
       const journey = journeyRef.current;
+      // جولة هندسية بخمس مراحل: افتتاحية ← الألواح ← الانفرتر ← البطاريات ← رجوع
+      // (الكاميرات محسوبة من إحداثيات البيتونة: الغرفة عند x≈-3.4 وواجهتها الزجاجية جهة -z)
       const JKEYS = [
-        { p: 0.00, pos: [9, 25, -38], look: [-3, 4, 0] },        // establishing مرتفعة 25م
-        { p: 0.12, pos: [6, 8, -30], look: [0, 4, -2] },          // نزول قوسي
-        { p: 0.18, pos: [-17, 1.7, -16.5], look: [-10, 3.2, -8] }, // مستوى النظر (المسار الأصلي — أنعم)
-        { p: 0.25, pos: [-4, 1.7, -15.5], look: [0, 3.5, -4] },   // نمشي بالشارع نحو البيت
-        { p: 0.32, pos: [-12, 3, -6], look: [0, 3.5, 0] },        // بداية الدوران النصفي
-        { p: 0.40, pos: [-9, 5.5, 8], look: [0, 3.5, 0] },        // نص دورة حول البيت
-        { p: 0.48, pos: [-3, 10, 9], look: [0, 5.8, 0] },         // صعود حلزوني
-        { p: 0.58, pos: [3, 15, -8], look: [1, 6.4, -2] },        // top-down مائل — الألواح تملأ الكادر
-        { p: 0.78, pos: [5, 16.5, -11], look: [1, 6.4, -2] },     // مسح الشمس صبح→عصر
-        { p: 0.92, pos: [9, 25, -38], look: [-3, 4, 0] },         // رجوع للقطة الافتتاح
-        { p: 1.00, pos: [9, 25, -38], look: [-3, 4, 0] },
+        { p: 0.00, pos: [9, 25, -38], look: [-3, 4, 0] },          // 1) الافتتاحية
+        { p: 0.15, pos: [7, 10.5, -10], look: [0.5, 7, -0.5] },    // 2) فوق السطح مقابل الألواح
+        { p: 0.38, pos: [-1.5, 9, -7.5], look: [-0.5, 7, 0] },     //    مسح بطيء على الألواح
+        { p: 0.46, pos: [-3.4, 7.9, -2.4], look: [-3.4, 7.6, 4] }, // 3) أمام زجاج البيتونة — الانفرترات
+        { p: 0.60, pos: [-3.4, 7.8, -1.7], look: [-3.4, 7.5, 4] },
+        { p: 0.68, pos: [-2.9, 7.1, -1.2], look: [-3.5, 6.9, 4] }, // 4) أوطأ وأقرب — البطاريات
+        { p: 0.82, pos: [-3.0, 7.0, -1.0], look: [-3.5, 6.8, 4] },
+        { p: 1.00, pos: [9, 25, -38], look: [-3, 4, 0] },          // 5) رجوع للوضع الطبيعي
       ];
       const JSTAGES = [
-        { a: 0.00, b: 0.10, t: 'منظومتك الشمسية على بيتك', s: 'عرض هندسي لبيت مستقل بالطاقة من بلاد أوتو' },
-        { a: 0.13, b: 0.24, t: 'بيتك بلا أسلاك ولا مولدة', s: 'لا اشتراك أمبيرات ولا فاتورة كل شهر' },
-        { a: 0.27, b: 0.40, t: 'الحل: استقلال كهربائي', s: 'منظومة متكاملة مصممة على بيتك بالضبط' },
-        { a: 0.43, b: 0.57, t: 'المنظومة على السطح', s: 'الألواح والانفرترات والبطاريات — كل شي مرئي وقابل للعد' },
-        { a: 0.60, b: 0.77, t: 'إمسك الشمس بإيدك', s: 'استمر بالسكرول… الشمس تمشي من الصبح للعصر والظلال وياها' },
-        { a: 0.80, b: 1.00, t: 'بلاد أوتو — استقلالك الكهربائي', s: 'طاقة نظيفة تشتغل طول النهار وتخزن لليل' },
+        { a: 0.00, b: 0.12, t: 'منظومتك الشمسية — جولة تعريفية', s: 'بأرقام عرض السعر الفعلية' },
+        { a: 0.15, b: 0.40, t: `الألواح: ${panels} لوح`, s: 'العدد مطابق لعرض سعرك — موزعة على هياكل السطح' },
+        { a: 0.44, b: 0.62, t: `الانفرتر: ${inverters}`, s: `يجهز نهاراً ~${ampDay || dayAmps || 20} أمبير` },
+        { a: 0.66, b: 0.84, t: `البطاريات: ${batteries}`, s: `تجهيز ليلي ~${nightHours || 8} ساعة` },
+        { a: 0.88, b: 1.00, t: 'منظومة متكاملة على بيتك', s: 'بلاد أوتو — استقلالك الكهربائي' },
       ];
       let jStageIdx = -1;
       const easeC = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
@@ -2154,7 +2156,7 @@ export default function SystemShowcase({
           jv.set(KA.look[0], KA.look[1], KA.look[2]).lerp(jl.set(KB.look[0], KB.look[1], KB.look[2]), ku);
           camera.lookAt(jv);
           // الوقت مربوط خطياً بمقطع 58-78% (المستخدم «يدير الشمس» بالسكرول)
-          if (journey.t >= 0.58) {
+          if (!TECH_MODE && journey.t >= 0.58) {
             const tu = Math.min(1, (journey.t - 0.58) / 0.20);
             timeRef.current = 9.0 + tu * 7.5; // مسح الشمس: 9 صبحاً ← 4:30 عصراً (السماء ثابتة والظل يمشي)
             if (clockRef.current) clockRef.current.textContent = '🕐 ' + fmtTime(timeRef.current);
