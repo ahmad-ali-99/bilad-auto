@@ -114,7 +114,7 @@ export default function SystemShowcase({
       const scene = new THREE.Scene();
       // ضباب جوي (القسم 9): بلون الأفق، يبدأ 80م ويكتمل 300م — يصنع طبقات العمق
       // ضباب جوي: بالعرض الهندسي يقرب حتى الأرض تذوب بالسماء قبل ما «تخلص» — بلا حافة أفق
-      scene.fog = TECH_MODE ? new THREE.Fog(0xd2d6da, 55, 210) : (ENG_MODE ? new THREE.Fog(0xd4ccba, 55, 210) : new THREE.Fog(0xc8d4dc, 60, 220));
+      scene.fog = TECH_MODE ? new THREE.Fog(0xd6dcc6, 55, 210) : (ENG_MODE ? new THREE.Fog(0xd4ccba, 55, 210) : new THREE.Fog(0xc8d4dc, 60, 220));
 
       // ================= خامات البناء =================
       const fadeMats = [];
@@ -203,8 +203,8 @@ export default function SystemShowcase({
       const sunLight = new THREE.DirectionalLight(0xffe8c4, 1.8);
       // وضع الحاسوب الأقصى: ظلال 4096 (الموبايل يبقى 1024)
       // normalBias يقتل نقشة الترميش المنقطة (shadow acne) على الجدران الغامقة
-      sunLight.castShadow = true; sunLight.shadow.mapSize.set(lowPerf ? 1024 : 4096, lowPerf ? 1024 : 4096); sunLight.shadow.bias = -0.0002;
-      sunLight.shadow.normalBias = 0.5;
+      sunLight.castShadow = true; sunLight.shadow.mapSize.set(lowPerf ? 1024 : 2048, lowPerf ? 1024 : 2048); sunLight.shadow.bias = -0.0002;
+      sunLight.shadow.normalBias = 1.0;
       sunLight.shadow.radius = 4; // نعومة حواف الظل
       Object.assign(sunLight.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 0.5, far: 160 });
       scene.add(sunLight);
@@ -261,11 +261,12 @@ export default function SystemShowcase({
       // ================= الأرضيات والشارع =================
       // الأرضية 560م: توصل ورة اكتمال الضباب — ماكو نقطة تشوف بيها «نهاية الأرض»
       const groundAll = new THREE.Mesh(track(new THREE.PlaneGeometry(560, 560)),
-        TECH_MODE ? M({ color: 0xbfc3c6, roughness: 1, envMapIntensity: 0.05 }) // أرضية استوديو محايدة (مو صاطعة)
+        TECH_MODE ? M({ map: rep(lawnT, 90, 90), color: 0xb2c084, roughness: 1, envMapIntensity: 0.05 }) // مرج أخضر هادئ
                   : M({ map: rep(dirtT, 112, 112), roughness: 1, envMapIntensity: 0.05 }));
       groundAll.rotation.x = -Math.PI / 2; groundAll.position.y = -0.02; groundAll.receiveShadow = true; scene.add(groundAll);
       const lot = new THREE.Mesh(track(new THREE.PlaneGeometry(HW + 8, HD + LOT_FRONT + 4)), M({ map: rep(sideT, 9, 11), roughness: 0.96, envMapIntensity: 0.05 }));
       lot.rotation.x = -Math.PI / 2; lot.position.set(0, 0, -LOT_FRONT / 2 + 1); lot.receiveShadow = true; scene.add(lot);
+      if (TECH_MODE) lot.visible = false; // الأرض عشبية بالكامل حتى تحت محيط البيت
       const walk = new THREE.Mesh(track(new THREE.PlaneGeometry(70, SIDEWALK)), M({ map: rep(sideT, 22, 1), roughness: 0.96, envMapIntensity: 0.05 }));
       walk.rotation.x = -Math.PI / 2; walk.position.set(0, 0.02, WALL_Z - SIDEWALK / 2 - 0.1); walk.receiveShadow = true; scene.add(walk);
       // حجر كيربستون
@@ -673,8 +674,9 @@ export default function SystemShowcase({
       const dum = new THREE.Object3D(); const gcol = new THREE.Color(); let gi = 0;
       const grassSpots = []; // مواقع الحديقة — تُعاد للاستخدام مع خصلات العشب الحقيقية (GLB)
       for (let k = 0; k < grassN; k++) {
-        const gx = -2 + (Math.random() - 0.5) * (HW + 3.6);
-        const gz = -HD / 2 - LOT_FRONT / 2 + 0.3 + (Math.random() - 0.5) * (LOT_FRONT - 1.2);
+        const gx = TECH_MODE ? (Math.random() - 0.5) * 36 : -2 + (Math.random() - 0.5) * (HW + 3.6);
+        const gz = TECH_MODE ? -3 + (Math.random() - 0.5) * 28 : -HD / 2 - LOT_FRONT / 2 + 0.3 + (Math.random() - 0.5) * (LOT_FRONT - 1.2);
+        if (TECH_MODE && Math.abs(gx) < 5.5 && gz > -6.5 && gz < 6.5) continue; // مو جوة البيت
         if (gx > gateX - 2 && gx < gateX + 2) continue;
         if (gx > -HW / 2 + towerW + 0.1 && gx < -HW / 2 + towerW + 1.7) continue;
         if (grassSpots.length < 160) grassSpots.push([gx, gz]);
@@ -721,7 +723,7 @@ export default function SystemShowcase({
         });
       }
       scene.add(leaves);
-      if (TECH_MODE) { leaves.visible = false; grass.visible = false; }
+      if (TECH_MODE) leaves.visible = false; // العشب يبقى — نسمة الهواء مطلوبة
 
       // ================= أعمدة الكهرباء والأسلاك (مثل الفيديو) =================
       const poleM = M({ color: 0x4d4237, roughness: 0.9 });
@@ -1602,7 +1604,7 @@ export default function SystemShowcase({
             // بالعرض الهندسي: نسحب الضباب صوب رملي دافئ — يلطف حدة الحزام الأبيض بالأفق
             if (ENG_MODE) fogC2.lerp(new THREE.Color(0xd9cdb4), 0.45);
             // بالوضع الهندسي البحت: الضباب بلون الأرضية المحايدة نفسه — الأرض تذوب بلا حزام
-            if (TECH_MODE) fogC2.set(0xd2d6da);
+            if (TECH_MODE) fogC2.set(0xd6dcc6);
             // المحاذاة: نثبّت أزيموث شمس المشهد على قوس الوقت بمنتصف الفترة، وندوّر الـHDRI ليطابق
             const midT = (slot.from + Math.min(slot.to, 24)) / 2;
             const dA = ((midT - 6) / 12) * Math.PI;
@@ -1983,6 +1985,20 @@ export default function SystemShowcase({
             });
           }
           } // نهاية !TECH_MODE
+          // بالوضع الهندسي الطبيعي: شجرتان حقيقيتان فقط (طلب المستخدم — «بس مو أكثر»)
+          if (TECH_MODE) {
+            const gTree2 = await loadGlb('island_tree_02/island_tree_02_1k.gltf').catch(() => null);
+            if (gTree2 && !disposed) {
+              gTree2.scene.traverse((o) => {
+                if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.material.color.multiplyScalar(1.28); o.material.envMapIntensity = 0.8; }
+              });
+              [[-9, 5.2, 1.15, 0.7], [11, -7, 1.35, 2.4]].forEach(([tx, tz, ts, tr]) => {
+                const cl = gTree2.scene.clone(true);
+                cl.position.set(tx, 0, tz); cl.rotation.y = tr; cl.scale.setScalar(ts); scene.add(cl);
+                mkAO(tx, tz, 4.5 * ts, 4.5 * ts, 0.5);
+              });
+            }
+          }
         } catch {
           /* أوفلاين أو فشل تحميل — يبقى المظهر الإجرائي الحالي شغالاً */
         } finally {
