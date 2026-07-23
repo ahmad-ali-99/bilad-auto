@@ -108,6 +108,9 @@ export default function SystemShowcase({
       // وضع العرض الهندسي (قرار المستخدم): بيت البطل ومنظومته فقط — المدينة كلها تنحجب
       // حتى تتركز ميزانية الجودة على البيت. رجّع false إذا رجعت فكرة المدينة.
       const ENG_MODE = true;
+      // وضع هندسي بحت (طلب المستخدم): بيت + هيكل + ألواح + معدات + وايرات فقط —
+      // بلا تلوين أرضي ولا شوارع ولا نخيل ولا أي زينة. البيت يبقى.
+      const TECH_MODE = true;
       const scene = new THREE.Scene();
       // ضباب جوي (القسم 9): بلون الأفق، يبدأ 80م ويكتمل 300م — يصنع طبقات العمق
       // ضباب جوي: بالعرض الهندسي يقرب حتى الأرض تذوب بالسماء قبل ما «تخلص» — بلا حافة أفق
@@ -255,7 +258,9 @@ export default function SystemShowcase({
 
       // ================= الأرضيات والشارع =================
       // الأرضية 560م: توصل ورة اكتمال الضباب — ماكو نقطة تشوف بيها «نهاية الأرض»
-      const groundAll = new THREE.Mesh(track(new THREE.PlaneGeometry(560, 560)), M({ map: rep(dirtT, 112, 112), roughness: 1, envMapIntensity: 0.05 }));
+      const groundAll = new THREE.Mesh(track(new THREE.PlaneGeometry(560, 560)),
+        TECH_MODE ? M({ color: 0xdfe1e3, roughness: 1, envMapIntensity: 0.05 }) // أرضية استوديو محايدة
+                  : M({ map: rep(dirtT, 112, 112), roughness: 1, envMapIntensity: 0.05 }));
       groundAll.rotation.x = -Math.PI / 2; groundAll.position.y = -0.02; groundAll.receiveShadow = true; scene.add(groundAll);
       const lot = new THREE.Mesh(track(new THREE.PlaneGeometry(HW + 8, HD + LOT_FRONT + 4)), M({ map: rep(sideT, 9, 11), roughness: 0.96, envMapIntensity: 0.05 }));
       lot.rotation.x = -Math.PI / 2; lot.position.set(0, 0, -LOT_FRONT / 2 + 1); lot.receiveShadow = true; scene.add(lot);
@@ -356,8 +361,9 @@ export default function SystemShowcase({
       const house = new THREE.Group();
       // الجسم مزحوف 0.32م لورة — وجهه الأمامي يصير «قاع» فتحات الواجهة الغاطسة
       const FT = 0.32; // سماكة جدار الواجهة
-      const mainMass = new THREE.Mesh(B(HW, HH, HD - FT), whiteWall);
-      mainMass.position.set(0, HH / 2, FT / 2); mainMass.castShadow = true; mainMass.receiveShadow = true; house.add(mainMass);
+      // الجسم مزحوف 6سم إضافية عن ظهر الواجهة — وجهان متطابقان بالمستوي = رمشة z-fighting
+      const mainMass = new THREE.Mesh(B(HW, HH, HD - FT - 0.06), whiteWall);
+      mainMass.position.set(0, HH / 2, (FT + 0.06) / 2); mainMass.castShadow = true; mainMass.receiveShadow = true; house.add(mainMass);
       // بنّاء واجهة بفتحات حقيقية: يقسم الجدار شرائح أفقية عند حواف الفتحات ويملأ ما بينها
       // — الشباك صار ثقب فعلي بجدار له سماكة، بحوافه اللي تلتقط الظل (روح اللعبة الحديثة)
       const buildFacade = (wallW, wallH, thick, openings, mat) => {
@@ -713,6 +719,7 @@ export default function SystemShowcase({
         });
       }
       scene.add(leaves);
+      if (TECH_MODE) { leaves.visible = false; grass.visible = false; }
 
       // ================= أعمدة الكهرباء والأسلاك (مثل الفيديو) =================
       const poleM = M({ color: 0x4d4237, roughness: 0.9 });
@@ -1361,6 +1368,7 @@ export default function SystemShowcase({
         wR.position.x = 0.2; wR.rotation.y = -0.1; bird.add(wR);
         scene.add(bird);
         pigeons.push({ g: bird, wL, wR, off: i * 1.05, flap: 2 + Math.random() });
+        if (TECH_MODE) bird.visible = false;
       }
       const PIG_CYC = 2 * Math.PI / 30; // دورة/30 ثانية
       // عصفوران واگفان على سلك الكهرباء
@@ -1505,8 +1513,9 @@ export default function SystemShowcase({
       const addWire = (a, b, mid, role, colorHex) => {
         const m = mid || new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5).add(new THREE.Vector3(0, 0.5, 0));
         const curve = new THREE.CatmullRomCurve3([a, m, b]);
-        const tube = new THREE.Mesh(track(new THREE.TubeGeometry(curve, 44, 0.02, 8, false)), M({ color: 0x222a33, roughness: 0.6 })); scene.add(tube);
-        const mat = track(new THREE.MeshBasicMaterial({ color: colorHex })); const geo = track(new THREE.SphereGeometry(0.06, 12, 12)); const pulses = [];
+        // وايرات أثخن وأوضح (الوضع الهندسي): أنبوب 4سم + نبضات أكبر — الربط مقروء من بعيد
+        const tube = new THREE.Mesh(track(new THREE.TubeGeometry(curve, 44, TECH_MODE ? 0.045 : 0.02, 8, false)), M({ color: 0x2a3340, roughness: 0.45, metalness: 0.3 })); scene.add(tube);
+        const mat = track(new THREE.MeshBasicMaterial({ color: colorHex })); const geo = track(new THREE.SphereGeometry(TECH_MODE ? 0.1 : 0.06, 12, 12)); const pulses = [];
         for (let k = 0; k < 4; k++) { const p = new THREE.Mesh(geo, mat); scene.add(p); pulses.push({ mesh: p, off: k / 4 }); }
         wires.push({ curve, pulses, mat, role, speed: 0.22 });
       };
@@ -1517,6 +1526,22 @@ export default function SystemShowcase({
       if (batWorld) addWire(invWorld.clone(), batWorld.clone(), new THREE.Vector3((invWorld.x + batWorld.x) / 2, HH + 0.8, invWorld.z - 0.3), 'store', 0x2fe06a);
       const housePoint = new THREE.Vector3(0, FLOOR - 0.3, HD * 0.1);
       addWire(invWorld.clone(), housePoint, new THREE.Vector3(invWorld.x + 0.5, HH * 0.6, HD * 0.25), 'load', 0xffcf66);
+
+      // ===== المسح الهندسي: إخفاء كل الزينة — يبقى البيت والهيكل والألواح والمعدات والوايرات =====
+      if (TECH_MODE) {
+        const keepSet = new Set([skyA, skyB, groundAll, lot, house, structsGroup, room, interior, grass, leaves]);
+        const cc = new THREE.Vector3(); const bb3 = new THREE.Box3();
+        scene.children.forEach((o) => {
+          if (keepSet.has(o) || o.isLight || o.isInstancedMesh) return;
+          bb3.setFromObject(o); if (bb3.isEmpty()) return;
+          bb3.getCenter(cc); if (!isFinite(cc.x)) return;
+          const outside = cc.x < -10.5 || cc.x > 10.5 || cc.z < -13.8 || cc.z > 9.8;
+          const frontYard = cc.z < -5.9 && cc.y < 7; // الحديقة والسياج والشارع قدام البيت
+          const sz3 = bb3.getSize(new THREE.Vector3());
+          const fence = cc.y < 3 && (sz3.x < 0.6 || sz3.z < 0.6) && (Math.abs(cc.x) > 7.5 || cc.z > 4.5); // جدران السياج الجانبية/الخلفية
+          if (outside || frontYard || fence) o.visible = false;
+        });
+      }
 
       // ================= رندر + كاميرا + Bloom =================
       const camera = new THREE.PerspectiveCamera(45, W() / H(), 0.1, 600);
@@ -1707,10 +1732,10 @@ export default function SystemShowcase({
             applyPBR(woodSlat, 'wood', 1, 2),
             applyPBR(poleM, 'wood', 1, 3),
             // أرضية حصى رملي ناعم مرتب (sandy_gravel_02) — مو صحراء متشققة
-            applyPBR(groundAll.material, 'ground', 46, 46, { color: new THREE.Color(0xd8d2c2) }),
+            (TECH_MODE ? Promise.resolve() : applyPBR(groundAll.material, 'ground', 46, 46, { color: new THREE.Color(0xd8d2c2) })),
             // ثيل الحديقة بخامة العشب الحقيقية بتينت هادئ (بدل الأخضر الفاقع)
-            applyPBR(lawn.material, 'grass', 5, 3, { color: new THREE.Color(0x9db06a) }),
-            applyPBR(apronM, 'pavers', 9, 9),
+            (TECH_MODE ? Promise.resolve() : applyPBR(lawn.material, 'grass', 5, 3, { color: new THREE.Color(0x9db06a) })),
+            (TECH_MODE ? Promise.resolve() : applyPBR(apronM, 'pavers', 9, 9)),
             // بيوت الجيران: خامة جص حقيقية مع الاحتفاظ بتينت اللوحة الرملية لكل بيت
             applyPBR(villaBodyMats, 'wall', 3, 2, { keepColor: true }),
             applyPBR(stoneDarkM, 'wall', 2.5, 1.5, { keepColor: true }),
@@ -1719,6 +1744,7 @@ export default function SystemShowcase({
           // التحميل هسه والموديلات (شجرة/نباتات/بوابة) تكتمل بالخلفية بصمت وتنخزن بالكاش
           if (!disposed) { setLoadPct(100); setLoadingAssets(false); }
 
+          if (!TECH_MODE) { // الوضع الهندسي البحت: بلا أي موديلات نباتات/إكسسوارات نهائياً
           // 3) نباتات حقيقية: خصلات عشب + شجيرات + شجرة فوتوغرامترية
           const [gGrass, gShrub1, gShrub2, gTree] = await Promise.all([
             loadGlb('grass_medium_01/grass_medium_01_1k.gltf'),
@@ -1954,6 +1980,7 @@ export default function SystemShowcase({
               scene.add(im); disp.push({ dispose: () => { im.dispose?.(); } });
             });
           }
+          } // نهاية !TECH_MODE
         } catch {
           /* أوفلاين أو فشل تحميل — يبقى المظهر الإجرائي الحالي شغالاً */
         } finally {
