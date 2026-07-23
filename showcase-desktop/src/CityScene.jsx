@@ -42,12 +42,13 @@ const LAYOUT = [
   ['002', 350, -480, 150, -2],
 ];
 
-// بيت البطل: بيت L بمسح 002 (محلي x 7..29, z -37..-28, سطح 11.65)
-// عالمياً بعد إزاحة البلاطة (0,-6,-225):
+// بيت البطل: بيت L بمسح 002 — مثبّت بصرياً بشبكة مؤشرات:
+// المستطيل العلوي محلياً x 26..44, z -41.5..-32 (سطح 12.75)، الرجل السفلية
+// x 26..35, z -32..-21 (سطح 9.9). عالمياً بعد إزاحة البلاطة (0,-6,-225):
 const HERO = {
-  cx: 18, cz: -257.5,               // مركز البيت عالمياً
-  slab: { x0: 8.2, x1: 27.8, z0: -261.6, z1: -254.4, y: 5.95 }, // صبّة التسوية فوق السطح
-  equip: { x: 26.2, z: -252.2, y: 5.75 },  // رجل الـL الشرقية — زاوية المعدات
+  cx: 35.5, cz: -258.5,             // مركز البيت عالمياً
+  slab: { x0: 28.0, x1: 43.4, z0: -262.6, z1: -258.0, y: 7.65 }, // صبّة تسوية جنوب هيكل الدرج/السخان
+  equip: { x: 31.0, z: -251.5, y: 7.05 }, // فوق منصة المعدات (سطح الرجل الفعلي 6.75 عالمياً)
 };
 
 // اتجاه شمس qwantani_afternoon (محسوب من أسطع بكسل): elev 41° az 36°
@@ -187,8 +188,9 @@ export default function CityScene({ panels = 24, batteries = 2, inverters = 2, n
 
       // صبّة التسوية النظيفة فوق سطح المسح
       const sw = slab.x1 - slab.x0, sd = slab.z1 - slab.z0;
-      const slabMesh = shadowMesh(new THREE.Mesh(new THREE.BoxGeometry(sw, 0.35, sd), concrete));
-      slabMesh.position.set((slab.x0 + slab.x1) / 2, slab.y - 0.175, (slab.z0 + slab.z1) / 2);
+      // صبّة سميكة (1م): تبلع نتوءات السطح الممسوح وتبين منصة تسوية حقيقية
+      const slabMesh = shadowMesh(new THREE.Mesh(new THREE.BoxGeometry(sw, 1.0, sd), concrete));
+      slabMesh.position.set((slab.x0 + slab.x1) / 2, slab.y - 0.5, (slab.z0 + slab.z1) / 2);
       sysGroup.add(slabMesh);
       // حافة بارابيت خفيفة حول الصبّة
       const lip = M({ color: 0xbdb7a8, roughness: 0.95 });
@@ -210,7 +212,7 @@ export default function CityScene({ panels = 24, batteries = 2, inverters = 2, n
       let left = panels;
       while (left > 0) { const take = Math.min(12, left); rows.push(take); left -= take; }
       const rowDepth = PH * Math.cos(TILT);
-      const gap = 1.7;
+      const gap = 1.0;
       const totalD = rows.length * rowDepth + (rows.length - 1) * gap;
       let z0 = (slab.z0 + slab.z1) / 2 - totalD / 2 + rowDepth / 2;
       const wires = [];
@@ -243,24 +245,53 @@ export default function CityScene({ panels = 24, batteries = 2, inverters = 2, n
             sysGroup.add(pad);
           }
         }
-        // كيبل السترنك: يمشي على ظهر الصف العلوي ويتجمع بأعلى شرق الصف (جهة المعدات)
+        // كيبل السترنك: يمشي على ظهر الصف العلوي ويتجمع بغرب الصف (جهة نقطة النزول)
         const y = slab.y + 0.5 + PH * Math.sin(TILT) - 0.12;
         const zc = rz + (PH / 2) * Math.cos(TILT) - 0.1;
         wires.push([new THREE.Vector3(x0 - PW / 2 + 0.2, y, zc), new THREE.Vector3(x0 + rowW - PW / 2, y, zc)]);
       });
-      // مسار كيبل تري من الصفوف لزاوية المعدات
+      // غرفة درج نظيفة تغلف هيكل المسح المايع جنوب الصبّة (تحويل العيب لعنصر مقصود)
+      const bulk = shadowMesh(new THREE.Mesh(new THREE.BoxGeometry(4.6, 5.0, 2.3), M({ color: 0xd6d0c2, roughness: 0.9 })));
+      bulk.position.set(34.9, slab.y - 1.9 + 2.5, -263.55);
+      sysGroup.add(bulk);
+      const bulkRoof = shadowMesh(new THREE.Mesh(new THREE.BoxGeometry(4.9, 0.14, 2.6), M({ color: 0xbdb7a8, roughness: 0.95 })));
+      bulkRoof.position.set(34.9, slab.y - 1.9 + 5.07, -263.55);
+      sysGroup.add(bulkRoof);
+      // مسار الكيبلات: تجميع بحافة الصبّة الشمالية ← نزول عمودي بالجدار ← كيبل تري
+      // نايم على سطح الرجل السفلية ← جدار المعدات (ولا واير طايح بالهوا)
       const trayMat = M({ color: 0x8f959c, roughness: 0.5, metalness: 0.7 });
       const wireMat = M({ color: 0x1a1c1f, roughness: 0.6 });
-      const collect = new THREE.Vector3(equip.x - 1.2, slab.y + 0.35, equip.z - 2.2);
+      const collect = new THREE.Vector3(29.6, slab.y + 0.12, slab.z1 - 0.25);
       for (const [a, b] of wires) {
-        const curve = new THREE.CatmullRomCurve3([a, b, new THREE.Vector3(b.x + 0.6, (b.y + collect.y) / 2, (b.z + collect.z) / 2), collect]);
-        const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.022, 6), wireMat);
-        sysGroup.add(tube);
+        const curve = new THREE.CatmullRomCurve3([
+          b, a,
+          new THREE.Vector3(collect.x, a.y - 0.25, (a.z + collect.z) / 2),
+          collect,
+        ]);
+        sysGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.022, 6), wireMat));
       }
-      const tray = shadowMesh(new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.08, 5.2), trayMat));
-      tray.position.set(equip.x - 1.2, slab.y + 0.3, equip.z - 0.2);
+      // النزول العمودي بجدار الكتلة العلوية (من الصبّة لسطح الرجل)
+      const dropTop = new THREE.Vector3(29.6, slab.y, slab.z1 + 0.12);
+      const dropBot = new THREE.Vector3(29.6, equip.y + 0.16, slab.z1 + 0.12);
+      const drop = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.045, 0.045, dropTop.y - dropBot.y).translate(0, (dropTop.y + dropBot.y) / 2, 0),
+        trayMat
+      );
+      drop.position.set(dropTop.x, 0, dropTop.z);
+      sysGroup.add(drop);
+      // كيبل تري نايم على سطح الرجل من النزول لجدار المعدات
+      const trayLen = Math.abs(equip.z - 1.0 - (slab.z1 + 0.3));
+      const tray = shadowMesh(new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.09, trayLen), trayMat));
+      tray.position.set(29.6, equip.y + 0.1, slab.z1 + 0.3 + trayLen / 2);
       sysGroup.add(tray);
+      const tray2 = shadowMesh(new THREE.Mesh(new THREE.BoxGeometry(Math.abs(equip.x - 29.6) + 0.3, 0.09, 0.26), trayMat));
+      tray2.position.set((29.6 + equip.x) / 2, equip.y + 0.1, equip.z - 1.0);
+      sysGroup.add(tray2);
 
+      // منصة كونكريت فوق سطح الرجل المنتفخ — المعدات كلها عليها
+      const pedestal = shadowMesh(new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.6, 8.2), concrete));
+      pedestal.position.set(equip.x, equip.y - 0.3, -253.6);
+      sysGroup.add(pedestal);
       // جدار تقني صغير نظيف بزاوية الـL: عليه الانفرترات، وجنبه قاعدة البطاريات
       const wall = shadowMesh(new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.7, 0.22), M({ color: 0xd8d2c4, roughness: 0.9 })));
       wall.position.set(equip.x, equip.y + 0.85, equip.z + 0.6);
@@ -274,11 +305,11 @@ export default function CityScene({ panels = 24, batteries = 2, inverters = 2, n
         scr.position.set(inv.position.x, inv.position.y + 0.14, inv.position.z - 0.125);
         scr.rotation.y = Math.PI;
         sysGroup.add(scr);
-        // واير نازل من الكيبل تري للانفرتر
+        // واير صاعد من الكيبل تري الأرضي للانفرتر على الجدار
         const c = new THREE.CatmullRomCurve3([
-          new THREE.Vector3(equip.x - 1.2, slab.y + 0.3, equip.z - 0.2),
-          new THREE.Vector3(inv.position.x, equip.y + 1.55, equip.z + 0.42),
-          new THREE.Vector3(inv.position.x, inv.position.y + 0.38, inv.position.z),
+          new THREE.Vector3(inv.position.x, equip.y + 0.12, equip.z - 1.0),
+          new THREE.Vector3(inv.position.x, equip.y + 0.5, equip.z + 0.2),
+          new THREE.Vector3(inv.position.x, inv.position.y - 0.38, inv.position.z),
         ]);
         sysGroup.add(new THREE.Mesh(new THREE.TubeGeometry(c, 24, 0.02, 6), wireMat));
       }
@@ -350,7 +381,7 @@ export default function CityScene({ panels = 24, batteries = 2, inverters = 2, n
 
       // غسيل يتحرك على سطحين قريبين
       const clothColors = [0xe8e2d4, 0xc94f7c, 0x7a9bd4, 0xf0f0f0];
-      for (const [lx, ly, lz] of [[HERO.cx - 11, 6.1, HERO.cz + 2.5], [HERO.cx + 21, 4.6, HERO.cz - 12]]) {
+      for (const [lx, ly, lz] of [[HERO.cx - 4, 4.0, HERO.cz + 8.5], [HERO.cx + 11, 4.3, HERO.cz - 11]]) {
         const lineMat = new THREE.MeshBasicMaterial({ color: 0x555555 });
         const line = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 3.6).rotateZ(Math.PI / 2), lineMat);
         line.position.set(lx, ly + 1.15, lz);
@@ -391,15 +422,17 @@ export default function CityScene({ panels = 24, batteries = 2, inverters = 2, n
     function buildNight() {
       // شبابيك بيت البطل تضوي دافئ (الواجهة الجنوبية والشرقية)
       const winMat = new THREE.MeshBasicMaterial({ color: 0xffd9a0, toneMapped: false });
+      // واجهة البيت الجنوبية (z=-266.6) + الغربية (x=25.9) — طابقين
       const winSpots = [
-        [11.5, 3.2, -261.7, 0], [15.5, 3.2, -261.7, 0], [20, 3.2, -261.7, 0], [24, 3.2, -261.7, 0],
-        [11.5, 1.1, -261.7, 0], [20, 1.1, -261.7, 0],
-        [28.0, 3.0, -257.5, 1], [28.0, 3.0, -253.5, 1],
+        [30, 4.6, -266.45, 's'], [33.5, 4.6, -266.45, 's'], [37, 4.6, -266.45, 's'], [40.5, 4.6, -266.45, 's'],
+        [31.5, 2.0, -266.45, 's'], [38.5, 2.0, -266.45, 's'],
+        [25.95, 4.6, -262.0, 'w'], [25.95, 4.6, -259.5, 'w'],
       ];
-      for (const [x, y, z, rot] of winSpots) {
+      for (const [x, y, z, face] of winSpots) {
         const w = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 1.5), winMat);
-        w.position.set(x, y, z - (rot ? 0 : 0.05));
-        if (rot) { w.rotation.y = -Math.PI / 2; w.position.x += 0.05; }
+        w.position.set(x, y, z);
+        if (face === 's') w.rotation.y = Math.PI;      // تطل للجنوب
+        else w.rotation.y = -Math.PI / 2;              // تطل للغرب
         nightGroup.add(w);
       }
       // ضوء حديقة دافئ + إنارة المنظومة
@@ -412,8 +445,8 @@ export default function CityScene({ panels = 24, batteries = 2, inverters = 2, n
       // شبابيك خافتة متفرقة بالجيران (أخف بكثير من البطل)
       const dimMat = new THREE.MeshBasicMaterial({ color: 0x8a7c58, toneMapped: false });
       const neighbors = [
-        [-2, 3.5, -246, 0], [36, 2.8, -251, 0], [4, 6.5, -270, 0], [40, 3.4, -238, 1],
-        [-14, 3.0, -240, 0], [26, 2.6, -274, 0],
+        [20, 4, -266, 0], [50, 3, -262, 0], [35, 6.5, -243, 0], [48, 3.4, -250, 1],
+        [24, 3, -240, 0], [56, 2.6, -270, 0],
       ];
       for (const [x, y, z, rot] of neighbors) {
         const w = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.2), dimMat);

@@ -30,16 +30,16 @@ npm start        # تشغيل التطبيق
 npm run dist     # تغليف ملف exe محمول (مجلد release/)
 ```
 
-## الأصول الثقيلة (موديل المدينة لاحقاً)
+## أصول المدينة (المسوحات الفوتوغرامترية)
 
-ملف الريبو الواحد على GitHub محدود بـ100MB، فموديل City pack 7 والأصول الضخمة
-(حتى 3–7GB) ما تدخل بالريبو — تُرفع على **GitHub Releases** (سقف 2GB للملف، مع تقسيم تلقائي):
+المسوحات الست (~870MB) مرفوعة على GitHub Release باسم `photoscans-v1` بريبو bilad-auto،
+و`start.bat` ينزلها ويجهزها **تلقائياً أول مرة**. يدوياً:
 
-- `node scripts/pack-assets.mjs city` — يضغط `public/city` لملفات جاهزة للرفع.
-- `node scripts/fetch-assets.mjs` — ينزّل ملفات آخر Release (يحتاج `GITHUB_TOKEN` لأن الريبو خاص)،
-  وبعدها تفك ملفات zip داخل `public/` وتعيد `npm run build`.
+- `node scripts/prepare-assets.mjs` — ينزّل المسوحات والسماوات HDRI، يفك الضغط،
+  ويحوّل OBJ لصيغة `scan.bin` السريعة. مرة وحدة وبعدها كلشي أوفلاين.
+- `node scripts/pack-assets.mjs` — لضغط أصول إضافية مستقبلاً ورفعها Release.
 
-أصول العرض الحالية (`public/showcase` — خامات وسماء، ~177MB) موجودة بالريبو نفسه فلا تحتاج شي.
+أصول العرض الهندسي القديم (`public/showcase` — ~177MB) موجودة بالريبو نفسه.
 
 ## الإسناد
 
