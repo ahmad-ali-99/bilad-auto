@@ -148,7 +148,8 @@ export default function SystemShowcase({
       const SUN_MIN = 7.0, SUN_MAX = 16.5; // مدى سلايدر الشمس
       const skyGeoBig = track(new THREE.SphereGeometry(380, 40, 24));
       const mkSkySphere = () => {
-        const m2 = track(new THREE.MeshBasicMaterial({ side: THREE.BackSide, fog: false, depthWrite: false, transparent: true, opacity: 0 }));
+        // toneMapped:false — خلفية الـJPG معالجة مسبقاً، ما تمر بـACES مرة ثانية
+        const m2 = track(new THREE.MeshBasicMaterial({ side: THREE.BackSide, fog: false, depthWrite: false, transparent: true, opacity: 0, toneMapped: false }));
         const mesh2 = new THREE.Mesh(skyGeoBig, m2); mesh2.renderOrder = -10; scene.add(mesh2); return mesh2;
       };
       const skyA = mkSkySphere(), skyB = mkSkySphere();
@@ -1496,7 +1497,7 @@ export default function SystemShowcase({
       const camera = new THREE.PerspectiveCamera(45, W() / H(), 0.1, 600);
       camera.position.set(3.5, 6, WALL_Z - SIDEWALK - ROAD_W - 4.5);
       renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowPerf ? 1.5 : 2));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowPerf ? 1.25 : 2));
       renderer.setSize(W(), H());
       renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -1517,7 +1518,18 @@ export default function SystemShowcase({
           const hdrBase = new URL('showcase/hdr/', document.baseURI).href;
           const loadHdrTex = (f) => new Promise((res, rej) => rgbe.load(hdrBase + f, (t2) => { t2.mapping = THREE.EquirectangularReflectionMapping; res(track(t2)); }, undefined, rej));
           const loadSlot = async (slot) => {
-            const [bg, env1k] = await Promise.all([loadHdrTex(slot.file + '.hdr'), loadHdrTex(slot.file + '_1k.hdr')]);
+            // الخلفية JPG عادي (33MB GPU بدل 134MB float — آيفون كان يكرش من الـ4K HDR)
+            // والإضاءة/كشف الشمس/لون الأفق من نسخة 1K HDR الصغيرة فقط
+            const bgUrl = hdrBase + (lowPerf ? 'sky_2k.jpg' : 'sky_4k.jpg');
+            const jpgL = new THREE.TextureLoader();
+            const [bg, env1k] = await Promise.all([
+              new Promise((res, rej) => jpgL.load(bgUrl, (t2) => {
+                t2.mapping = THREE.EquirectangularReflectionMapping;
+                t2.colorSpace = THREE.SRGBColorSpace; t2.anisotropy = 4;
+                res(track(t2));
+              }, undefined, rej)),
+              loadHdrTex(slot.file + '_1k.hdr'),
+            ]);
             // كشف الشمس: أسطع بكسل بنسخة 1K → أزيموثها وارتفاعها + لون الأفق للضباب
             const img = env1k.image, data = img.data, W2 = img.width, H2 = img.height;
             let best = -1, bu = 0.5, bv = 0.3;
@@ -1545,6 +1557,7 @@ export default function SystemShowcase({
             const sunElev = slot.noSun ? THREE.MathUtils.degToRad(slot.elevFallback) : Math.max(THREE.MathUtils.degToRad(4), Math.min(elevTex, THREE.MathUtils.degToRad(80)));
             const sd = new THREE.Vector3(Math.cos(targetAz) * Math.cos(sunElev), Math.sin(sunElev), Math.sin(targetAz) * Math.cos(sunElev));
             const envRT2 = pmrem.fromEquirectangular(env1k); disp.push(envRT2);
+            env1k.dispose(); // نسخة CPU العائمة تنحذف — خلصنا من قراءة بياناتها
             hdriSky.slots[slot.id] = { bg, envRT: envRT2, fogC: fogC2, sunDir: sd, rotY: rotY2, expo: slot.expo };
           };
           await loadSlot(SKY_SLOTS[0]); // السماء الثابتة الوحيدة
