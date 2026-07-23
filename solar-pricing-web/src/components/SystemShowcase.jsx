@@ -229,7 +229,7 @@ export default function SystemShowcase({
       };
       const PANEL_W = 1.05, TIER_L = 1.1, TILT = THREE.MathUtils.degToRad(22);
       const LEG = 0.38, LIFT = 0.75, GAPS = 1.0, POST = 0.055;
-      const panelBase = M({ map: panelTexture(), roughness: 0.42, metalness: 0.2, emissive: 0x24406e, emissiveIntensity: 0, envMapIntensity: 0.7 });
+      const panelBase = M({ map: panelTexture(), roughness: 0.62, metalness: 0.15, emissive: 0x24406e, emissiveIntensity: 0, envMapIntensity: 0.35 });
       const panelSurfaces = [];
       const buildStructure = (cols, baseH) => {
         const grp = new THREE.Group();
@@ -723,7 +723,7 @@ export default function SystemShowcase({
         });
       }
       scene.add(leaves);
-      if (TECH_MODE) leaves.visible = false; // العشب يبقى — نسمة الهواء مطلوبة
+      if (TECH_MODE) { leaves.visible = false; grass.visible = false; } // بلا شفرات عشب — شكلها تعيس
 
       // ================= أعمدة الكهرباء والأسلاك (مثل الفيديو) =================
       const poleM = M({ color: 0x4d4237, roughness: 0.9 });
@@ -1524,8 +1524,26 @@ export default function SystemShowcase({
         wires.push({ curve, pulses, mat, role, speed: 0.22 });
       };
       if (structs.length && panelFront) {
-        const pw = panelFront.clone().add(structsGroup.position);
-        addWire(pw, invWorld.clone().add(new THREE.Vector3(0, 0.3, -0.1)), new THREE.Vector3((pw.x + invWorld.x) / 2, HH + 1.2, (pw.z + invWorld.z) / 2), 'gen', 0x66ccff);
+        // كيبلات السترنك: خط تجميع على ظهر كل طاولة ألواح، تلتقي كلها بنقطة
+        // أعلى يسار ظهر المصفوفة، ومنها الكيبل الرئيسي للانفرتر (طلب المستخدم)
+        structsGroup.updateMatrixWorld(true);
+        const stringM = M({ color: 0x2a3340, roughness: 0.45, metalness: 0.3 });
+        const sBox = new THREE.Box3().setFromObject(structsGroup);
+        const collect = new THREE.Vector3(sBox.min.x + 0.18, sBox.max.y + 0.04, sBox.max.z - 0.12);
+        const stringWire = (pts, sag = 0.06) => {
+          const cur = new THREE.CatmullRomCurve3(pts.map((q, qi) => (qi > 0 && qi < pts.length - 1 ? q.clone().setY(q.y - sag) : q.clone())));
+          const tb = new THREE.Mesh(track(new THREE.TubeGeometry(cur, 24, 0.022, 6, false)), stringM); scene.add(tb);
+        };
+        structsGroup.children.forEach((sg2) => {
+          const b2 = new THREE.Box3().setFromObject(sg2);
+          const yTop = b2.max.y + 0.03, zBack = b2.max.z - 0.1;
+          const right = new THREE.Vector3(b2.max.x - 0.15, yTop, zBack);
+          const mid = new THREE.Vector3((b2.max.x + b2.min.x) / 2, yTop, zBack);
+          const left = new THREE.Vector3(b2.min.x + 0.15, yTop, zBack);
+          stringWire([right, mid, left]);                 // خط الظهر يجمع الألواح
+          stringWire([left, collect], 0.1);               // من يسار الطاولة لنقطة التجميع
+        });
+        addWire(collect, invWorld.clone().add(new THREE.Vector3(0, 0.3, -0.1)), new THREE.Vector3((collect.x + invWorld.x) / 2, Math.max(collect.y, HH + 1.4), (collect.z + invWorld.z) / 2), 'gen', 0x66ccff);
       }
       if (batWorld) addWire(invWorld.clone(), batWorld.clone(), new THREE.Vector3((invWorld.x + batWorld.x) / 2, HH + 0.8, invWorld.z - 0.3), 'store', 0x2fe06a);
       const housePoint = new THREE.Vector3(0, FLOOR - 0.3, HD * 0.1);
@@ -2151,8 +2169,8 @@ export default function SystemShowcase({
         // Bloom بعتبة عالية (القسم 9): نهاراً شبه معدوم، ليلاً على الأضوية فقط
         // المغرب سماؤه ساطعة — البلوم القوي للّيل الحقيقي فقط وإلا تحترق سماء الغروب
         const nightGlow = !isDay && slot.id === 'night';
-        bloom.strength = nightGlow ? 0.4 : 0.08;
-        bloom.threshold = nightGlow ? 0.88 : 1.15;
+        bloom.strength = nightGlow ? 0.4 : 0.04;
+        bloom.threshold = nightGlow ? 0.88 : 1.4;
 
         // ===== رحلة السكرول: damping + كاميرا الكيفريمات + ربط الوقت (58-78%) =====
         // الجولة التلقائية: تتقدم بريتم ثابت (~40 ثانية للجولة كاملة) وتنتهي برجوع ناعم
