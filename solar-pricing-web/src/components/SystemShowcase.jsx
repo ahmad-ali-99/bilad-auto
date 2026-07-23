@@ -51,6 +51,7 @@ export default function SystemShowcase({
       const { RenderPass } = await import('three/examples/jsm/postprocessing/RenderPass.js');
       const { UnrealBloomPass } = await import('three/examples/jsm/postprocessing/UnrealBloomPass.js');
       const { ShaderPass } = await import('three/examples/jsm/postprocessing/ShaderPass.js');
+      const { RoundedBoxGeometry } = await import('three/examples/jsm/geometries/RoundedBoxGeometry.js');
       const mount = mountRef.current;
       if (disposed || !mount) return;
       const track = (o) => { disp.push(o); return o; };
@@ -103,10 +104,13 @@ export default function SystemShowcase({
 
       // موبايل/جهاز خفيف: ظلال أوطى + عشب أقل + دقة رسم أقل (قسم 11)
       const lowPerf = Math.min(window.innerWidth, window.innerHeight) < 640 || (navigator.hardwareConcurrency || 8) <= 4;
+      // وضع العرض الهندسي (قرار المستخدم): بيت البطل ومنظومته فقط — المدينة كلها تنحجب
+      // حتى تتركز ميزانية الجودة على البيت. رجّع false إذا رجعت فكرة المدينة.
+      const ENG_MODE = true;
       const scene = new THREE.Scene();
       // ضباب جوي (القسم 9): بلون الأفق، يبدأ 80م ويكتمل 300م — يصنع طبقات العمق
-      // ضباب جوي قوي: خط النخيل (~205م) نص ذايب، ولونه يتحدث من أفق HDRI بالحركة
-      scene.fog = new THREE.Fog(0xc8d4dc, 60, 220);
+      // ضباب جوي: بالعرض الهندسي يقرب حتى الأرض تذوب بالسماء قبل ما «تخلص» — بلا حافة أفق
+      scene.fog = ENG_MODE ? new THREE.Fog(0xc8d4dc, 45, 160) : new THREE.Fog(0xc8d4dc, 60, 220);
 
       // ================= خامات البناء =================
       const fadeMats = [];
@@ -119,7 +123,10 @@ export default function SystemShowcase({
       const innerWall = fadeMat({ color: 0xefe9df, roughness: 0.95 });
       const slabMat = fadeMat({ map: rep(roofT, 4, 4), bumpMap: rep(roofB, 4, 4), bumpScale: 0.4, roughness: 0.95 });
       // زجاج يعكس سماء الـHDRI فعلياً — هذا اللي يحوّل الشباك من «حفرة سودة» لزجاج حي
-      const glassMat = M({ color: 0x8fa3b3, roughness: 0.05, metalness: 1.0, emissive: 0xffc97a, emissiveIntensity: 0.04, envMapIntensity: 1.6 });
+      // زجاج فاتح: معدنية جزئية = انعكاس سماء + قاعدة لونية فاتحة تمنع «الحفرة السودة»
+      // (معدنية واطية عمداً: الانعكاس للأسفل يصطاد منطقة ما تحت أفق الـHDRI السودة —
+      //  فنخلي القاعدة الفاتحة تهيمن ويظل لمعان سماء خفيف)
+      const glassMat = M({ color: 0xaec3d2, roughness: 0.12, metalness: 0.45, emissive: 0xffc97a, emissiveIntensity: 0.04, envMapIntensity: 1.6 });
       const frameMat = M({ color: 0x1f2327, roughness: 0.45, metalness: 0.5 });
       const woodSlat = M({ map: rep(woodT, 1, 2), roughness: 0.7 });
       const floorWood = M({ color: 0xc9a876, roughness: 0.8 });
@@ -132,14 +139,13 @@ export default function SystemShowcase({
       // خمسة أوقات، كل وقت HDRI: 4K خلفية + 1K إضاءة/انعكاسات PMREM. كروس-فيد بين
       // كرتي سماء، محاذاة تلقائية لاتجاه الشمس (نكشف أسطع بكسل بالصورة فيتطابق الظل
       // ويا شمس السماء)، ولون الضباب يُستخرج من أفق الـHDRI نفسه — بلا خط فاصل.
+      // قرار المستخدم: سماء واحدة ثابتة (نهار غائم جزئياً) — صورة السماء ما تتغير أبداً.
+      // السلايدر يحرك الشمس (اتجاه/دفء/طول الظل) من الصبح للعصر فقط، بلا ليل ولا مغرب.
       const SKY_SLOTS = [
-        { id: 'dawn', file: 'dawn', from: 6.0, to: 9.0, expo: 1.05, elevFallback: 10 },      // qwantani_dawn_puresky
-        { id: 'noon', file: 'noon', from: 9.0, to: 14.0, expo: 0.9, elevFallback: 70 },      // qwantani_noon_puresky
-        { id: 'asr', file: 'day', from: 14.0, to: 17.4, expo: 1.0, elevFallback: 40 },       // kloofendal_48d_partly_cloudy_puresky
-        { id: 'maghrib', file: 'sunset', from: 17.4, to: 19.4, expo: 0.6, elevFallback: 6 }, // the_sky_is_on_fire
-        { id: 'night', file: 'night', from: 19.4, to: 30.1, expo: 1.35, elevFallback: 35, noSun: true }, // moonless_golf
+        { id: 'asr', file: 'day', from: 0, to: 30.1, expo: 1.0, elevFallback: 40 }, // kloofendal_48d_partly_cloudy_puresky
       ];
-      const slotAt = (tv) => { const tt = tv < 6 ? tv + 24 : tv; return SKY_SLOTS.find((s2) => tt >= s2.from && tt < s2.to) || SKY_SLOTS[4]; };
+      const slotAt = () => SKY_SLOTS[0];
+      const SUN_MIN = 7.0, SUN_MAX = 16.5; // مدى سلايدر الشمس
       const skyGeoBig = track(new THREE.SphereGeometry(380, 40, 24));
       const mkSkySphere = () => {
         const m2 = track(new THREE.MeshBasicMaterial({ side: THREE.BackSide, fog: false, depthWrite: false, transparent: true, opacity: 0 }));
@@ -245,7 +251,8 @@ export default function SystemShowcase({
       const SIDEWALK = 2, ROAD_W = 9;
 
       // ================= الأرضيات والشارع =================
-      const groundAll = new THREE.Mesh(track(new THREE.PlaneGeometry(200, 200)), M({ map: rep(dirtT, 40, 40), roughness: 1, envMapIntensity: 0.05 }));
+      // الأرضية 560م: توصل ورة اكتمال الضباب — ماكو نقطة تشوف بيها «نهاية الأرض»
+      const groundAll = new THREE.Mesh(track(new THREE.PlaneGeometry(560, 560)), M({ map: rep(dirtT, 112, 112), roughness: 1, envMapIntensity: 0.05 }));
       groundAll.rotation.x = -Math.PI / 2; groundAll.position.y = -0.02; groundAll.receiveShadow = true; scene.add(groundAll);
       const lot = new THREE.Mesh(track(new THREE.PlaneGeometry(HW + 8, HD + LOT_FRONT + 4)), M({ map: rep(sideT, 9, 11), roughness: 0.96, envMapIntensity: 0.05 }));
       lot.rotation.x = -Math.PI / 2; lot.position.set(0, 0, -LOT_FRONT / 2 + 1); lot.receiveShadow = true; scene.add(lot);
@@ -298,6 +305,28 @@ export default function SystemShowcase({
       })();
       const streakM = track(new THREE.MeshBasicMaterial({ map: streakTex, transparent: true, depthWrite: false }));
       const baseDirtM = track(new THREE.MeshBasicMaterial({ map: baseDirtTex, transparent: true, depthWrite: false }));
+      // ---- فروقات الأرض: بقع ناعمة كبيرة بدرجات اللوحة تكسر رتابة الأرضية الموحدة ----
+      const patchTex = (() => {
+        const c = mkCanvas(128); const g = c.getContext('2d');
+        const gr = g.createRadialGradient(64, 64, 10, 64, 64, 62);
+        gr.addColorStop(0, 'rgba(255,255,255,0.55)'); gr.addColorStop(0.65, 'rgba(255,255,255,0.28)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+        return track(new THREE.CanvasTexture(c));
+      })();
+      const mkPatch = (x, z, rx, rz, hex, op, ry = 0) => {
+        const m2 = track(new THREE.MeshBasicMaterial({ map: patchTex, color: hex, transparent: true, depthWrite: false, opacity: op }));
+        const p = new THREE.Mesh(aoGeo, m2);
+        p.rotation.x = -Math.PI / 2; p.rotation.z = ry; p.scale.set(rx, rz, 1);
+        p.position.set(x, 0.012, z); p.renderOrder = 1; scene.add(p); return p;
+      };
+      // تراب أفتح وأغمق حول البيت وبالساحات — عشوائية حتمية هادئة
+      [[-18, 12, 14, 9, 0xd6c49c, 0.5], [22, 18, 18, 11, 0xcdbb96, 0.45], [0, 30, 22, 13, 0xd9c7a8, 0.4],
+       [-32, -2, 12, 8, 0x9a8a6e, 0.4], [30, -4, 10, 7, 0xa89878, 0.35], [-10, 22, 9, 6, 0x8f7f63, 0.35],
+       [14, 9, 8, 5, 0xc9b691, 0.42], [-24, 28, 13, 9, 0xd2c09b, 0.38], [40, 12, 15, 10, 0xc4b28c, 0.4],
+       [-42, 16, 14, 9, 0xcfbd98, 0.42]].forEach(([px, pz, rx, rz, hx, op], i) => mkPatch(px, pz, rx, rz, hx, op, i * 0.9));
+      // بقع خدمة غامقة بالشارع قرب الحافة + خطوط إطارات باهتة على الدرايف
+      mkPatch(-6, WALL_Z - SIDEWALK - 1.6, 3.4, 1.6, 0x2f3336, 0.35, 0.15);
+      mkPatch(8, WALL_Z - SIDEWALK - 2.2, 2.6, 1.3, 0x33373a, 0.3, -0.2);
 
       // ================= السياج + اللوحة + البوابة =================
       const wallH = 1.7;
@@ -322,8 +351,45 @@ export default function SystemShowcase({
 
       // ================= البيت (واجهة الصورة) =================
       const house = new THREE.Group();
-      const mainMass = new THREE.Mesh(B(HW, HH, HD), whiteWall);
-      mainMass.position.y = HH / 2; mainMass.castShadow = true; mainMass.receiveShadow = true; house.add(mainMass);
+      // الجسم مزحوف 0.32م لورة — وجهه الأمامي يصير «قاع» فتحات الواجهة الغاطسة
+      const FT = 0.32; // سماكة جدار الواجهة
+      const mainMass = new THREE.Mesh(B(HW, HH, HD - FT), whiteWall);
+      mainMass.position.set(0, HH / 2, FT / 2); mainMass.castShadow = true; mainMass.receiveShadow = true; house.add(mainMass);
+      // بنّاء واجهة بفتحات حقيقية: يقسم الجدار شرائح أفقية عند حواف الفتحات ويملأ ما بينها
+      // — الشباك صار ثقب فعلي بجدار له سماكة، بحوافه اللي تلتقط الظل (روح اللعبة الحديثة)
+      const buildFacade = (wallW, wallH, thick, openings, mat) => {
+        const fg = new THREE.Group();
+        const ys = [...new Set([0, wallH, ...openings.flatMap((o) => [o.y - o.h / 2, o.y + o.h / 2])])].sort((a2, b2) => a2 - b2);
+        for (let i = 0; i < ys.length - 1; i++) {
+          const y0 = ys[i], y1 = ys[i + 1]; if (y1 - y0 < 0.015) continue;
+          const midY = (y0 + y1) / 2;
+          const act = openings.filter((o) => midY > o.y - o.h / 2 && midY < o.y + o.h / 2).sort((a2, b2) => a2.x - b2.x);
+          let x0 = -wallW / 2;
+          const put = (xa, xb) => {
+            if (xb - xa < 0.015) return;
+            const b2 = new THREE.Mesh(B(xb - xa, y1 - y0, thick), mat);
+            b2.position.set((xa + xb) / 2, midY, 0); b2.castShadow = true; b2.receiveShadow = true; fg.add(b2);
+          };
+          for (const o of act) { put(x0, o.x - o.w / 2); x0 = Math.max(x0, o.x + o.w / 2); }
+          put(x0, wallW / 2);
+        }
+        return fg;
+      };
+      const balcW = 5.4, balcH = FLOOR, balcX = HW / 2 - balcW / 2 - 0.6;
+      const towerW0 = 2.4;
+      const heroOpenings = [
+        { x: HW / 2 - 2.2, y: 1.55, w: 2.3, h: 1.72 },                        // شباك الصالة
+        { x: 0.2, y: 1.55, w: 1.42, h: 1.56 },                                // شباك المطبخ
+        { x: -HW / 2 + towerW0 + 0.9, y: 1.16, w: 1.3, h: 2.32 },             // الباب
+        { x: balcX, y: FLOOR + balcH / 2, w: balcW - 0.7, h: balcH - 0.4 },   // فتحة البلكونة الغاطسة
+        { x: -HW / 2 + towerW0 / 2, y: HH / 2, w: towerW0 + 0.04, h: HH + 0.1 }, // منطقة البرج (يغطيها البرج)
+      ];
+      const heroFacade = buildFacade(HW, HH, FT, heroOpenings, whiteWall);
+      heroFacade.position.z = -HD / 2 + FT / 2; house.add(heroFacade);
+      // عتمة داخلية ورة كل الفتحات — من تباوع بالزجاج تشوف غرفة مظلمة مو لون جص
+      // (الطابق الأرضي فقط — فتحة البلكونة فوگ لازم تبقى مفتوحة لعمقها الحقيقي)
+      const innerDark = new THREE.Mesh(B(HW - 0.2, FLOOR - 0.08, 0.02), M({ color: 0x0e1114, roughness: 1 }));
+      innerDark.position.set(0, FLOOR / 2, -HD / 2 + FT - 0.01); house.add(innerDark);
       const towerW = 2.4, towerH = HH + 1.6;
       const tower = new THREE.Mesh(B(towerW, towerH, 3), charcoalDark);
       tower.position.set(-HW / 2 + towerW / 2, towerH / 2, -HD / 2 + 1.5); tower.castShadow = true; house.add(tower);
@@ -337,32 +403,39 @@ export default function SystemShowcase({
           pl.scale.set(1, 1.7, 1); pl.position.set(-HW / 2 + 0.5 + i * 0.5, ly - 0.3, -HD / 2 - 0.3); house.add(pl);
         }
       });
-      const balcW = 5.4, balcH = FLOOR, balcX = HW / 2 - balcW / 2 - 0.6;
-      const balcBack = new THREE.Mesh(B(balcW, balcH, 0.15), charcoal);
+      // جدار البلكونة الداخلي فاتح دافئ — الفتحة تقرأ كبلكونة حقيقية مو حفرة سودة
+      const balcBack = new THREE.Mesh(B(balcW, balcH, 0.15), M({ color: 0xd9cdb4, roughness: 0.9 }));
       balcBack.position.set(balcX, FLOOR + balcH / 2, -HD / 2 + 1.1); house.add(balcBack);
+      const balcCeil = new THREE.Mesh(B(balcW, 0.12, 1.2), M({ color: 0xcfc4ab, roughness: 0.9 }));
+      balcCeil.position.set(balcX, HH - 0.06, -HD / 2 + 0.75); house.add(balcCeil);
+      const balcFloor = new THREE.Mesh(B(balcW, 0.1, 1.2), M({ color: 0xb8ad94, roughness: 0.85 }));
+      balcFloor.position.set(balcX, FLOOR + 0.05, -HD / 2 + 0.75); house.add(balcFloor);
       const balcGlass = new THREE.Mesh(B(balcW - 0.5, balcH - 0.9, 0.05), glassMat.clone());
       track(balcGlass.material); windowsGlow.push(balcGlass.material);
       balcGlass.position.set(balcX, FLOOR + balcH / 2 + 0.2, -HD / 2 + 1.02); house.add(balcGlass);
-      const balcRail = new THREE.Mesh(B(balcW, 1.0, 0.1), charcoalDark);
+      const balcRail = new THREE.Mesh(B(balcW - 0.6, 1.0, 0.08), M({ color: 0xc8ccd0, roughness: 0.35, metalness: 0.7 }));
       balcRail.position.set(balcX, FLOOR + 0.55, -HD / 2 + 0.35); house.add(balcRail);
-      const stripGeo = B(balcW + 1.2, 0.16, 0.06);
-      [FLOOR + 1.15, FLOOR + 2.2].forEach((sy) => { const s = new THREE.Mesh(stripGeo, whiteWall); s.position.set(balcX - 0.2, sy, -HD / 2 - 0.02); house.add(s); });
+      // (شرائط الواجهة القديمة انحذفت — صارت فتحة البلكونة حقيقية بحوافها)
       const slatGrp = new THREE.Group();
       for (let i = 0; i < 7; i++) { const sl = new THREE.Mesh(B(0.09, FLOOR - 0.3, 0.09), woodSlat); sl.position.set(i * 0.14, 0, 0); slatGrp.add(sl); }
       slatGrp.position.set(HW / 2 - 1.1, FLOOR + FLOOR / 2, -HD / 2 - 0.06); house.add(slatGrp);
-      // شباك بإطار + عارضتين + عتبة
-      const mkWin = (x, y, w2, h2, z, host = house) => {
-        const fr = new THREE.Mesh(B(w2 + 0.14, h2 + 0.14, 0.08), frameMat); fr.position.set(x, y, z); host.add(fr);
-        const gm = glassMat.clone(); track(gm); windowsGlow.push(gm);
-        const gl = new THREE.Mesh(B(w2, h2, 0.05), gm); gl.position.set(x, y, z - 0.025); host.add(gl);
-        const mull = new THREE.Mesh(B(0.05, h2, 0.06), frameMat); mull.position.set(x, y, z - 0.01); host.add(mull);
-        const sill = new THREE.Mesh(B(w2 + 0.3, 0.08, 0.18), curbM); sill.position.set(x, y - h2 / 2 - 0.1, z); host.add(sill);
+      // شباك غاطس جوة الفتحة: إطار بمنتصف السماكة + زجاج وراه + عتبة بارزة بره
+      // (zFace = مستوى الواجهة الخارجي — الغطس نحو داخل البيت = +z)
+      const mkWin = (x, y, w2, h2, zFace, host = house) => {
+        // لوح الإطار خلفية بعمق الفتحة، والزجاج قدامه (لو انعكس الترتيب ينبلع الزجاج!)
+        const fr = new THREE.Mesh(B(w2 + 0.14, h2 + 0.14, 0.05), frameMat); fr.position.set(x, y, zFace + 0.2); host.add(fr);
+        // زجاج الفتحة الغاطسة: بظل الفتحة الانعكاس وحده يطلع أسود — نضيف سماوية ذاتية
+        // خفيفة (خدعة العرض المعماري) حتى يقرأ كزجاج نهاري حي
+        const gm = M({ color: 0xa8c0d4, roughness: 0.15, metalness: 0.3, emissive: 0x8fa8bc, emissiveIntensity: 0.4, envMapIntensity: 1.4 });
+        const gl = new THREE.Mesh(B(w2, h2, 0.04), gm); gl.position.set(x, y, zFace + 0.15); host.add(gl);
+        const mull = new THREE.Mesh(B(0.05, h2, 0.05), frameMat); mull.position.set(x, y, zFace + 0.12); host.add(mull);
+        const sill = new THREE.Mesh(B(w2 + 0.34, 0.09, 0.22), curbM); sill.position.set(x, y - h2 / 2 - 0.1, zFace - 0.04); host.add(sill);
       };
-      mkWin(HW / 2 - 2.2, 1.55, 2.6, 1.7, -HD / 2 - 0.03);
-      mkWin(0.2, 1.55, 1.5, 1.5, -HD / 2 - 0.03);
-      mkWin(-HW / 2 + towerW / 2, 3.4, 1.1, 2.2, -HD / 2 - 0.03);
-      const door = new THREE.Mesh(B(1.1, 2.2, 0.08), M({ color: 0x2d2620, roughness: 0.5 }));
-      door.position.set(-HW / 2 + towerW + 0.9, 1.1, -HD / 2 - 0.03); house.add(door);
+      mkWin(HW / 2 - 2.2, 1.55, 2.14, 1.58, -HD / 2);
+      mkWin(0.2, 1.55, 1.28, 1.44, -HD / 2);
+      mkWin(-HW / 2 + towerW / 2, 3.4, 1.1, 2.2, -HD / 2 - 0.24); // شباك البرج (بارز على وجه البرج الصم)
+      const door = new THREE.Mesh(B(1.14, 2.24, 0.08), M({ color: 0x2d2620, roughness: 0.5 }));
+      door.position.set(-HW / 2 + towerW + 0.9, 1.12, -HD / 2 + 0.22); house.add(door); // غاطس بمحرابه
       const doorStep = new THREE.Mesh(B(1.5, 0.12, 0.8), curbM); doorStep.position.set(-HW / 2 + towerW + 0.9, 0.06, -HD / 2 - 0.4); house.add(doorStep);
       [[-HW / 2 - 0.03, HD * 0.05, Math.PI / 2], [HW / 2 + 0.03, HD * 0.05, -Math.PI / 2]].forEach(([sx, sz, ry]) => {
         [1.55, FLOOR + 1.55].forEach((sy) => {
@@ -621,7 +694,7 @@ export default function SystemShowcase({
       const poleZ = WALL_Z - SIDEWALK - ROAD_W - 1.0;
       const wireM = M({ color: 0x1a1d20, roughness: 0.6 });
       const procPoles = []; // تنخفي إذا تحمّل عمود الكهرباء الفوتوريالستك
-      polesX.forEach((px) => {
+      if (!ENG_MODE) polesX.forEach((px) => {
         const pole = new THREE.Mesh(track(new THREE.CylinderGeometry(0.09, 0.11, 7.2, 10)), poleM);
         pole.position.set(px, 3.6, poleZ); pole.castShadow = true; scene.add(pole);
         const arm = new THREE.Mesh(B(1.6, 0.09, 0.09), poleM); arm.position.set(px, 6.6, poleZ); scene.add(arm);
@@ -633,7 +706,7 @@ export default function SystemShowcase({
         const cur = new THREE.CatmullRomCurve3(pts);
         const tube = new THREE.Mesh(track(new THREE.TubeGeometry(cur, 24, 0.015, 6, false)), wireM); scene.add(tube);
       };
-      for (let i = 0; i < polesX.length - 1; i++) {
+      if (!ENG_MODE) for (let i = 0; i < polesX.length - 1; i++) {
         mkCatenary(polesX[i], polesX[i + 1], 6.62, poleZ - 0.55, 0.35);
         mkCatenary(polesX[i], polesX[i + 1], 6.62, poleZ + 0.55, 0.35);
       }
@@ -652,8 +725,8 @@ export default function SystemShowcase({
         const bulb = new THREE.Mesh(track(new THREE.SphereGeometry(0.17, 14, 14)), bulbM); bulb.position.y = 4.12; g.add(bulb);
         g.position.set(x, 0, z); scene.add(g);
       };
-      mkLamp(3.4, WALL_Z - 0.9); mkLamp(-11, WALL_Z - 0.9); mkLamp(16, WALL_Z - 0.9);
-      mkLamp(-2, WALL_Z - SIDEWALK - ROAD_W - 1.4);
+      mkLamp(3.4, WALL_Z - 0.9);
+      if (!ENG_MODE) { mkLamp(-11, WALL_Z - 0.9); mkLamp(16, WALL_Z - 0.9); mkLamp(-2, WALL_Z - SIDEWALK - ROAD_W - 1.4); }
 
       // ================= الجيران: محرك النماذج الأربعة + التنويع (المواصفة قسم 6) =================
       // لوحة القسم 9: رملي دافئ #D9C7A8 وتدرجاته (بيج/رملي/عاجي/ترابي فاتح)
@@ -836,6 +909,7 @@ export default function SystemShowcase({
         return g;
       };
       // ---- توزيع الحي: 13 بيت، ولا اثنين متطابقين ----
+      if (!ENG_MODE) { // وضع العرض الهندسي: بلا جيران نهائياً
       // صفّنا
       mkVilla(1, -17.5, -HD / 2 + 2.2, 0, 11, { laundry: true });
       mkVilla(3, 17.5, -HD / 2 + 2.2, 0, 22);
@@ -889,6 +963,7 @@ export default function SystemShowcase({
         const bb = new THREE.Mesh(track(new THREE.PlaneGeometry(v2.w + 0.1, 0.55)), baseDirtM);
         bb.position.set(0, 0.28, v2.d / 2 + 0.03); v2.g.add(bb);
       });
+      } // نهاية !ENG_MODE (الجيران وصفوف العمق وباس العمر)
 
       // ================= طبقة الأفق (القسم 2): خط نخيل + سيلويتات #9FB4C7 =================
       const hazeC = 0x9fb4c7;
@@ -909,6 +984,7 @@ export default function SystemShowcase({
         }
         const t2 = track(new THREE.CanvasTexture(c)); t2.colorSpace = THREE.SRGBColorSpace; return t2;
       };
+      if (!ENG_MODE) { // طبقة الأفق المدنية كلها — بالعرض الهندسي الأفق يذوب بالضباب نظيفاً
       const plTex = palmLineTex();
       for (let i = 0; i < 8; i++) {
         const ang = (i / 8) * Math.PI * 2 + 0.35;
@@ -946,6 +1022,7 @@ export default function SystemShowcase({
         const tw2 = new THREE.Mesh(track(new THREE.CylinderGeometry(0.3, 1.6, 34, 6)), hazeM); tw2.position.set(95, 17, 165); scene.add(tw2);
         const ant = new THREE.Mesh(B(0.2, 6, 0.2), hazeM); ant.position.set(95, 37, 165); scene.add(ant);
       }
+      } // نهاية !ENG_MODE (طبقة الأفق)
 
       // ================= تفاصيل الشارع (القسم 4) =================
       // منهولات معدنية
@@ -974,30 +1051,64 @@ export default function SystemShowcase({
         pit.rotation.x = -Math.PI / 2; pit.position.set(px2, 0.025, WALL_Z - 1.1); scene.add(pit);
       });
       // شارع فرعي ثاني يمين + إغلاق بصري لنهايات الشوارع (قاعدة الحافة)
-      const crossRoad2 = new THREE.Mesh(track(new THREE.PlaneGeometry(ROAD_W - 1.5, 40)), road.material);
-      crossRoad2.rotation.x = -Math.PI / 2; crossRoad2.position.set(27.5, 0.003, WALL_Z - SIDEWALK - ROAD_W - 18);
-      crossRoad2.receiveShadow = true; scene.add(crossRoad2);
+      if (!ENG_MODE) {
+        const crossRoad2 = new THREE.Mesh(track(new THREE.PlaneGeometry(ROAD_W - 1.5, 40)), road.material);
+        crossRoad2.rotation.x = -Math.PI / 2; crossRoad2.position.set(27.5, 0.003, WALL_Z - SIDEWALK - ROAD_W - 18);
+        crossRoad2.receiveShadow = true; scene.add(crossRoad2);
+      }
       // (نخلات إغلاق نهايات الشوارع تُضاف بعد تعريف mkPalm أدناه)
 
       // ================= سيارات (3 ألوان) =================
       const glassM2 = M({ color: 0x18242e, roughness: 0.12, metalness: 0.5 });
       const wheelG = track(new THREE.CylinderGeometry(0.34, 0.34, 0.24, 18)); const wheelM = M({ color: 0x121212, roughness: 0.7 });
       const procCars = []; const carSpots = [];
+      // سيدان معاصرة بحواف منحنية (RoundedBox) — مو صناديق: جسم + قمرة مدموجة + حزام
+      // زجاج ملفوف + مصدات ومرايات وجنوط — طول ~4.5م (فحص السكيل)
       const mkCar = (hex, x, z, ry = 0) => {
         carSpots.push([x, z, ry]);
         const car = new THREE.Group();
         procCars.push(car);
-        const paint = M({ color: hex, roughness: 0.4, metalness: 0.55, envMapIntensity: 0.8 });
-        const cb1 = new THREE.Mesh(B(1.75, 0.5, 4.0), paint); cb1.position.y = 0.55; cb1.castShadow = true; car.add(cb1);
-        const cb2 = new THREE.Mesh(B(1.6, 0.48, 2.2), paint); cb2.position.set(0, 1.0, -0.2); cb2.castShadow = true; car.add(cb2);
-        const cw1 = new THREE.Mesh(B(1.5, 0.36, 0.06), glassM2); cw1.position.set(0, 1.0, 0.95); car.add(cw1);
-        const cw2 = new THREE.Mesh(B(1.5, 0.34, 0.06), glassM2); cw2.position.set(0, 1.0, -1.28); car.add(cw2);
-        [[0.82, 1.35], [-0.82, 1.35], [0.82, -1.35], [-0.82, -1.35]].forEach(([wx, wz]) => { const w2 = new THREE.Mesh(wheelG, wheelM); w2.rotation.z = Math.PI / 2; w2.position.set(wx, 0.34, wz); car.add(w2); });
+        const paint = M({ color: hex, roughness: 0.22, metalness: 0.65, envMapIntensity: 1.3 });
+        const darkTrim = M({ color: 0x1c1f22, roughness: 0.55, metalness: 0.3 });
+        const rb = (w2, h2, d2, r2) => track(new RoundedBoxGeometry(w2, h2, d2, 4, r2));
+        // الجسم السفلي: منحنٍ من كل الحواف
+        const body2 = new THREE.Mesh(rb(1.78, 0.62, 4.45, 0.16), paint); body2.position.y = 0.62; body2.castShadow = true; car.add(body2);
+        // القمرة: منزلقة للورة شوية بانحناء أكبر (fastback)
+        const cabin = new THREE.Mesh(rb(1.58, 0.55, 2.35, 0.24), paint); cabin.position.set(0, 1.08, -0.25); cabin.castShadow = true; car.add(cabin);
+        // حزام الزجاج الملفوف: صندوق منحنٍ غامق يبرز قليلاً من القمرة
+        const glassBand = new THREE.Mesh(rb(1.6, 0.34, 2.1, 0.16), glassM2); glassBand.position.set(0, 1.13, -0.25); car.add(glassBand);
+        // مصدات + عتبة سفلية
+        const bumperF = new THREE.Mesh(rb(1.72, 0.24, 0.4, 0.1), darkTrim); bumperF.position.set(0, 0.4, 2.12); car.add(bumperF);
+        const bumperR = bumperF.clone(); bumperR.position.z = -2.12; car.add(bumperR);
+        const skirt = new THREE.Mesh(rb(1.7, 0.14, 3.6, 0.06), darkTrim); skirt.position.y = 0.3; car.add(skirt);
+        // شبك أمامي + لوحة
+        const grille = new THREE.Mesh(rb(0.9, 0.18, 0.06, 0.03), darkTrim); grille.position.set(0, 0.62, 2.23); car.add(grille);
+        const plate = new THREE.Mesh(B(0.5, 0.12, 0.02), M({ color: 0xe8e6da, roughness: 0.6 })); plate.position.set(0, 0.42, 2.33); car.add(plate);
+        // مصابيح أمامية/خلفية
+        const hlM = M({ color: 0xd8dee6, roughness: 0.15, metalness: 0.6, emissive: 0x667080, emissiveIntensity: 0.12 });
+        const tlM = M({ color: 0x7a1e22, roughness: 0.3, emissive: 0x5a1215, emissiveIntensity: 0.25 });
+        [[-0.62, 2.2, hlM], [0.62, 2.2, hlM], [-0.62, -2.2, tlM], [0.62, -2.2, tlM]].forEach(([lx, lz, lm]) => {
+          const lamp = new THREE.Mesh(rb(0.42, 0.14, 0.1, 0.05), lm); lamp.position.set(lx, 0.78, lz); car.add(lamp);
+        });
+        // مرايات جانبية
+        [-1, 1].forEach((s2) => {
+          const mir2 = new THREE.Mesh(rb(0.09, 0.12, 0.2, 0.03), paint); mir2.position.set(s2 * 0.93, 1.02, 0.85); car.add(mir2);
+        });
+        // عجلات بجنوط فضية
+        const rimM = M({ color: 0xc4c8cc, roughness: 0.25, metalness: 0.9 });
+        [[0.83, 1.42], [-0.83, 1.42], [0.83, -1.42], [-0.83, -1.42]].forEach(([wx, wz]) => {
+          const w2 = new THREE.Mesh(wheelG, wheelM); w2.rotation.z = Math.PI / 2; w2.position.set(wx, 0.35, wz); car.add(w2);
+          const rim = new THREE.Mesh(track(new THREE.CylinderGeometry(0.19, 0.19, 0.26, 14)), rimM);
+          rim.rotation.z = Math.PI / 2; rim.position.set(wx, 0.35, wz); car.add(rim);
+        });
         car.position.set(x, 0, z); car.rotation.y = ry; scene.add(car);
+        mkAO(x, z, 2.6, 5.2, 0.85, ry);
       };
-      mkCar(0x8e9aa5, gateX, -HD / 2 - 2.6);                                     // فضية على الدرايف
-      mkCar(0xe8e6e0, -7, WALL_Z - SIDEWALK - 1.6, Math.PI / 2);                 // بيضاء واقفة على الرصيف
-      mkCar(0x1f3a5c, 12.5, WALL_Z - SIDEWALK - ROAD_W + 1.4, Math.PI / 2);      // كحلية بالجهة الثانية
+      mkCar(0xe8e6e0, gateX, -HD / 2 - 2.6);                                     // بيضاء على الدرايف
+      if (!ENG_MODE) {
+        mkCar(0x8e9aa5, -7, WALL_Z - SIDEWALK - 1.6, Math.PI / 2);               // فضية واقفة على الرصيف
+        mkCar(0x1f3a5c, 12.5, WALL_Z - SIDEWALK - ROAD_W + 1.4, Math.PI / 2);    // كحلية بالجهة الثانية
+      }
 
       // ================= الخضرة (القسم 7): ثلاث درجات أخضر + نسيم موحّد =================
       // اللوحة: نخيلي مزرق #4A6B4D • سدر دافئ #7A9B5E • عشب مصفر (بالشيدر)
@@ -1099,17 +1210,19 @@ export default function SystemShowcase({
         mkAO(x, z, 2.6 * sc, 2.6 * sc, 0.65);
       };
       mkPalm(-14, WALL_Z - 1.1, 4.4);
-      mkPalm(-5, WALL_Z - 1.1, 3.9, 0.92);
       mkPalm(10.5, WALL_Z - 1.1, 4.6);
-      mkPalm(-19, WALL_Z - SIDEWALK - ROAD_W - 1.2, 4.2, 0.95);
-      mkPalm(12, WALL_Z - SIDEWALK - ROAD_W - 1.2, 4.8);
-      mkPalm(26, WALL_Z - SIDEWALK - ROAD_W - 1.2, 4.0, 0.9);
-      // سدر بحدائق الجيران (4-5 حسب القسم 7)
       mkSidr(-21.5, 2.5, 1.1);
-      mkSidr(22, 2.8, 0.95);
-      mkSidr(-16, ACROSS_Z + 7.2, 1.2);
-      mkSidr(12.5, ACROSS_Z + 7.5, 1.0);
-      mkSidr(-30, WALL_Z - SIDEWALK - ROAD_W - 3, 1.15);
+      if (!ENG_MODE) {
+        mkPalm(-5, WALL_Z - 1.1, 3.9, 0.92);
+        mkPalm(-19, WALL_Z - SIDEWALK - ROAD_W - 1.2, 4.2, 0.95);
+        mkPalm(12, WALL_Z - SIDEWALK - ROAD_W - 1.2, 4.8);
+        mkPalm(26, WALL_Z - SIDEWALK - ROAD_W - 1.2, 4.0, 0.9);
+        // سدر بحدائق الجيران (4-5 حسب القسم 7)
+        mkSidr(22, 2.8, 0.95);
+        mkSidr(-16, ACROSS_Z + 7.2, 1.2);
+        mkSidr(12.5, ACROSS_Z + 7.5, 1.0);
+        mkSidr(-30, WALL_Z - SIDEWALK - ROAD_W - 3, 1.15);
+      }
 
       // ===== جهنمية (Bougainvillea) — أقوى نقطة لون، موضعان فقط (القسم 7 + حد القسم 20) =====
       const bougM = M({ color: 0xc94f7c, roughness: 0.9 });
@@ -1221,6 +1334,8 @@ export default function SystemShowcase({
       const GEN_X = -25.5, GEN_Z = WALL_Z - SIDEWALK - 0.9;
       const genSteelM = M({ color: 0x3a4148, roughness: 0.7, metalness: 0.45 });
       const genRustM = M({ color: 0x6b4a2c, roughness: 0.95 });
+      const smoke = [];
+      if (!ENG_MODE) {
       {
         const gen = new THREE.Group();
         const body4 = new THREE.Mesh(B(2.3, 1.5, 1.25), genSteelM); body4.position.y = 0.95; body4.castShadow = true; gen.add(body4);
@@ -1281,7 +1396,6 @@ export default function SystemShowcase({
         genWire([a2, b3], 0.5);
       }
       // دخان المولدة: particles شفافة 15% تصعد وتنحرف ويا الريح (+x) — جدول الحركة
-      const smoke = [];
       const smokeTexS = cloudTex(true);
       for (let i = 0; i < 9; i++) {
         const m2 = track(new THREE.SpriteMaterial({ map: smokeTexS, transparent: true, opacity: 0, color: 0x8a8f94, fog: true, depthWrite: false }));
@@ -1289,10 +1403,11 @@ export default function SystemShowcase({
         sp2.position.set(GEN_X + 0.85, 2.6, GEN_Z - 0.3); scene.add(sp2);
         smoke.push({ sp: sp2, m: m2, age: (i / 9) * 4 });
       }
-      mkPalm(-HW / 2 + 1.2, -HD / 2 - 1.4, 3.6, 0.85); // نخلة بحديقتنا
       // إغلاق نهايات الشوارع بصرياً (قاعدة الحافة — قسم 2)
       mkPalm(-36.5, WALL_Z - SIDEWALK - 1, 4.5, 1.05);
       mkPalm(37, WALL_Z - SIDEWALK - ROAD_W - 1.2, 4.3, 0.95);
+      } // نهاية !ENG_MODE (المولدة والشيلمانات وأسلاكها ودخانها)
+      mkPalm(-HW / 2 + 1.2, -HD / 2 - 1.4, 3.6, 0.85); // نخلة بحديقتنا
 
       // ================= ممر مشاة (زيبرا) + شارع متقاطع + تفاصيل =================
       const zebraM = M({ color: 0xe6e6de, roughness: 0.85 });
@@ -1303,12 +1418,16 @@ export default function SystemShowcase({
         scene.add(zb);
       }
       // شارع متقاطع يسار يكسر الرتابة
-      const crossRoad = new THREE.Mesh(track(new THREE.PlaneGeometry(ROAD_W - 1, 40)), road.material);
-      crossRoad.rotation.x = -Math.PI / 2; crossRoad.position.set(-27.5, 0.003, WALL_Z - SIDEWALK - ROAD_W - 18);
-      crossRoad.receiveShadow = true; scene.add(crossRoad);
-      // حاوية نفايات خضراء يمّ البوابة + مصطبة
-      const bin = new THREE.Mesh(B(0.7, 0.85, 0.55), M({ color: 0x2e6b34, roughness: 0.7 }));
-      bin.position.set(gateX + 2.4, 0.45, WALL_Z - 0.8); bin.castShadow = true; scene.add(bin);
+      if (!ENG_MODE) {
+        const crossRoad = new THREE.Mesh(track(new THREE.PlaneGeometry(ROAD_W - 1, 40)), road.material);
+        crossRoad.rotation.x = -Math.PI / 2; crossRoad.position.set(-27.5, 0.003, WALL_Z - SIDEWALK - ROAD_W - 18);
+        crossRoad.receiveShadow = true; scene.add(crossRoad);
+      }
+      // حاوية نفايات خضراء يمّ البوابة + مصطبة (بالعرض الهندسي: بلا حاويات — نظافة عرض)
+      if (!ENG_MODE) {
+        const bin = new THREE.Mesh(B(0.7, 0.85, 0.55), M({ color: 0x2e6b34, roughness: 0.7 }));
+        bin.position.set(gateX + 2.4, 0.45, WALL_Z - 0.8); bin.castShadow = true; scene.add(bin);
+      }
       const bench = new THREE.Mesh(B(1.6, 0.1, 0.45), M({ color: 0x8a6a45, roughness: 0.8 }));
       bench.position.set(-9.5, 0.45, WALL_Z - 0.9); scene.add(bench);
       [[-10.1, 0.2], [-8.9, 0.2]].forEach(([bx, bh2]) => { const bl2 = new THREE.Mesh(B(0.12, 0.42, 0.4), metalGray); bl2.position.set(bx, bh2, WALL_Z - 0.9); scene.add(bl2); });
@@ -1391,12 +1510,8 @@ export default function SystemShowcase({
             const envRT2 = pmrem.fromEquirectangular(env1k); disp.push(envRT2);
             hdriSky.slots[slot.id] = { bg, envRT: envRT2, fogC: fogC2, sunDir: sd, rotY: rotY2, expo: slot.expo };
           };
-          await loadSlot(SKY_SLOTS[2]); // العصر (الافتراضي) أول شي
+          await loadSlot(SKY_SLOTS[0]); // السماء الثابتة الوحيدة
           hdriSky.ready = true;
-          for (const s2 of [SKY_SLOTS[3], SKY_SLOTS[4], SKY_SLOTS[1], SKY_SLOTS[0]]) {
-            if (disposed) return;
-            try { await loadSlot(s2); } catch { /* فترة ناقصة — يغطيها أقرب وقت محمّل */ }
-          }
         } catch { /* أوفلاين قبل أول تخزين — تبقى سماء لونية من اللوحة */ }
       })();
 
@@ -1440,23 +1555,23 @@ export default function SystemShowcase({
       const JKEYS = [
         { p: 0.00, pos: [9, 25, -38], look: [-3, 4, 0] },        // establishing مرتفعة 25م
         { p: 0.12, pos: [6, 8, -30], look: [0, 4, -2] },          // نزول قوسي
-        { p: 0.18, pos: [-17, 1.7, -16.5], look: [-10, 3.2, -8] }, // مستوى النظر — المولدة تدخل الكادر يسار
+        { p: 0.18, pos: [-14, 1.7, -17], look: [-2, 3.2, -6] },   // مستوى النظر — نقترب من البوابة
         { p: 0.25, pos: [-4, 1.7, -15.5], look: [0, 3.5, -4] },   // نمشي بالشارع نحو البيت
         { p: 0.32, pos: [-12, 3, -6], look: [0, 3.5, 0] },        // بداية الدوران النصفي
         { p: 0.40, pos: [-9, 5.5, 8], look: [0, 3.5, 0] },        // نص دورة حول البيت
         { p: 0.48, pos: [-3, 10, 9], look: [0, 5.8, 0] },         // صعود حلزوني
         { p: 0.58, pos: [3, 15, -8], look: [1, 6.4, -2] },        // top-down مائل — الألواح تملأ الكادر
-        { p: 0.78, pos: [5, 16.5, -11], look: [1, 6.4, -2] },     // الوقت يتحول للّيل
-        { p: 0.92, pos: [9, 25, -38], look: [-3, 4, 0] },         // رجوع للقطة الافتتاح ليلاً
+        { p: 0.78, pos: [5, 16.5, -11], look: [1, 6.4, -2] },     // مسح الشمس صبح→عصر
+        { p: 0.92, pos: [9, 25, -38], look: [-3, 4, 0] },         // رجوع للقطة الافتتاح
         { p: 1.00, pos: [9, 25, -38], look: [-3, 4, 0] },
       ];
       const JSTAGES = [
-        { a: 0.00, b: 0.10, t: 'منظومتك الشمسية على بيتك', s: 'جولة بحي بغدادي — بيت مستقل بالطاقة من بلاد أوتو' },
-        { a: 0.13, b: 0.24, t: 'المشكلة: المولدة', s: 'أسلاك متشابكة وأمبيرات محدودة وفاتورة كل شهر' },
-        { a: 0.27, b: 0.40, t: 'الحل: بيت مستقل', s: 'بيت نظيف — ولا سلك مولدة واصله' },
+        { a: 0.00, b: 0.10, t: 'منظومتك الشمسية على بيتك', s: 'عرض هندسي لبيت مستقل بالطاقة من بلاد أوتو' },
+        { a: 0.13, b: 0.24, t: 'بيتك بلا أسلاك ولا مولدة', s: 'لا اشتراك أمبيرات ولا فاتورة كل شهر' },
+        { a: 0.27, b: 0.40, t: 'الحل: استقلال كهربائي', s: 'منظومة متكاملة مصممة على بيتك بالضبط' },
         { a: 0.43, b: 0.57, t: 'المنظومة على السطح', s: 'الألواح والانفرترات والبطاريات — كل شي مرئي وقابل للعد' },
-        { a: 0.60, b: 0.77, t: 'إمسك الغروب بإيدك', s: 'استمر بالسكرول… الليل ينزل وبيتك يبقى مضوّي' },
-        { a: 0.80, b: 1.00, t: 'بلاد أوتو — استقلالك الكهربائي', s: 'بيتك نجمة الحي' },
+        { a: 0.60, b: 0.77, t: 'إمسك الشمس بإيدك', s: 'استمر بالسكرول… الشمس تمشي من الصبح للعصر والظلال وياها' },
+        { a: 0.80, b: 1.00, t: 'بلاد أوتو — استقلالك الكهربائي', s: 'طاقة نظيفة تشتغل طول النهار وتخزن لليل' },
       ];
       let jStageIdx = -1;
       const easeC = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
@@ -1509,7 +1624,7 @@ export default function SystemShowcase({
               if (a2) { mm.roughnessMap = c(a2); mm.metalnessMap = mm.roughnessMap; mm.roughness = 1; mm.metalness = 1; }
               // keepColor: تينت اللوحة الرملية يبقى يضرب بخامة الجص (بيوت الجيران)
               if (!keepColor) mm.color = new THREE.Color(0xffffff);
-              else mm.color.lerp(new THREE.Color(0xffffff), 0.25); // تعويض تغميق الضرب بالخامة
+              else mm.color.lerp(new THREE.Color(0xffffff), 0.10); // تفتيح أقل — تباين الجص يبقى حي
               Object.assign(mm, rest); mm.needsUpdate = true;
             });
           };
@@ -1602,7 +1717,7 @@ export default function SystemShowcase({
             scene.add(cl); return cl;
           };
           // أعمدة كهرباء حقيقية (محولات وعوازل) مكان الأسطوانات — الأسلاك بارتفاعها تبقى
-          if (gPole) {
+          if (gPole && !ENG_MODE) {
             procPoles.forEach((p2) => { p2.visible = false; });
             polesX.forEach((px, i) => { const c2 = world(gPole, px, poleZ, 0.72, (i % 2 ? 0.06 : -0.04)); c2.rotation.z = (i % 2 ? 0.012 : -0.015); });
           }
@@ -1618,7 +1733,8 @@ export default function SystemShowcase({
             });
           }
           // سيارة مغطاة بتربال (فوتوغرامتري) مكان سيارات المكعبات — بتنويع لون ودوران
-          if (gCarGlb) {
+          // بالعرض الهندسي: سيارة السيدان المبنية بالكود هي البطلة، بلا تربال
+          if (gCarGlb && !ENG_MODE) {
             procCars.forEach((c2) => { c2.visible = false; });
             const tints = [0xd9d4c8, 0xc9cdd4, 0xcfc4ae];
             carSpots.forEach(([cx2, cz2, cry], i) => {
@@ -1658,20 +1774,20 @@ export default function SystemShowcase({
             c2.position.set(gateX, 0, WALL_Z); scene.add(c2);
           }
           // فوضى الشارع الحية: حاويات، تاير مسنود، حواجز كونكريت بنهاية الفرعي
-          if (gTrash) {
+          if (gTrash && !ENG_MODE) {
             const v4 = villaGroups.find((v2) => v2.arch === 4);
             if (v4) { const c2 = gTrash.scene.clone(true); c2.position.set(v4.mir * (v4.w * 0.15 + v4.w * 0.3 + 1.3), 0, v4.d / 2 + 1.1); c2.rotation.y = 0.7; v4.g.add(c2); }
             const t2 = world(gTrash, gateX + 3.1, WALL_Z - 0.75, 1, 2.3);
             const t3 = world(gTrash, gateX + 3.75, WALL_Z - 0.9, 1, -0.4); t3.rotation.z = 0.06;
             mkAO(gateX + 3.4, WALL_Z - 0.82, 2.1, 1.4, 0.8);
           }
-          if (gTyre) { const c2 = world(gTyre, -HW / 2 - 1.1, WALL_Z - 0.42, 1, 0.5); c2.position.y = 0.05; c2.rotation.x = -0.28; }
-          if (gBarrier) {
+          if (gTyre && !ENG_MODE) { const c2 = world(gTyre, -HW / 2 - 1.1, WALL_Z - 0.42, 1, 0.5); c2.position.y = 0.05; c2.rotation.x = -0.28; }
+          if (gBarrier && !ENG_MODE) {
             world(gBarrier, 26.4, WALL_Z - SIDEWALK - ROAD_W - 33, 1, 0.12);
             world(gBarrier, 28.3, WALL_Z - SIDEWALK - ROAD_W - 33.4, 1, -0.2);
           }
           // سياج شبك حول المولدة (محوطة مثل الواقع) — بميلان خفيف مقصود
-          if (gFenceCl) {
+          if (gFenceCl && !ENG_MODE) {
             const f1 = world(gFenceCl, GEN_X - 0.4, GEN_Z - 1.6, 0.62, 0); f1.rotation.z = 0.02;
             const f2 = world(gFenceCl, GEN_X - 2.15, GEN_Z - 0.3, 0.62, Math.PI / 2); f2.rotation.z = -0.015;
           }
@@ -1793,8 +1909,8 @@ export default function SystemShowcase({
             }
           } else skyA.material.opacity = 1;
           scene.background = null;
-          // الظل يتبع شمس الـHDRI المكتشفة (لِيرب ناعم) — الخدعة ما تنكسر
-          sunDir.lerp(S2.sunDir, Math.min(1, dt * 2.5));
+          // الشمس تتبع قوس السلايدر (صبح→عصر) — السماء ثابتة والإضاءة هي اللي تتحرك
+          sunDir.set(Math.cos(dayAngle), Math.max(sinE, 0.08), -0.55).normalize();
           sunLight.position.copy(sunDir).multiplyScalar(R);
           // الضباب بلون أفق الـHDRI بالضبط — الأرض تذوب بالسماء بلا خط فاصل
           scene.fog.color.lerp(S2.fogC, Math.min(1, dt * 2.5));
@@ -1904,7 +2020,7 @@ export default function SystemShowcase({
           // الوقت مربوط خطياً بمقطع 58-78% (المستخدم «يدير الشمس» بالسكرول)
           if (journey.t >= 0.58) {
             const tu = Math.min(1, (journey.t - 0.58) / 0.20);
-            timeRef.current = 15.5 + tu * 6.0; // عصر 3:30 ← ليل 9:30
+            timeRef.current = 9.0 + tu * 7.5; // مسح الشمس: 9 صبحاً ← 4:30 عصراً (السماء ثابتة والظل يمشي)
             if (clockRef.current) clockRef.current.textContent = '🕐 ' + fmtTime(timeRef.current);
             if (sliderRef.current) sliderRef.current.value = String(timeRef.current);
           }
@@ -1993,8 +2109,8 @@ export default function SystemShowcase({
       <div className="showcase-timebar">
         <span className="tclock" ref={clockRef}>🕐 {timeLabel}</span>
         <span className="tend">🌅</span>
-        <input ref={sliderRef} type="range" min={6} max={30} step={0.25} defaultValue={15.5} onInput={onTime} onChange={onTime} />
-        <span className="tend">🌙</span>
+        <input ref={sliderRef} type="range" min={7} max={16.5} step={0.25} defaultValue={15.5} onInput={onTime} onChange={onTime} />
+        <span className="tend">☀️</span>
       </div>
       <div className="showcase-hint">🖱️ سكرول = الجولة • سحب = نظرة حرة • الشريط = وقت اليوم</div>
       <button className="showcase-skip" onClick={() => { journeyRef.current.target = 1; }} title="تخطي للنهاية">⏭ تخطي</button>
