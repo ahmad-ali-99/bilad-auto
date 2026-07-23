@@ -36,6 +36,7 @@ export default function SystemShowcase({
   const jTitleRef = useRef(null);
   const jSubRef = useRef(null);
   const replayRef = useRef(null);
+  const skipRef = useRef(null);
   const journeyRef = useRef({ t: 0, target: 0 });
 
   useEffect(() => {
@@ -197,7 +198,8 @@ export default function SystemShowcase({
 
       // شمس المواصفة: #FFE8C4 عصراً، ظلال PCF ناعمة 2048 مركزة على بيت البطل ومحيطه
       const sunLight = new THREE.DirectionalLight(0xffe8c4, 1.8);
-      sunLight.castShadow = true; sunLight.shadow.mapSize.set(lowPerf ? 1024 : 2048, lowPerf ? 1024 : 2048); sunLight.shadow.bias = -0.0004;
+      // وضع الحاسوب الأقصى: ظلال 4096 (الموبايل يبقى 1024)
+      sunLight.castShadow = true; sunLight.shadow.mapSize.set(lowPerf ? 1024 : 4096, lowPerf ? 1024 : 4096); sunLight.shadow.bias = -0.0004;
       sunLight.shadow.radius = 4; // نعومة حواف الظل
       Object.assign(sunLight.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 0.5, far: 160 });
       scene.add(sunLight);
@@ -1617,7 +1619,8 @@ export default function SystemShowcase({
       controls.enableDamping = true; controls.dampingFactor = 0.08;
       // drift سكون بطيء جداً 2-3°/دقيقة (جدول الحركة) — يتوقف عند التفاعل ويرجع بعد 5 ثوان خمول
       controls.autoRotate = true; controls.autoRotateSpeed = 0.006;
-      controls.enableZoom = false; // العجلة صارت لرحلة السكرول
+      controls.enableZoom = true; // العجلة = زوم مثل قبل (الجولة صارت زر تشغيل تلقائي)
+      controls.minDistance = 6; controls.maxDistance = 55;
       controls.minDistance = 2.5; controls.maxDistance = 70;
       controls.minPolarAngle = 0.15; controls.maxPolarAngle = Math.PI / 2 - 0.02;
       controls.target.set(0, 3.4, -1);
@@ -1651,23 +1654,11 @@ export default function SystemShowcase({
       ];
       let jStageIdx = -1;
       const easeC = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
-      const onWheel = (e) => {
-        e.preventDefault();
-        journey.target = Math.max(0, Math.min(1, journey.target + e.deltaY * 0.00032));
-        lastUserAct = performance.now();
-      };
-      renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
-      let touchY = null;
-      const onTS = (e) => { if (e.touches.length === 1) touchY = e.touches[0].clientY; };
-      const onTM = (e) => {
-        if (touchY == null || e.touches.length !== 1) return;
-        const dy2 = touchY - e.touches[0].clientY; touchY = e.touches[0].clientY;
-        journey.target = Math.max(0, Math.min(1, journey.target + dy2 * 0.0016));
-        lastUserAct = performance.now();
-      };
-      renderer.domElement.addEventListener('touchstart', onTS, { passive: true });
-      renderer.domElement.addEventListener('touchmove', onTM, { passive: true });
-      disp.push({ dispose: () => { renderer.domElement.removeEventListener('wheel', onWheel); renderer.domElement.removeEventListener('touchstart', onTS); renderer.domElement.removeEventListener('touchmove', onTM); } });
+      // السكرول رجع زوم طبيعي (طلب المستخدم) — الجولة صارت زر تشغيل تلقائي،
+      // وأي ضغطة على المشهد توقف الجولة وترجّع التحكم الحر
+      const onPD = () => { if (journey.auto) { journey.auto = false; journey.target = 0; } lastUserAct = performance.now(); };
+      renderer.domElement.addEventListener('pointerdown', onPD);
+      disp.push({ dispose: () => { renderer.domElement.removeEventListener('pointerdown', onPD); } });
       const jv = new THREE.Vector3(), jl = new THREE.Vector3();
 
       // ================= أصول واقعية (PBR + GLB) — تحميل كسول بتقدم =================
@@ -1683,7 +1674,7 @@ export default function SystemShowcase({
           const glbL = new GLTFLoader(manager);
           // الموبايل (lowPerf) ياخذ نسخ 1K من كل الخامات — يوفر ~330MB رام GPU (سبب كراش آيفون)
           const loadTex = (f, srgb) => new Promise((res, rej) => texL.load(baseURL + 'tex/' + (lowPerf ? f.replace('.jpg', '_1k.jpg') : f), (t2) => {
-            t2.wrapS = t2.wrapT = THREE.RepeatWrapping; t2.anisotropy = lowPerf ? 4 : 8;
+            t2.wrapS = t2.wrapT = THREE.RepeatWrapping; t2.anisotropy = lowPerf ? 4 : 16;
             if (srgb) t2.colorSpace = THREE.SRGBColorSpace;
             res(track(t2));
           }, undefined, rej));
@@ -2119,6 +2110,11 @@ export default function SystemShowcase({
         bloom.threshold = nightGlow ? 0.88 : 1.15;
 
         // ===== رحلة السكرول: damping + كاميرا الكيفريمات + ربط الوقت (58-78%) =====
+        // الجولة التلقائية: تتقدم بريتم ثابت (~40 ثانية للجولة كاملة) وتنتهي برجوع ناعم
+        if (journey.auto) {
+          journey.target = Math.min(1, journey.target + dt / 40);
+          if (journey.target >= 1 && journey.t > 0.985) { journey.auto = false; journey.target = 0; }
+        }
         journey.t += (journey.target - journey.t) * Math.min(1, dt * 5);
         const jActive = journey.t > 0.004 || journey.target > 0.004;
         if (jActive) {
@@ -2155,11 +2151,13 @@ export default function SystemShowcase({
             if (jSubRef.current) jSubRef.current.textContent = JSTAGES[si2].s;
           }
           if (jBoxRef.current) jBoxRef.current.style.opacity = String(sOp);
-          if (replayRef.current) replayRef.current.style.display = journey.t > 0.9 ? 'block' : 'none';
+          if (replayRef.current) replayRef.current.style.display = 'none';
+          if (skipRef.current) skipRef.current.style.display = 'block';
         } else {
           controls.enabled = true;
           if (jBoxRef.current) jBoxRef.current.style.opacity = '0';
-          if (replayRef.current) replayRef.current.style.display = 'none';
+          if (replayRef.current) replayRef.current.style.display = 'block'; // زر «شغّل الجولة» يبين بالوضع الحر
+          if (skipRef.current) skipRef.current.style.display = 'none';
           // drift السكون يرجع بعد 5 ثوان خمول
           if (!controls.autoRotate && performance.now() - lastUserAct > 5000) controls.autoRotate = true;
           controls.update();
@@ -2225,11 +2223,14 @@ export default function SystemShowcase({
         <input ref={sliderRef} type="range" min={7} max={16.5} step={0.25} defaultValue={15.5} onInput={onTime} onChange={onTime} />
         <span className="tend">☀️</span>
       </div>
-      <div className="showcase-hint">🖱️ سكرول = الجولة • سحب = نظرة حرة • الشريط = وقت اليوم</div>
-      <button className="showcase-skip" onClick={() => { journeyRef.current.target = 1; }} title="تخطي للنهاية">⏭ تخطي</button>
+      <div className="showcase-hint">🖱️ سكرول = زوم • سحب = دوران حر • زر الجولة = عرض تلقائي</div>
+      <button className="showcase-skip" ref={skipRef} style={{ display: 'none' }} onClick={() => { journeyRef.current.auto = false; journeyRef.current.target = 0; }} title="إنهاء الجولة">⏭ إنهاء الجولة</button>
       <button className="showcase-replay" ref={replayRef} style={{ display: 'none' }}
-        onClick={() => { journeyRef.current.target = 0; timeRef.current = 15.5; setTimeLabel(fmtTime(15.5)); if (sliderRef.current) sliderRef.current.value = '15.5'; }}>
-        ☀️ رجّع النهار وأعد الجولة
+        onClick={() => {
+          journeyRef.current.auto = true; journeyRef.current.target = 0.01;
+          timeRef.current = 15.5; setTimeLabel(fmtTime(15.5)); if (sliderRef.current) sliderRef.current.value = '15.5';
+        }}>
+        ▶ شغّل الجولة التعريفية
       </button>
     </div>
   );
