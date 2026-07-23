@@ -1,3 +1,7 @@
 node_modules/
 dist/
 release/
+# الأصول الثقيلة (موديل المدينة) — تنزل من GitHub Releases، ما تدخل بالريبو
+public/city/
+assets-download/
+release-assets/
