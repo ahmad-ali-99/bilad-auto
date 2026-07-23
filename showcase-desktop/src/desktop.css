@@ -1,0 +1,27 @@
+/* شاشة الإعداد — نسخة سطح المكتب */
+body { margin: 0; font-family: 'Cairo', 'Segoe UI', sans-serif; }
+.desk-setup {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(160deg, #1a3a5c, #0e2238); direction: rtl;
+}
+.desk-card {
+  background: rgba(255, 255, 255, 0.97); border-radius: 20px; padding: 36px 42px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35); max-width: 620px; width: 92%;
+  border-top: 5px solid #d4a947;
+}
+.desk-card h1 { margin: 0 0 6px; color: #1b2a4a; font-size: 1.6rem; }
+.desk-sub { margin: 0 0 22px; color: #5a6b80; font-weight: 600; }
+.desk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+.desk-grid label { display: flex; flex-direction: column; gap: 6px; font-weight: 700; color: #1b2a4a; font-size: 0.9rem; }
+.desk-grid input {
+  padding: 10px 12px; border: 2px solid #dfe5ec; border-radius: 10px; font-size: 1.05rem;
+  font-family: inherit; font-weight: 700; color: #1b2a4a; text-align: center;
+}
+.desk-grid input:focus { outline: none; border-color: #d4a947; }
+.desk-start {
+  margin-top: 24px; width: 100%; padding: 14px; border: none; border-radius: 12px;
+  background: linear-gradient(135deg, #d4a947, #c39a3d); color: #1b2a4a;
+  font-family: inherit; font-weight: 800; font-size: 1.15rem; cursor: pointer;
+}
+.desk-start:hover { filter: brightness(1.06); }
+.desk-attr { margin: 16px 0 0; text-align: center; color: #9aa7b5; font-size: 0.75rem; }
