@@ -205,8 +205,23 @@ export default function CityScene({ panels = 24, batteries = 2, inverters = 2, n
         sysGroup.add(e);
       }
 
-      // خامة اللوح: زجاج يعكس السماء (اللقطة الإعلانية)
-      const cell = M({ color: 0x152238, roughness: 0.12, metalness: 0.3, envMapIntensity: 1.5 });
+      // خامة اللوح: نفس شبكة خلايا التطبيق القديم + انعكاس سماء معقول
+      const panelTexture = () => {
+        const c = document.createElement('canvas');
+        c.width = c.height = 256;
+        const g = c.getContext('2d');
+        const grd = g.createLinearGradient(0, 0, 128, 256);
+        grd.addColorStop(0, '#5570c0'); grd.addColorStop(0.5, '#3a55a0'); grd.addColorStop(1, '#2c4180');
+        g.fillStyle = grd; g.fillRect(0, 0, 256, 256);
+        g.strokeStyle = 'rgba(180,200,240,0.6)'; g.lineWidth = 2;
+        for (let i = 1; i < 6; i++) { const x = (i / 6) * 256; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 256); g.stroke(); }
+        for (let j = 1; j < 12; j++) { const y = (j / 12) * 256; g.beginPath(); g.moveTo(0, y); g.lineTo(256, y); g.stroke(); }
+        g.strokeStyle = 'rgba(8,20,45,0.9)'; g.lineWidth = 8; g.strokeRect(0, 0, 256, 256);
+        const t = new THREE.CanvasTexture(c);
+        t.anisotropy = 8; t.colorSpace = THREE.SRGBColorSpace;
+        return t;
+      };
+      const cell = M({ map: panelTexture(), roughness: 0.55, metalness: 0.18, envMapIntensity: 0.6 });
       const PW = 1.15, PH = 2.05, TILT = THREE.MathUtils.degToRad(30);
       const rows = [];
       let left = panels;
@@ -313,6 +328,37 @@ export default function CityScene({ panels = 24, batteries = 2, inverters = 2, n
         ]);
         sysGroup.add(new THREE.Mesh(new THREE.TubeGeometry(c, 24, 0.02, 6), wireMat));
       }
+      // واجهة البيت الجنوبية بالمسح مايعة — نلبسها شبابيك حقيقية مبنية بالكود
+      // (نفس فكرة العرض القديم): إطار ألمنيوم + زجاج يعكس السماء + باب
+      const frameM = M({ color: 0x8a8f96, roughness: 0.4, metalness: 0.8 });
+      const glassM = M({ color: 0xa8c0d4, roughness: 0.15, metalness: 0.3, emissive: 0x8fa8bc, emissiveIntensity: 0.25, envMapIntensity: 1.3 });
+      const sillM = M({ color: 0xcfc9bb, roughness: 0.85 });
+      const FZ = -266.32; // بارز شوية عن سطح الجدار المتموج
+      const mkWin = (x, y, w = 1.35, h = 1.55) => {
+        const fr = shadowMesh(new THREE.Mesh(new THREE.BoxGeometry(w + 0.16, h + 0.16, 0.14), frameM));
+        fr.position.set(x, y, FZ);
+        sysGroup.add(fr);
+        const gl = new THREE.Mesh(new THREE.PlaneGeometry(w, h), glassM);
+        gl.position.set(x, y, FZ - 0.075);
+        gl.rotation.y = Math.PI;
+        sysGroup.add(gl);
+        const mid = new THREE.Mesh(new THREE.BoxGeometry(0.05, h, 0.06), frameM);
+        mid.position.set(x, y, FZ - 0.06);
+        sysGroup.add(mid);
+        const sill = shadowMesh(new THREE.Mesh(new THREE.BoxGeometry(w + 0.3, 0.09, 0.24), sillM));
+        sill.position.set(x, y - h / 2 - 0.12, FZ - 0.02);
+        sysGroup.add(sill);
+      };
+      for (const x of [30, 33.5, 37, 40.5]) mkWin(x, 4.6);
+      mkWin(31.5, 2.0); mkWin(38.5, 2.0);
+      // باب رئيسي بإطار
+      const doorFr = shadowMesh(new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.5, 0.16), frameM));
+      doorFr.position.set(35, 1.25, FZ);
+      sysGroup.add(doorFr);
+      const door = new THREE.Mesh(new THREE.BoxGeometry(1.3, 2.35, 0.08), M({ color: 0x5a4632, roughness: 0.6 }));
+      door.position.set(35, 1.18, FZ - 0.03);
+      sysGroup.add(door);
+
       // البطاريات على قاعدة كونكريت — كحلي بلاد أوتو
       const base = shadowMesh(new THREE.Mesh(new THREE.BoxGeometry(0.9 * batteries + 0.4, 0.18, 0.75), concrete));
       base.position.set(equip.x - 0.2, equip.y + 0.09, equip.z + 1.9);
