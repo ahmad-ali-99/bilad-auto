@@ -1,7 +1,8 @@
 node_modules/
 dist/
 release/
-# الأصول الثقيلة (موديل المدينة) — تنزل من GitHub Releases، ما تدخل بالريبو
+# الأصول الثقيلة (المسوحات/موديل المدينة) — تنزل من GitHub Releases، ما تدخل بالريبو
 public/city/
+public/assets/models/photoscans/
 assets-download/
 release-assets/
