@@ -1655,8 +1655,9 @@ export default function SystemShowcase({
           manager.onProgress = (u, l, tot) => { if (!disposed) setLoadPct(Math.min(99, Math.round((l / Math.max(1, tot)) * 100))); };
           const texL = new THREE.TextureLoader(manager);
           const glbL = new GLTFLoader(manager);
-          const loadTex = (f, srgb) => new Promise((res, rej) => texL.load(baseURL + 'tex/' + f, (t2) => {
-            t2.wrapS = t2.wrapT = THREE.RepeatWrapping; t2.anisotropy = 8;
+          // الموبايل (lowPerf) ياخذ نسخ 1K من كل الخامات — يوفر ~330MB رام GPU (سبب كراش آيفون)
+          const loadTex = (f, srgb) => new Promise((res, rej) => texL.load(baseURL + 'tex/' + (lowPerf ? f.replace('.jpg', '_1k.jpg') : f), (t2) => {
+            t2.wrapS = t2.wrapT = THREE.RepeatWrapping; t2.anisotropy = lowPerf ? 4 : 8;
             if (srgb) t2.colorSpace = THREE.SRGBColorSpace;
             res(track(t2));
           }, undefined, rej));
@@ -1704,7 +1705,7 @@ export default function SystemShowcase({
           ]);
           if (disposed) return;
           // عشب: InstancedMesh لكل ميش من الموديل على مواقع الحديقة
-          const spots = grassSpots;
+          const spots = lowPerf ? grassSpots.filter((_, i2) => i2 % 2 === 0) : grassSpots;
           gGrass.scene.updateMatrixWorld(true);
           gGrass.scene.traverse((o) => {
             if (!o.isMesh) return;
@@ -1742,15 +1743,17 @@ export default function SystemShowcase({
             return g2;
           }).catch(() => null);
           const bboxOf = (obj) => new THREE.Box3().setFromObject(obj);
+          // بالعرض الهندسي: الموديلات المدنية غير المعروضة لا تُنزَّل ولا تُفك أصلاً (رام + باندويث)
+          const loadCity = (p) => (ENG_MODE ? Promise.resolve(null) : loadOpt(p));
           const [gPole, gLampGlb, gCarGlb, gAC, gTrash, gTyre, gShutter, gGateGlb,
             gPlanter, gPot, gShrubA, gShrubC, gNettle, gWeed, gBermuda, gBarrier, gFenceCl] = await Promise.all([
-            loadOpt('modular_electricity_poles/modular_electricity_poles_1k.gltf'),
+            loadCity('modular_electricity_poles/modular_electricity_poles_1k.gltf'),
             loadOpt('street_lamp_01/street_lamp_01_1k.gltf'),
-            loadOpt('covered_car/covered_car_1k.gltf'),
+            loadCity('covered_car/covered_car_1k.gltf'),
             loadOpt('exterior_aircon_unit/exterior_aircon_unit_1k.gltf'),
-            loadOpt('metal_trash_can/metal_trash_can_1k.gltf'),
-            loadOpt('old_tyre/old_tyre_1k.gltf'),
-            loadOpt('rollershutter_door/rollershutter_door_1k.gltf'),
+            loadCity('metal_trash_can/metal_trash_can_1k.gltf'),
+            loadCity('old_tyre/old_tyre_1k.gltf'),
+            loadCity('rollershutter_door/rollershutter_door_1k.gltf'),
             loadOpt('large_iron_gate/large_iron_gate_1k.gltf'),
             loadOpt('planter_box_01/planter_box_01_1k.gltf'),
             loadOpt('potted_plant_01/potted_plant_01_1k.gltf'),
@@ -1759,8 +1762,8 @@ export default function SystemShowcase({
             loadOpt('nettle_plant/nettle_plant_1k.gltf'),
             loadOpt('weed_plant_02/weed_plant_02_1k.gltf'),
             loadOpt('grass_bermuda_01/grass_bermuda_01_1k.gltf'),
-            loadOpt('concrete_road_barrier/concrete_road_barrier_1k.gltf'),
-            loadOpt('modular_chainlink_fence/modular_chainlink_fence_1k.gltf'),
+            loadCity('concrete_road_barrier/concrete_road_barrier_1k.gltf'),
+            loadCity('modular_chainlink_fence/modular_chainlink_fence_1k.gltf'),
           ]);
           if (disposed) return;
           const world = (src, x, z, sc = 1, ry = 0) => {
@@ -1867,7 +1870,8 @@ export default function SystemShowcase({
             });
           };
           [[-28, 14, 2.0, 0.8], [16, 19, 1.6, 2.9], [-6, 30, 2.25, 4.4], [30, 33, 1.35, 1.7],
-           [46, 16, 1.85, 3.3], [-44, 28, 2.1, 5.6], [8, 24, 1.1, 0.4], [-27, -10.5, 1.45, 2.4]].forEach(([tx, tz, ts, tr], ti) => {
+           [46, 16, 1.85, 3.3], [-44, 28, 2.1, 5.6], [8, 24, 1.1, 0.4], [-27, -10.5, 1.45, 2.4]]
+            .slice(0, lowPerf ? 4 : 8).forEach(([tx, tz, ts, tr], ti) => {
             const cl = placeClone(gTree, tx, tz, ts, tr);
             tintLeaves(cl, treeTints[ti % treeTints.length]);
             mkAO(tx, tz, 4.2 * ts, 4.2 * ts, 0.45);
