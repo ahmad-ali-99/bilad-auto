@@ -261,7 +261,7 @@ export default function SystemShowcase({
       // ================= الأرضيات والشارع =================
       // الأرضية 560م: توصل ورة اكتمال الضباب — ماكو نقطة تشوف بيها «نهاية الأرض»
       const groundAll = new THREE.Mesh(track(new THREE.PlaneGeometry(560, 560)),
-        TECH_MODE ? M({ map: rep(lawnT, 90, 90), color: 0xb2c084, roughness: 1, envMapIntensity: 0.05 }) // مرج أخضر هادئ
+        TECH_MODE ? M({ map: rep(lawnT, 130, 130), color: 0xaac479, roughness: 1, envMapIntensity: 0.05 }) // مرج أخضر بلون الرفرنس
                   : M({ map: rep(dirtT, 112, 112), roughness: 1, envMapIntensity: 0.05 }));
       groundAll.rotation.x = -Math.PI / 2; groundAll.position.y = -0.02; groundAll.receiveShadow = true; scene.add(groundAll);
       const lot = new THREE.Mesh(track(new THREE.PlaneGeometry(HW + 8, HD + LOT_FRONT + 4)), M({ map: rep(sideT, 9, 11), roughness: 0.96, envMapIntensity: 0.05 }));
@@ -408,7 +408,7 @@ export default function SystemShowcase({
       const ledgeGeo = B(towerW + 0.15, 0.18, 0.5);
       const plantMat = M({ color: 0x3f8b3a, roughness: 0.9 });
       const plantJit = (geo) => { const p = geo.attributes.position; for (let i = 0; i < p.count; i++) { p.setXYZ(i, p.getX(i) * (0.85 + Math.random() * 0.3), p.getY(i) * (0.85 + Math.random() * 0.3), p.getZ(i) * (0.85 + Math.random() * 0.3)); } geo.computeVertexNormals(); return geo; };
-      [2.2, 4.4].forEach((ly) => {
+      (TECH_MODE ? [] : [2.2, 4.4]).forEach((ly) => {
         const ledge = new THREE.Mesh(ledgeGeo, whiteWall); ledge.position.set(-HW / 2 + towerW / 2, ly, -HD / 2 - 0.28); house.add(ledge);
         for (let i = 0; i < 4; i++) {
           const pl = new THREE.Mesh(plantJit(track(new THREE.IcosahedronGeometry(0.17, 1))), plantMat);
@@ -431,6 +431,7 @@ export default function SystemShowcase({
       const slatGrp = new THREE.Group();
       for (let i = 0; i < 7; i++) { const sl = new THREE.Mesh(B(0.09, FLOOR - 0.3, 0.09), woodSlat); sl.position.set(i * 0.14, 0, 0); slatGrp.add(sl); }
       slatGrp.position.set(HW / 2 - 1.1, FLOOR + FLOOR / 2, -HD / 2 - 0.06); house.add(slatGrp);
+      if (TECH_MODE) slatGrp.visible = false; // ستايل الرفرنس: واجهة نظيفة بلا شرائح خشب
       // شباك غاطس جوة الفتحة: إطار بمنتصف السماكة + زجاج وراه + عتبة بارزة بره
       // (zFace = مستوى الواجهة الخارجي — الغطس نحو داخل البيت = +z)
       const mkWin = (x, y, w2, h2, zFace, host = house) => {
@@ -440,7 +441,7 @@ export default function SystemShowcase({
         // خفيفة (خدعة العرض المعماري) حتى يقرأ كزجاج نهاري حي
         // بستايل الرفرنس: زجاج كحلي غامق عاكس؛ بالوضع القديم: سماوي فاتح
         const gm = TECH_MODE
-          ? M({ color: 0x51678f, roughness: 0.12, metalness: 0.35, emissive: 0x2c3d60, emissiveIntensity: 0.35, envMapIntensity: 1.5 })
+          ? M({ color: 0x7d95b8, roughness: 0.12, metalness: 0.35, emissive: 0x46608f, emissiveIntensity: 0.55, envMapIntensity: 1.5 })
           : M({ color: 0xa8c0d4, roughness: 0.15, metalness: 0.3, emissive: 0x8fa8bc, emissiveIntensity: 0.4, envMapIntensity: 1.4 });
         const gl = new THREE.Mesh(B(w2, h2, 0.04), gm); gl.position.set(x, y, zFace + 0.15); host.add(gl);
         const mull = new THREE.Mesh(B(0.05, h2, 0.05), frameMat); mull.position.set(x, y, zFace + 0.12); host.add(mull);
@@ -449,14 +450,23 @@ export default function SystemShowcase({
       mkWin(HW / 2 - 2.2, 1.55, 2.14, 1.58, -HD / 2);
       mkWin(0.2, 1.55, 1.28, 1.44, -HD / 2);
       mkWin(-HW / 2 + towerW / 2, 3.4, 1.1, 2.2, -HD / 2 - 0.24); // شباك البرج (بارز على وجه البرج الصم)
-      const door = new THREE.Mesh(B(1.14, 2.24, 0.08), M({ color: 0x2d2620, roughness: 0.5 }));
+      const door = new THREE.Mesh(B(1.14, 2.24, 0.08),
+        TECH_MODE
+          ? M({ color: 0x7d95b8, roughness: 0.15, metalness: 0.35, emissive: 0x46608f, emissiveIntensity: 0.45, envMapIntensity: 1.4 }) // باب زجاجي كحلي مثل الرفرنس
+          : M({ color: 0x2d2620, roughness: 0.5 }));
+      if (TECH_MODE) {
+        const doorFr = new THREE.Mesh(B(1.4, 2.42, 0.05), frameMat);
+        doorFr.position.set(-HW / 2 + towerW + 0.9, 1.14, -HD / 2 + 0.26); house.add(doorFr);
+        const doorMull = new THREE.Mesh(B(0.05, 2.24, 0.05), frameMat);
+        doorMull.position.set(-HW / 2 + towerW + 0.9, 1.12, -HD / 2 + 0.18); house.add(doorMull);
+      }
       door.position.set(-HW / 2 + towerW + 0.9, 1.12, -HD / 2 + 0.22); house.add(door); // غاطس بمحرابه
       const doorStep = new THREE.Mesh(B(1.5, 0.12, 0.8), curbM); doorStep.position.set(-HW / 2 + towerW + 0.9, 0.06, -HD / 2 - 0.4); house.add(doorStep);
 
       if (TECH_MODE) {
         // ============ ستايل الرفرنس (IMG_4989): بيت طيني موحد على مرج مفتوح ============
         tower.material = whiteWall;                       // بلا برج أسود — كتلة موحدة
-        whiteWall.color = new THREE.Color(0xd09a76);      // تينت تراكوتا (يضرب بخامة الجص)
+        whiteWall.color = new THREE.Color(0xfaf3ec); // الخامة نفسها معايرة على تراكوتا الرفرنس
         // قاعدة كونكريت بيضاء حول محيط البيت
         const plinth = new THREE.Mesh(B(HW + 0.4, 0.55, HD + 0.4), M({ color: 0xe9e5db, roughness: 0.85 }));
         plinth.position.set(0, 0.27, 0); plinth.receiveShadow = true; house.add(plinth);
@@ -629,7 +639,7 @@ export default function SystemShowcase({
       const roomX = -HW / 2 + towerW / 2 + 0.4, roomZ = HD / 2 - roomD / 2 - 0.6;
       const room = new THREE.Group();
       const rWall = fadeMat({ map: rep(plasterT, 2, 1), bumpMap: rep(plasterB, 2, 1), bumpScale: 0.4, roughness: 0.95 });
-      if (TECH_MODE) rWall.color = new THREE.Color(0xd09a76); // بيتونة بنفس تينت التراكوتا
+      if (TECH_MODE) rWall.color = new THREE.Color(0xfaf3ec); // بيتونة بنفس المعايرة
       const rb = new THREE.Mesh(B(roomW, roomH, 0.1), rWall); rb.position.set(0, roomH / 2, roomD / 2); room.add(rb);
       const rl = new THREE.Mesh(B(0.1, roomH, roomD), rWall); rl.position.set(-roomW / 2, roomH / 2, 0); room.add(rl);
       const rr = new THREE.Mesh(B(0.1, roomH, roomD), rWall); rr.position.set(roomW / 2, roomH / 2, 0); room.add(rr);
@@ -2086,26 +2096,14 @@ export default function SystemShowcase({
           } // نهاية !TECH_MODE
           // بالوضع الهندسي الطبيعي: شجرتان حقيقيتان فقط (طلب المستخدم — «بس مو أكثر»)
           if (TECH_MODE) {
-            // ===== ترقية المظهر: عشب PBR حقيقي + ممر + تحوطات + أشجار + مدخل مرتب =====
-            // 1) أرضية عشب حقيقية (diff+normal فقط — الـarm سبب «الشظايا السوداء» سابقاً)
-            try {
-              const [gd, gn] = await Promise.all([loadTex('grass_diff.jpg', true), loadTex('grass_nor.jpg')]);
-              if (!disposed) {
-                const gm = groundAll.material;
-                gm.map = gd; gm.map.repeat.set(64, 64);
-                gm.normalMap = gn; gm.normalMap.repeat.set(64, 64);
-                gm.normalScale = new THREE.Vector2(0.55, 0.55);
-                gm.color = new THREE.Color(0xc8d2a4); // تفتيح وتدفئة — مرج مشمس مو غابة غامقة
-                gm.roughness = 1; gm.metalness = 0; gm.envMapIntensity = 0.06;
-                gm.needsUpdate = true;
-              }
-            } catch { /* الكانفاس يبقى */ }
+            // (خامة العشب PBR جُربت مرتين وبالمرتين طلعت «شظايا سوداء» — الكانفاس
+            // بلون الرفرنس هو الصحيح، ومضبوط بتعريف groundAll نفسه)
 
-            // 2) شجرتان واقعيتان يأطران البيت (مثل الرفرنس بالضبط — بلا زحمة)
+            // شجرتان واقعيتان يأطران البيت (مثل الرفرنس بالضبط — بلا زحمة)
             const gTree2 = await loadGlb('island_tree_02/island_tree_02_1k.gltf').catch(() => null);
             if (gTree2 && !disposed) {
               gTree2.scene.traverse((o) => {
-                if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.material.color.multiplyScalar(1.28); o.material.envMapIntensity = 0.8; }
+                if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.material.color.multiplyScalar(1.55); o.material.envMapIntensity = 1.0; }
               });
               [[-8.8, -1.5, 1.3, 0.7], [9.8, -2.5, 0.95, 2.4]].forEach(([tx, tz, ts, tr]) => {
                 const cl = gTree2.scene.clone(true);
@@ -2145,7 +2143,7 @@ export default function SystemShowcase({
         const P = skyAt(t);
         hemi.intensity = P.hemiI;
         amb.intensity = P.hemiI * 0.3;
-        fillL.intensity = isDay ? 0.25 : 0.06;
+        fillL.intensity = isDay ? (TECH_MODE ? 0.5 : 0.25) : 0.06; // بستايل الرفرنس: تعبئة أقوى ترفع ظل الواجهة
         sunLight.color.copy(P.sunC);
         sunLight.intensity = P.sunI;
         moonLight.position.set(-30, 32, -34); moonLight.intensity = isDay ? 0 : 0.25;
