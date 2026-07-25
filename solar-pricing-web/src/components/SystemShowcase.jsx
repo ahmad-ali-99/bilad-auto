@@ -114,7 +114,7 @@ export default function SystemShowcase({
       const scene = new THREE.Scene();
       // ضباب جوي (القسم 9): بلون الأفق، يبدأ 80م ويكتمل 300م — يصنع طبقات العمق
       // ضباب جوي: بالعرض الهندسي يقرب حتى الأرض تذوب بالسماء قبل ما «تخلص» — بلا حافة أفق
-      scene.fog = TECH_MODE ? new THREE.Fog(0xd6dcc6, 55, 210) : (ENG_MODE ? new THREE.Fog(0xd4ccba, 55, 210) : new THREE.Fog(0xc8d4dc, 60, 220));
+      scene.fog = TECH_MODE ? new THREE.Fog(0xd3dcba, 55, 210) : (ENG_MODE ? new THREE.Fog(0xd4ccba, 55, 210) : new THREE.Fog(0xc8d4dc, 60, 220));
 
       // ================= خامات البناء =================
       const fadeMats = [];
@@ -275,7 +275,7 @@ export default function SystemShowcase({
       const road = new THREE.Mesh(track(new THREE.PlaneGeometry(70, ROAD_W)), M({ map: rep(asphaltT, 20, 3), roughness: 0.98, envMapIntensity: 0.04 }));
       road.rotation.x = -Math.PI / 2; road.position.set(0, 0.004, WALL_Z - SIDEWALK - ROAD_W / 2 - 0.1); road.receiveShadow = true; scene.add(road);
       const dashGeo = B(1.4, 0.012, 0.16); const dashMat = M({ color: 0xc4bfb2, roughness: 0.9 }); // أبيض متآكل ~70%
-      for (let x = -32; x <= 32; x += 3.4) { const d = new THREE.Mesh(dashGeo, dashMat); d.position.set(x, 0.012, WALL_Z - SIDEWALK - ROAD_W / 2 - 0.1); scene.add(d); }
+      if (!TECH_MODE) for (let x = -32; x <= 32; x += 3.4) { const d = new THREE.Mesh(dashGeo, dashMat); d.position.set(x, 0.012, WALL_Z - SIDEWALK - ROAD_W / 2 - 0.1); scene.add(d); }
       const walk2 = walk.clone(); walk2.position.z = WALL_Z - SIDEWALK - ROAD_W - SIDEWALK / 2 - 0.1; scene.add(walk2);
       const curb2 = curb.clone(); curb2.position.z = WALL_Z - SIDEWALK - ROAD_W - 0.15; scene.add(curb2);
 
@@ -350,7 +350,7 @@ export default function SystemShowcase({
       const fenceSideR = fenceSideL.clone(); fenceSideR.position.x = (HW + 8) / 2; scene.add(fenceSideR);
       const board = new THREE.Mesh(B(3.6, 1.15, 0.06), charcoal); board.position.set(0.4, 0.95, WALL_Z - 0.15); scene.add(board);
       const plaqueGeo = B(0.62, 0.4, 0.02); const plaqueMat = M({ color: 0xf6f6f2, roughness: 0.55 });
-      for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) {
+      if (!TECH_MODE) for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) {
         const p = new THREE.Mesh(plaqueGeo, plaqueMat);
         p.position.set(0.4 - 1.32 + c * 0.88, 0.95 + 0.28 - r * 0.55, WALL_Z - 0.19); scene.add(p);
       }
@@ -438,7 +438,10 @@ export default function SystemShowcase({
         const fr = new THREE.Mesh(B(w2 + 0.14, h2 + 0.14, 0.05), frameMat); fr.position.set(x, y, zFace + 0.2); host.add(fr);
         // زجاج الفتحة الغاطسة: بظل الفتحة الانعكاس وحده يطلع أسود — نضيف سماوية ذاتية
         // خفيفة (خدعة العرض المعماري) حتى يقرأ كزجاج نهاري حي
-        const gm = M({ color: 0xa8c0d4, roughness: 0.15, metalness: 0.3, emissive: 0x8fa8bc, emissiveIntensity: 0.4, envMapIntensity: 1.4 });
+        // بستايل الرفرنس: زجاج كحلي غامق عاكس؛ بالوضع القديم: سماوي فاتح
+        const gm = TECH_MODE
+          ? M({ color: 0x51678f, roughness: 0.12, metalness: 0.35, emissive: 0x2c3d60, emissiveIntensity: 0.35, envMapIntensity: 1.5 })
+          : M({ color: 0xa8c0d4, roughness: 0.15, metalness: 0.3, emissive: 0x8fa8bc, emissiveIntensity: 0.4, envMapIntensity: 1.4 });
         const gl = new THREE.Mesh(B(w2, h2, 0.04), gm); gl.position.set(x, y, zFace + 0.15); host.add(gl);
         const mull = new THREE.Mesh(B(0.05, h2, 0.05), frameMat); mull.position.set(x, y, zFace + 0.12); host.add(mull);
         const sill = new THREE.Mesh(B(w2 + 0.34, 0.09, 0.22), curbM); sill.position.set(x, y - h2 / 2 - 0.1, zFace - 0.04); host.add(sill);
@@ -449,6 +452,76 @@ export default function SystemShowcase({
       const door = new THREE.Mesh(B(1.14, 2.24, 0.08), M({ color: 0x2d2620, roughness: 0.5 }));
       door.position.set(-HW / 2 + towerW + 0.9, 1.12, -HD / 2 + 0.22); house.add(door); // غاطس بمحرابه
       const doorStep = new THREE.Mesh(B(1.5, 0.12, 0.8), curbM); doorStep.position.set(-HW / 2 + towerW + 0.9, 0.06, -HD / 2 - 0.4); house.add(doorStep);
+
+      if (TECH_MODE) {
+        // ============ ستايل الرفرنس (IMG_4989): بيت طيني موحد على مرج مفتوح ============
+        tower.material = whiteWall;                       // بلا برج أسود — كتلة موحدة
+        whiteWall.color = new THREE.Color(0xd09a76);      // تينت تراكوتا (يضرب بخامة الجص)
+        // قاعدة كونكريت بيضاء حول محيط البيت
+        const plinth = new THREE.Mesh(B(HW + 0.4, 0.55, HD + 0.4), M({ color: 0xe9e5db, roughness: 0.85 }));
+        plinth.position.set(0, 0.27, 0); plinth.receiveShadow = true; house.add(plinth);
+        // شباكان علويان بأحواض ورد تحتهم (مثل الرفرنس بالضبط)
+        mkWin(HW / 2 - 2.2, FLOOR + 1.7, 1.9, 1.5, -HD / 2);
+        mkWin(0.4, FLOOR + 1.7, 1.4, 1.5, -HD / 2);
+        const flowerCols = [0xd94f6b, 0xe8c53a, 0xf2f2f2, 0xc75fd6];
+        [[HW / 2 - 2.2, 2.0], [0.4, 1.5]].forEach(([wx, ww]) => {
+          const box = new THREE.Mesh(B(ww + 0.24, 0.32, 0.42), M({ color: 0xdfdacd, roughness: 0.9 }));
+          box.position.set(wx, FLOOR + 0.78, -HD / 2 - 0.24); box.castShadow = true; house.add(box);
+          for (let i = 0; i < 8; i++) {
+            const fl = new THREE.Mesh(plantJit(track(new THREE.IcosahedronGeometry(0.085, 1))),
+              M({ color: i % 2 ? flowerCols[(i >> 1) % 4] : 0x3f8b3a, roughness: 0.9 }));
+            fl.position.set(wx - ww / 2 + 0.12 + i * (ww / 7.2), FLOOR + 1.0, -HD / 2 - 0.24 + (i % 2) * 0.08);
+            house.add(fl);
+          }
+        });
+        // سياج السطح المعدني الرفيع المحيطي (توقيع الرفرنس)
+        const railM = M({ color: 0x9aa0a6, roughness: 0.35, metalness: 0.85 });
+        const postG = track(new THREE.CylinderGeometry(0.022, 0.022, 0.85, 6));
+        const mkRailRun = (x1, z1, x2, z2) => {
+          const len = Math.hypot(x2 - x1, z2 - z1);
+          const n = Math.max(2, Math.round(len / 1.15));
+          for (let i = 0; i <= n; i++) {
+            const p = new THREE.Mesh(postG, railM);
+            p.position.set(x1 + (x2 - x1) * (i / n), HH + 0.425, z1 + (z2 - z1) * (i / n));
+            house.add(p);
+          }
+          [HH + 0.85, HH + 0.5].forEach((ry2) => {
+            const bar = new THREE.Mesh(B(len, 0.04, 0.04), railM);
+            bar.position.set((x1 + x2) / 2, ry2, (z1 + z2) / 2);
+            bar.rotation.y = Math.atan2(-(z2 - z1), x2 - x1);
+            house.add(bar);
+          });
+        };
+        const hx2 = HW / 2 - 0.12, hz2 = HD / 2 - 0.12;
+        mkRailRun(-hx2, -hz2, hx2, -hz2); mkRailRun(-hx2, hz2, hx2, hz2);
+        mkRailRun(-hx2, -hz2, -hx2, hz2); mkRailRun(hx2, -hz2, hx2, hz2);
+        // تانكي ماي أسود + ستلايت بالزاوية الخلفية اليمنى (بعيد عن الألواح والبيتونة)
+        const tankM = M({ color: 0x1d2126, roughness: 0.55 });
+        const tank = new THREE.Mesh(track(new THREE.CylinderGeometry(0.6, 0.6, 1.2, 16)), tankM);
+        tank.position.set(HW / 2 - 1.3, HH + 0.6, HD / 2 - 1.5); tank.castShadow = true; house.add(tank);
+        const tankCap = new THREE.Mesh(track(new THREE.CylinderGeometry(0.19, 0.23, 0.13, 12)), tankM);
+        tankCap.position.set(HW / 2 - 1.3, HH + 1.25, HD / 2 - 1.5); house.add(tankCap);
+        const dishArm = new THREE.Mesh(track(new THREE.CylinderGeometry(0.028, 0.028, 1.4, 8)), railM);
+        dishArm.position.set(HW / 2 - 2.5, HH + 0.7, HD / 2 - 0.8); house.add(dishArm);
+        const dish = new THREE.Mesh(track(new THREE.SphereGeometry(0.52, 16, 10, 0, Math.PI * 2, 0, 0.6)),
+          M({ color: 0xb9bdc2, roughness: 0.4, metalness: 0.5, side: THREE.DoubleSide }));
+        dish.position.set(HW / 2 - 2.5, HH + 1.38, HD / 2 - 0.76); dish.rotation.x = Math.PI / 1.45; house.add(dish);
+        // حبل غسيل بمناشف ملونة على الجهة اليمنى (إشارة حياة مثل الرفرنس)
+        const lwire = new THREE.Mesh(track(new THREE.CylinderGeometry(0.011, 0.011, 3.2, 6)), railM);
+        lwire.rotation.x = Math.PI / 2; lwire.position.set(HW / 2 - 0.9, HH + 1.1, 1.6); house.add(lwire);
+        [0xe86a5f, 0x8fd0f0, 0xf2e29b].forEach((tc, i) => {
+          const towel = new THREE.Mesh(B(0.02, 0.6, 0.7), M({ color: tc, roughness: 0.95 }));
+          towel.position.set(HW / 2 - 0.9, HH + 0.78, 0.55 + i * 1.05);
+          towel.castShadow = true; house.add(towel);
+        });
+        // خضرة بزاوية السطح الخلفية اليسرى
+        for (let i = 0; i < 4; i++) {
+          const pl = new THREE.Mesh(plantJit(track(new THREE.IcosahedronGeometry(0.2, 1))), plantMat);
+          pl.scale.set(1, 1.35, 1);
+          pl.position.set(-HW / 2 + 0.6 + i * 0.45, HH + 0.3, HD / 2 - 0.45);
+          house.add(pl);
+        }
+      }
       [[-HW / 2 - 0.03, HD * 0.05, Math.PI / 2], [HW / 2 + 0.03, HD * 0.05, -Math.PI / 2]].forEach(([sx, sz, ry]) => {
         [1.55, FLOOR + 1.55].forEach((sy) => {
           const g2 = new THREE.Group();
@@ -556,6 +629,7 @@ export default function SystemShowcase({
       const roomX = -HW / 2 + towerW / 2 + 0.4, roomZ = HD / 2 - roomD / 2 - 0.6;
       const room = new THREE.Group();
       const rWall = fadeMat({ map: rep(plasterT, 2, 1), bumpMap: rep(plasterB, 2, 1), bumpScale: 0.4, roughness: 0.95 });
+      if (TECH_MODE) rWall.color = new THREE.Color(0xd09a76); // بيتونة بنفس تينت التراكوتا
       const rb = new THREE.Mesh(B(roomW, roomH, 0.1), rWall); rb.position.set(0, roomH / 2, roomD / 2); room.add(rb);
       const rl = new THREE.Mesh(B(0.1, roomH, roomD), rWall); rl.position.set(-roomW / 2, roomH / 2, 0); room.add(rl);
       const rr = new THREE.Mesh(B(0.1, roomH, roomD), rWall); rr.position.set(roomW / 2, roomH / 2, 0); room.add(rr);
@@ -636,15 +710,15 @@ export default function SystemShowcase({
       // إطار حجري مشذب حول الثيل
       const borderM = M({ color: 0xb8b2a6, roughness: 0.85 });
       const lw = HW + 4, ld = LOT_FRONT - 0.8, lcx = -2, lcz = -HD / 2 - LOT_FRONT / 2 + 0.3;
-      [[lcx, lcz - ld / 2, lw + 0.3, 0.18], [lcx, lcz + ld / 2, lw + 0.3, 0.18]].forEach(([bx, bz, bw2, bd3]) => {
+      (TECH_MODE ? [] : [[lcx, lcz - ld / 2, lw + 0.3, 0.18], [lcx, lcz + ld / 2, lw + 0.3, 0.18]]).forEach(([bx, bz, bw2, bd3]) => {
         const bs = new THREE.Mesh(B(bw2, 0.09, bd3), borderM); bs.position.set(bx, 0.045, bz); scene.add(bs);
       });
-      [[lcx - lw / 2, lcz, 0.18, ld + 0.3], [lcx + lw / 2, lcz, 0.18, ld + 0.3]].forEach(([bx, bz, bw2, bd3]) => {
+      (TECH_MODE ? [] : [[lcx - lw / 2, lcz, 0.18, ld + 0.3], [lcx + lw / 2, lcz, 0.18, ld + 0.3]]).forEach(([bx, bz, bw2, bd3]) => {
         const bs = new THREE.Mesh(B(bw2, 0.09, bd3), borderM); bs.position.set(bx, 0.045, bz); scene.add(bs);
       });
       // ساحة مبلطة مرتبة حول الملكية (hardscape) — المحيط ما يبقى «صحراء قاحلة»
       const apronM = M({ map: rep(sideT, 9, 9), roughness: 0.95, envMapIntensity: 0.05 });
-      [[-13, -2, 8, 24], [13, -2, 8, 24], [0, 13.5, 34, 9]].forEach(([ax, az, aw, ad]) => {
+      (TECH_MODE ? [] : [[-13, -2, 8, 24], [13, -2, 8, 24], [0, 13.5, 34, 9]]).forEach(([ax, az, aw, ad]) => {
         const ap = new THREE.Mesh(track(new THREE.PlaneGeometry(aw, ad)), apronM);
         ap.rotation.x = -Math.PI / 2; ap.position.set(ax, 0.006, az); ap.receiveShadow = true; scene.add(ap);
       });
@@ -657,6 +731,12 @@ export default function SystemShowcase({
       path.rotation.x = -Math.PI / 2; path.position.set(-HW / 2 + towerW + 0.9, 0.02, -HD / 2 - LOT_FRONT / 2); scene.add(path);
       const drive = new THREE.Mesh(track(new THREE.PlaneGeometry(3.2, LOT_FRONT)), M({ map: rep(asphaltT, 2, 3), color: 0x9a9a9a, roughness: 0.96, envMapIntensity: 0.04 }));
       drive.rotation.x = -Math.PI / 2; drive.position.set(gateX, 0.02, -HD / 2 - LOT_FRONT / 2); drive.receiveShadow = true; scene.add(drive);
+      if (TECH_MODE) {
+        // ستايل الرفرنس: مرج أخضر مفتوح — بلا شارع/سياج/لوحة/أرصفة/ممرات
+        [road, walk, walk2, curb, lawn, path, drive, bedSoil, bedEdge,
+         fenceFront1, fenceSideL, fenceSideR, capF, board].forEach((o) => { o.visible = false; });
+        procGate.forEach((o) => { o.visible = false; });
+      }
       const bladeGeo = track(new THREE.ConeGeometry(0.028, 0.34, 4, 1)); bladeGeo.translate(0, 0.17, 0);
       const grassMat = M({ color: 0xffffff, roughness: 1 });
       grassMat.onBeforeCompile = (sh) => {
@@ -1356,7 +1436,7 @@ export default function SystemShowcase({
         });
         wildGrass.count = wi; wildGrass.instanceMatrix.needsUpdate = true;
         if (wildGrass.instanceColor) wildGrass.instanceColor.needsUpdate = true;
-        scene.add(wildGrass);
+        if (!TECH_MODE) scene.add(wildGrass);
       }
 
       // ===== سرب حمام يدور بالسماء (جدول الحركة: دورة 25-35ث، ارتفاع يتنفس ±3م) =====
@@ -1622,7 +1702,7 @@ export default function SystemShowcase({
             // بالعرض الهندسي: نسحب الضباب صوب رملي دافئ — يلطف حدة الحزام الأبيض بالأفق
             if (ENG_MODE) fogC2.lerp(new THREE.Color(0xd9cdb4), 0.45);
             // بالوضع الهندسي البحت: الضباب بلون الأرضية المحايدة نفسه — الأرض تذوب بلا حزام
-            if (TECH_MODE) fogC2.set(0xd6dcc6);
+            if (TECH_MODE) fogC2.set(0xd3dcba);
             // المحاذاة: نثبّت أزيموث شمس المشهد على قوس الوقت بمنتصف الفترة، وندوّر الـHDRI ليطابق
             const midT = (slot.from + Math.min(slot.to, 24)) / 2;
             const dA = ((midT - 6) / 12) * Math.PI;
@@ -1744,8 +1824,9 @@ export default function SystemShowcase({
             });
           };
           await Promise.all([
-            applyPBR(whiteWall, 'wall', 4, 2),
-            applyPBR(rWall, 'wall', 2, 1),
+            // بستايل الرفرنس: جص طيني (clay_plaster) بتينت التراكوتا المضبوط مسبقاً
+            applyPBR(whiteWall, TECH_MODE ? 'plaster' : 'wall', 4, 2, TECH_MODE ? { keepColor: true } : {}),
+            applyPBR(rWall, TECH_MODE ? 'plaster' : 'wall', 2, 1, TECH_MODE ? { keepColor: true } : {}),
             applyPBR(road.material, 'asphalt', 12, 2),
             applyPBR(drive.material, 'asphalt', 1.2, 2, { color: new THREE.Color(0xbbbbbb) }),
             applyPBR(walk.material, 'pavers', 18, 1),
@@ -2005,12 +2086,28 @@ export default function SystemShowcase({
           } // نهاية !TECH_MODE
           // بالوضع الهندسي الطبيعي: شجرتان حقيقيتان فقط (طلب المستخدم — «بس مو أكثر»)
           if (TECH_MODE) {
+            // ===== ترقية المظهر: عشب PBR حقيقي + ممر + تحوطات + أشجار + مدخل مرتب =====
+            // 1) أرضية عشب حقيقية (diff+normal فقط — الـarm سبب «الشظايا السوداء» سابقاً)
+            try {
+              const [gd, gn] = await Promise.all([loadTex('grass_diff.jpg', true), loadTex('grass_nor.jpg')]);
+              if (!disposed) {
+                const gm = groundAll.material;
+                gm.map = gd; gm.map.repeat.set(64, 64);
+                gm.normalMap = gn; gm.normalMap.repeat.set(64, 64);
+                gm.normalScale = new THREE.Vector2(0.55, 0.55);
+                gm.color = new THREE.Color(0xc8d2a4); // تفتيح وتدفئة — مرج مشمس مو غابة غامقة
+                gm.roughness = 1; gm.metalness = 0; gm.envMapIntensity = 0.06;
+                gm.needsUpdate = true;
+              }
+            } catch { /* الكانفاس يبقى */ }
+
+            // 2) شجرتان واقعيتان يأطران البيت (مثل الرفرنس بالضبط — بلا زحمة)
             const gTree2 = await loadGlb('island_tree_02/island_tree_02_1k.gltf').catch(() => null);
             if (gTree2 && !disposed) {
               gTree2.scene.traverse((o) => {
                 if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.material.color.multiplyScalar(1.28); o.material.envMapIntensity = 0.8; }
               });
-              [[-9, 5.2, 1.15, 0.7], [11, -7, 1.35, 2.4]].forEach(([tx, tz, ts, tr]) => {
+              [[-8.8, -1.5, 1.3, 0.7], [9.8, -2.5, 0.95, 2.4]].forEach(([tx, tz, ts, tr]) => {
                 const cl = gTree2.scene.clone(true);
                 cl.position.set(tx, 0, tz); cl.rotation.y = tr; cl.scale.setScalar(ts); scene.add(cl);
                 mkAO(tx, tz, 4.5 * ts, 4.5 * ts, 0.5);
