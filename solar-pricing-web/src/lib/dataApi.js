@@ -311,14 +311,18 @@ export const api = {
     },
     // نسبة الزيادة/الخصم تنحفظ لكل عرض بجدول app_config (مفتاح quote_adj_<id>)
     // حتى ترجع بوضع التعديل حتى لو كانت الزيادة موزعة (مخفية) بدون سطر ظاهر
-    async _saveAdjustments(quoteId, adjustments, extraUnits) {
+    async _saveAdjustments(quoteId, adjustments, extraUnits, secondarySelections) {
       const a = adjustments || {};
       const x = extraUnits || {};
       const hasExtra = ['panel', 'battery', 'inverter'].some((k) => (Number(x[k]) || 0) !== 0);
+      // الاختيارات الثانوية الخام (بكمياتها اليدوية) تنحفظ هم — ذاكرة العرض الكاملة
+      const sel = secondarySelections && Object.keys(secondarySelections).length > 0 ? secondarySelections : null;
       const active =
-        (Number(a.markupPercent) || 0) > 0 || (Number(a.discountPercent) || 0) > 0 || a.installment?.enabled || hasExtra;
+        (Number(a.markupPercent) || 0) > 0 || (Number(a.discountPercent) || 0) > 0 || a.installment?.enabled || hasExtra || !!sel;
       try {
         await api.config.set(`quote_adj_${quoteId}`, active ? {
+          // ذاكرة المواد الثانوية كما أدخلها البياع — فتح التعديل يرجعها حرفياً
+          secondarySelections: sel,
           markupPercent: Number(a.markupPercent) || 0,
           markupMode: a.markupMode === 'distributed' ? 'distributed' : 'visible',
           discountPercent: Number(a.discountPercent) || 0,
@@ -382,7 +386,7 @@ export const api = {
       const notesPayload = notes.map((note_text, idx) => ({ quote_id: quote.id, note_text, sort_order: idx }));
       if (notesPayload.length) throwIf((await supabase.from('quote_notes').insert(notesPayload)).error);
 
-      await this._saveAdjustments(quote.id, await this._adjustments(input), input.extraUnits);
+      await this._saveAdjustments(quote.id, await this._adjustments(input), input.extraUnits, input.secondarySelections);
       return quote;
     },
     // تحديث عرض محفوظ بمدخلات جديدة: نفس الرقم وتاريخ الإنشاء والمرفق، وبنود وملاحظات جديدة
@@ -435,7 +439,7 @@ export const api = {
       const notesPayload = notes.map((note_text, idx) => ({ quote_id: id, note_text, sort_order: idx }));
       if (notesPayload.length) throwIf((await supabase.from('quote_notes').insert(notesPayload)).error);
 
-      await this._saveAdjustments(id, await this._adjustments(input), input.extraUnits);
+      await this._saveAdjustments(id, await this._adjustments(input), input.extraUnits, input.secondarySelections);
       return quote;
     },
     async list() {

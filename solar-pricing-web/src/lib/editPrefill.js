@@ -15,7 +15,7 @@ export async function buildEditPrefill(quoteId) {
     const mat = item.material_id != null ? byId.get(item.material_id) : null;
     if (!mat) continue; // أجور العمل أو مادة انحذفت من المخزون
     if (mat.category === 'secondary') {
-      // المرتبطة بالألواح ترجع تلقائية حتى تتبع أي تعديل، والباقي بكميتها المحفوظة
+      // فولباك للعروض القديمة: المرتبطة بالألواح تلقائية، والباقي بكميتها المحفوظة
       secondarySelections[mat.id] = { qty: mat.qty_per_panel > 0 ? '' : item.quantity };
     } else {
       overrides[mat.category] = mat.id;
@@ -33,7 +33,11 @@ export async function buildEditPrefill(quoteId) {
     nightSupplyHours: full.quote.night_supply_hours,
     tier: full.quote.selected_tier,
     overrides,
-    secondarySelections,
+    // ذاكرة العرض الحرفية: الاختيارات الخام بكمياتها اليدوية إذا محفوظة (العروض الجديدة)،
+    // وإلا الاستنتاج من البنود (العروض القديمة)
+    secondarySelections: adjustments?.secondarySelections && Object.keys(adjustments.secondarySelections).length > 0
+      ? adjustments.secondarySelections
+      : secondarySelections,
     adjustments: adjustments || null,
     extraUnits: adjustments?.extraUnits || null,
     notes: full.notes.map((n) => n.note_text),

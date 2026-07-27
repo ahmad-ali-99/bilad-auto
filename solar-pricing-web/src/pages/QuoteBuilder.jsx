@@ -215,6 +215,11 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
 
   // فحص حي أثناء الكتابة: إذا الاسم أو الرقم موجود بعرض سابق يطلع تنبيه وسط الشاشة
   useEffect(() => {
+    // بوضع التعديل ماكو أي فحص تكرار — إنت أصلاً گاعد تعدل عرض هذا العميل
+    if (editingQuote) {
+      setDupMatch(null);
+      return;
+    }
     const name = clientName.trim();
     const phone = clientPhone.trim();
     if (name.length < 3 && phone.length < 8) {
