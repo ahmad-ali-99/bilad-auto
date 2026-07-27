@@ -27,16 +27,11 @@ function batteriesRequired(ampNight, nightSupplyHours, { systemVoltage, dod }, b
   return Math.max(1, Math.ceil((nightEnergyKwh * factor) / dod / batteryKwh));
 }
 
-// عدد الألواح النهائي = تغذية النهار + شحن البطاريات — ودائماً زوجي (التركيب أزواج على 2 MPPT)
+// عدد الألواح النهائي = تغذية النهار + شحن البطاريات — العدد حر (يُسمح بالفردي)
 function panelsRequired(ampDay, batteryCount, settings, panelWatt) {
-  let feedPanels = ampDay > 0 ? Math.ceil(ampDay / panelAmpsFor(panelWatt)) : 0;
+  const feedPanels = ampDay > 0 ? Math.ceil(ampDay / panelAmpsFor(panelWatt)) : 0;
   const chargePanels = Math.ceil(batteryCount * settings.chargePanelsPerBattery);
-  let total = feedPanels + chargePanels;
-  if (total % 2 === 1) {
-    total += 1;
-    feedPanels += 1; // اللوح المكمل يظهر ضمن ألواح التغذية بالتفصيل
-  }
-  return { feedPanels, chargePanels, total };
+  return { feedPanels, chargePanels, total: feedPanels + chargePanels };
 }
 
 function requiredRoofArea(panelCount, { panelAreaM2 }) {

@@ -767,7 +767,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
                 <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
                   <b style={{ color: 'var(--navy)' }}>🛠 زيادة / نقصان يدوي:</b>
                   {[
-                    { cat: 'panel', label: 'لوح', step: 1, floor: 2 },
+                    { cat: 'panel', label: 'لوح', step: 1, floor: 1 },
                     { cat: 'battery', label: 'بطارية', step: 1, floor: 1 },
                     { cat: 'inverter', label: 'انفيرتر', step: 1, floor: 1 },
                   ].map(({ cat, label, step, floor }) => {

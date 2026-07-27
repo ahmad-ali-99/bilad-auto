@@ -178,8 +178,8 @@ function adjustCombo(combo, delta, minUnits) {
 // المذكورة فيه؛ qty رقم = كمية يدوية، وqty فارغ/null = كمية تلقائية (حسب الألواح أو وحدة واحدة).
 // إذا لم يمرّر يبقى السلوك القديم: كل الثانوية "عدد/قطعي" تنضاف تلقائياً + أمتار من cableMeters.
 // adjustments (اختياري): نسبة الزيادة (علنية/موزعة) ونسبة الخصم — تنطبق بعد اكتمال البنود.
-// extraUnits (اختياري): { panel, battery, inverter } — زيادة/نقصان يدوي بالوحدات؛ اللوح
-// بمضاعفات 2 دائماً (بلا أعداد فردية)، والفحوصات (المساحة/الشحن/التوازي) تحسب بالعدد النهائي.
+// extraUnits (اختياري): { panel, battery, inverter } — زيادة/نقصان يدوي بالوحدات لوح بلوح
+// (العدد الفردي مسموح)، والفحوصات (المساحة/الشحن/التوازي) تحسب بالعدد النهائي.
 function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, secondarySelections = null, adjustments = null, extraUnits = null }) {
   const { settings, roofAreaM2, ampDay, ampNight, batteryTiers, panelMaterials, inverterMaterials, secondary, labor, systemAmps } = options;
 
@@ -187,7 +187,7 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
   const warnings = {};
 
   const extra = {
-    panel: 2 * Math.round((Number(extraUnits?.panel) || 0) / 2),
+    panel: Math.round(Number(extraUnits?.panel) || 0),
     battery: Math.round(Number(extraUnits?.battery) || 0),
     inverter: Math.round(Number(extraUnits?.inverter) || 0),
   };
@@ -198,7 +198,7 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
 
   const panelTiers = calc.selectPanelTiers(panelMaterials, ampDay, batteryCount, settings);
   const panelComboBase = pickCombo(panelTiers, tier, overrides, 'panel', errors);
-  const panelCombo = adjustCombo(panelComboBase, extra.panel, 2);
+  const panelCombo = adjustCombo(panelComboBase, extra.panel, 1);
 
   // الانفيرتر يُختار بعد الألواح: قدرته لازم تستوعب الحمل ومصفوفة الألواح كاملة (÷1.3)
   const panelArrayW = panelCombo ? panelCombo.units * panelCombo.material.watt_or_capacity : 0;

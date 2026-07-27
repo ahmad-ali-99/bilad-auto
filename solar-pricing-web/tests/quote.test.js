@@ -171,7 +171,7 @@ describe('التقسيط المصرفي: المجموع × النسبة ÷ ال�
   });
 });
 
-describe('الزيادة/النقصان اليدوي بالوحدات (لوح ±2، بطارية/انفيرتر ±1)', () => {
+describe('الزيادة/النقصان اليدوي بالوحدات (لوح/بطارية/انفيرتر ±1)', () => {
   const base = () => optionsFor({ roofAreaM2: 40, ampDay: 15, ampNight: 15, nightSupplyHours: 8 });
 
   it('لوح +2: العدد والسعر يزيدان لوحين والعدد يبقى زوجي', () => {
@@ -198,17 +198,18 @@ describe('الزيادة/النقصان اليدوي بالوحدات (لوح ±
     expect(draft.capability.nightHours).toBe(expectedHours);
   });
 
-  it('النقصان لا ينزل تحت الحد الأدنى (بطارية 1، لوح 2)', () => {
+  it('النقصان لا ينزل تحت الحد الأدنى (بطارية 1، لوح 1)', () => {
     const draft = buildQuoteDraft(base(), { tier: 'economy', cableMeters: {}, extraUnits: { battery: -99, panel: -99 } });
     expect(draft.counts.battery).toBe(1);
-    expect(draft.counts.panel).toBe(2);
+    expect(draft.counts.panel).toBe(1);
   });
 
-  it('لوح فردي يتقرب لمضاعف 2 (لا أعداد فردية أبداً)', () => {
+  it('لوح +1 و−1: العدد يتغير لوحاً واحداً بالضبط (الفردي مسموح)', () => {
     const plain = buildQuoteDraft(base(), { tier: 'economy', cableMeters: {} });
-    const draft = buildQuoteDraft(base(), { tier: 'economy', cableMeters: {}, extraUnits: { panel: 3 } });
-    expect(draft.counts.panel % 2).toBe(0);
-    expect(Math.abs(draft.counts.panel - plain.counts.panel)).toBeLessThanOrEqual(4);
+    const plus = buildQuoteDraft(base(), { tier: 'economy', cableMeters: {}, extraUnits: { panel: 1 } });
+    const minus = buildQuoteDraft(base(), { tier: 'economy', cableMeters: {}, extraUnits: { panel: -1 } });
+    expect(plus.counts.panel).toBe(plain.counts.panel + 1);
+    expect(minus.counts.panel).toBe(plain.counts.panel - 1);
   });
 
   it('زيادة الألواح تفعّل فحص المساحة الحاجب إذا ما تكفي', () => {
