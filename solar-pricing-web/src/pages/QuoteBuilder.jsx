@@ -286,6 +286,10 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
     setSaveMessage('');
     try {
       const saved = await window.api.quotes.update(editingQuote.id, buildBaseInput());
+      // بعد الخروج من وضع التعديل الفحص الحي يرجع يشتغل والحقول معبأة —
+      // فنسجل هذا العرض كمتجاهَل حتى ما يطلع تحذير عن العرض اللي توك محدثه
+      dupDismissedRef.current.add(editingQuote.id);
+      if (saved?.id != null) dupDismissedRef.current.add(saved.id);
       setSaveMessage(`تم تحديث العرض رقم ${saved.quote_number} بنجاح ✔`);
       setEditingQuote(null);
     } catch (err) {
@@ -389,6 +393,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
         }
       }
       const saved = await window.api.quotes.save(buildBaseInput());
+      // العرض المحفوظ توه ما نحذر عنه — بلياها الفحص الحي يلگيه فوراً ويطلع التنبيه
+      if (saved?.id != null) dupDismissedRef.current.add(saved.id);
       setSaveMessage(`تم حفظ العرض رقم ${saved.quote_number} بنجاح ✔`);
     } catch (err) {
       setSaveMessage('حدث خطأ أثناء الحفظ: ' + err.message);

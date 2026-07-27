@@ -187,7 +187,8 @@ textarea { resize: vertical; min-height: 70px; }
 
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.4);
-  display: flex; align-items: center; justify-content: center; z-index: 50;
+  /* فوق شريط الإجراءات الثابت (50) وشريط التنقل السفلي (1200) — المودال يغطي كلشي */
+  display: flex; align-items: center; justify-content: center; z-index: 1300;
 }
 .modal {
   background: #fff; border-radius: 10px; padding: 22px;
