@@ -98,7 +98,9 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   const [saveMessage, setSaveMessage] = useState('');
 
   useEffect(() => {
-    window.api.company.get().then((c) => setNotes(c.notes_default || []));
+    // الملاحظات الافتراضية فقط إذا ماكو ملاحظات قائمة (مسودة محفوظة أو عرض مفتوح للتعديل) —
+    // حتى ما تنداس ملاحظات البياع كل ما يرجع للصفحة أو يوصل الرد متأخر وهو يكتب
+    window.api.company.get().then((c) => setNotes((prev) => (prev == null ? c.notes_default || [] : prev)));
     // ساعات التجهيز الليلي بدون قيمة افتراضية — البياع يحددها بكل عرض
     // الافتراضي: القائمة الدائمة المشتركة من قاعدة البيانات (يحفظها الفريق من نافذة الثانوية)،
     // وإذا ما محفوظة بعد: الأساسيات حسب الألواح (هيكل + صبات) + بوردة الحماية DC
