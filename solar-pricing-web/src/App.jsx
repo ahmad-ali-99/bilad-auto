@@ -8,6 +8,7 @@ import GlobalLoadingBar from './components/GlobalLoadingBar.jsx';
 import AssistantBar from './components/AssistantBar.jsx';
 import CustomerView from './pages/CustomerView.jsx';
 import Requests from './pages/Requests.jsx';
+import History from './pages/History.jsx';
 import { supabase } from './lib/supabase.js';
 import { isAdminName } from './lib/agent.js';
 
@@ -246,7 +247,12 @@ export default function App() {
   const currentUser = (session.user?.user_metadata?.username || '').replace(/^مستخدم(?=[0-9])/, '');
   // تبويب الطلبات للمشرفين الثلاثة فقط
   const isAdmin = isAdminName(session.user?.user_metadata?.username || '');
-  const navPages = isAdmin ? [...PAGES.slice(0, 2), ...ADMIN_PAGES, ...PAGES.slice(2)] : PAGES;
+  // سجل الحركات (الهستوري) لحساب أحمد حصراً — الحماية الفعلية بـRLS بقاعدة البيانات
+  const isAhmad = (session.user?.user_metadata?.username || '').replace(/[أإآ]/g, 'ا').trim() === 'احمد';
+  const navPages = [
+    ...(isAdmin ? [...PAGES.slice(0, 2), ...ADMIN_PAGES, ...PAGES.slice(2)] : PAGES),
+    ...(isAhmad ? [{ key: 'history', label: 'الحركات', icon: '🕓' }] : []),
+  ];
 
   // خروج فوري: نمسح الجلسة محلياً بدون انتظار السيرفر (كان يعلق إذا الشبكة بطيئة)
   async function logout() {
@@ -310,6 +316,7 @@ export default function App() {
         )}
         {page === 'inventory' && <Inventory initialSearch={inventorySearch} />}
         {page === 'requests' && isAdmin && <Requests />}
+        {page === 'history' && isAhmad && <History />}
         {page === 'settings' && <Settings />}
       </main>
       <nav className="mobile-bottomnav">

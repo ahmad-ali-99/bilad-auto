@@ -4,6 +4,7 @@ import { supabase } from './supabase.js';
 import * as quoteService from './quoteService.js';
 import * as excelImport from './excelImport.js';
 import { exportInvoicePdf } from './pdfExport.js';
+import { logActivity } from './activityLog.js';
 
 function throwIf(error) {
   if (error) throw new Error(error.message || 'خطأ بالاتصال بقاعدة البيانات');
@@ -85,16 +86,25 @@ export const api = {
     async create(data) {
       const { data: row, error } = await supabase.from('materials').insert(materialPayload(data)).select().single();
       throwIf(error);
+      logActivity('إضافة مادة', 'المخزون', { 'المادة': row.full_description, 'السعر': row.price });
       return row;
     },
     async update(id, data) {
+      // نلتقط القيم القديمة قبل التعديل — حتى يبين بالسجل شنو تغيّر بالضبط
+      const { data: old } = await supabase.from('materials').select('full_description, price').eq('id', id).maybeSingle();
       const { data: row, error } = await supabase.from('materials').update(materialPayload(data)).eq('id', id).select().single();
       throwIf(error);
+      logActivity('تعديل مادة', 'المخزون', {
+        'المادة': row.full_description,
+        ...(old && old.price !== row.price ? { 'السعر القديم': old.price, 'السعر الجديد': row.price } : { 'السعر': row.price }),
+      });
       return row;
     },
     async remove(id) {
+      const { data: old } = await supabase.from('materials').select('full_description, price').eq('id', id).maybeSingle();
       const { error } = await supabase.from('materials').delete().eq('id', id);
       throwIf(error);
+      logActivity('حذف مادة', 'المخزون', old ? { 'المادة': old.full_description, 'السعر': old.price } : { 'المعرف': id });
       return { ok: true };
     },
     async parseExcel() {
@@ -145,6 +155,9 @@ export const api = {
           }
         }
       }
+      logActivity('استيراد إكسل للمخزون', 'المخزون', {
+        'مواد مضافة': added, 'مواد محدثة': updated, 'أجور مضافة': laborAdded, 'أجور محدثة': laborUpdated,
+      });
       return { added, updated, laborAdded, laborUpdated };
     },
     async downloadTemplate() {
@@ -170,16 +183,24 @@ export const api = {
     async create(data) {
       const { data: row, error } = await supabase.from('labor_tiers').insert({ system_amps: data.system_amps, price: data.price, note: data.note || null }).select().single();
       throwIf(error);
+      logActivity('إضافة أجور عمل', 'المخزون', { 'الحجم (أمبير)': row.system_amps, 'السعر': row.price });
       return row;
     },
     async update(id, data) {
+      const { data: old } = await supabase.from('labor_tiers').select('system_amps, price').eq('id', id).maybeSingle();
       const { data: row, error } = await supabase.from('labor_tiers').update({ system_amps: data.system_amps, price: data.price, note: data.note || null }).eq('id', id).select().single();
       throwIf(error);
+      logActivity('تعديل أجور عمل', 'المخزون', {
+        'الحجم (أمبير)': row.system_amps,
+        ...(old && old.price !== row.price ? { 'السعر القديم': old.price, 'السعر الجديد': row.price } : { 'السعر': row.price }),
+      });
       return row;
     },
     async remove(id) {
+      const { data: old } = await supabase.from('labor_tiers').select('system_amps, price').eq('id', id).maybeSingle();
       const { error } = await supabase.from('labor_tiers').delete().eq('id', id);
       throwIf(error);
+      logActivity('حذف أجور عمل', 'المخزون', old ? { 'الحجم (أمبير)': old.system_amps, 'السعر': old.price } : { 'المعرف': id });
       return { ok: true };
     },
   },
@@ -258,6 +279,10 @@ export const api = {
       return map;
     },
     async setStatus(id, status) {
+      const { data: q } = await supabase.from('quotes').select('quote_number, client_name').eq('id', id).maybeSingle();
+      logActivity('تغيير حالة عرض', 'العروض', {
+        'رقم العرض': q?.quote_number ?? id, 'العميل': q?.client_name || '-', 'الحالة': status.level, ...(status.note ? { 'ملاحظة': status.note } : {}),
+      });
       return api.config.set(`quote_status_${id}`, { level: status.level, note: status.note || '' });
     },
     // أسماء كل من سبق وأنشأ عرضاً — تغذي قائمة «العرض من طرف» تلقائياً بدون قائمة ثابتة
@@ -387,10 +412,16 @@ export const api = {
       if (notesPayload.length) throwIf((await supabase.from('quote_notes').insert(notesPayload)).error);
 
       await this._saveAdjustments(quote.id, await this._adjustments(input), input.extraUnits, input.secondarySelections);
+      logActivity('حفظ عرض جديد', 'العروض', {
+        'رقم العرض': quote.quote_number, 'العميل': quote.client_name || '-', 'المجموع': quote.total_price,
+        ...(input.createdBy ? { 'من طرف': input.createdBy } : {}),
+      });
       return quote;
     },
     // تحديث عرض محفوظ بمدخلات جديدة: نفس الرقم وتاريخ الإنشاء والمرفق، وبنود وملاحظات جديدة
     async update(id, input) {
+      // لقطة قبل التعديل — للسجل: تغيّر المجموع وتحويل المنشئ يبينون صريحاً
+      const { data: before } = await supabase.from('quotes').select('quote_number, total_price, created_by').eq('id', id).maybeSingle();
       const options = await this._options(input);
       const draft = quoteService.buildQuoteDraft(options, {
         tier: input.tier,
@@ -440,6 +471,14 @@ export const api = {
       if (notesPayload.length) throwIf((await supabase.from('quote_notes').insert(notesPayload)).error);
 
       await this._saveAdjustments(id, await this._adjustments(input), input.extraUnits, input.secondarySelections);
+      const transferred = input.createdBy && before?.created_by && input.createdBy !== before.created_by;
+      logActivity(transferred ? 'تعديل عرض + تحويل الحساب' : 'تعديل عرض', 'العروض', {
+        'رقم العرض': quote.quote_number, 'العميل': quote.client_name || '-',
+        ...(before && before.total_price !== quote.total_price
+          ? { 'المجموع القديم': before.total_price, 'المجموع الجديد': quote.total_price }
+          : { 'المجموع': quote.total_price }),
+        ...(transferred ? { 'من حساب': before.created_by, 'إلى حساب': input.createdBy } : {}),
+      });
       return quote;
     },
     async list() {
@@ -464,17 +503,23 @@ export const api = {
     async restore(id) {
       const { error } = await supabase.from('quotes').update({ deleted_at: null, deleted_by: null }).eq('id', id);
       throwIf(error);
+      const { data: q } = await supabase.from('quotes').select('quote_number, client_name').eq('id', id).maybeSingle();
+      logActivity('استرجاع عرض من سلة المحذوفات', 'العروض', { 'رقم العرض': q?.quote_number ?? id, 'العميل': q?.client_name || '-' });
       return { ok: true };
     },
     // إرفاق ملف تصميم (صورة أو PDF) بالعرض — يخزن base64 ويتصدر مع ملف العرض
     async setAttachment(id, { name, data }) {
       const { error } = await supabase.from('quotes').update({ attachment_name: name, attachment_data: data }).eq('id', id);
       throwIf(error);
+      const { data: q } = await supabase.from('quotes').select('quote_number').eq('id', id).maybeSingle();
+      logActivity('إرفاق تصميم بعرض', 'العروض', { 'رقم العرض': q?.quote_number ?? id, 'الملف': name });
       return { ok: true };
     },
     async removeAttachment(id) {
       const { error } = await supabase.from('quotes').update({ attachment_name: null, attachment_data: null }).eq('id', id);
       throwIf(error);
+      const { data: q } = await supabase.from('quotes').select('quote_number').eq('id', id).maybeSingle();
+      logActivity('حذف مرفق عرض', 'العروض', { 'رقم العرض': q?.quote_number ?? id });
       return { ok: true };
     },
     async get(id) {
@@ -490,11 +535,15 @@ export const api = {
       // حذف ناعم: يروح لسلة المحذوفات مع تسجيل منو حذفه، ويمكن استرداده خلال أسبوع
       const { data: { user } } = await supabase.auth.getUser();
       const username = user?.user_metadata?.username || user?.email || 'غير معروف';
+      const { data: q } = await supabase.from('quotes').select('quote_number, client_name, total_price').eq('id', id).maybeSingle();
       const { error } = await supabase
         .from('quotes')
         .update({ deleted_at: new Date().toISOString(), deleted_by: username })
         .eq('id', id);
       throwIf(error);
+      logActivity('حذف عرض (لسلة المحذوفات)', 'العروض', {
+        'رقم العرض': q?.quote_number ?? id, 'العميل': q?.client_name || '-', 'المجموع': q?.total_price ?? '-',
+      });
       return { ok: true };
     },
     async exportPdf(id) {
@@ -514,6 +563,7 @@ export const api = {
         const totalWithInterest = Math.round(quote.total_price * Number(inst.rate));
         installment = { rate: Number(inst.rate), months, totalWithInterest, monthly: Math.round(totalWithInterest / months) };
       }
+      logActivity('تصدير PDF لعرض محفوظ', 'العروض', { 'رقم العرض': quote.quote_number, 'العميل': quote.client_name || '-' });
       return exportInvoicePdf({
         installment,
         quote,
@@ -550,6 +600,7 @@ export const api = {
         required_amp_day: input.ampDay,
         required_amp_night: input.ampNight,
       };
+      logActivity('تصدير PDF معاينة (بلا حفظ)', 'العروض', { 'العميل': input.clientName || '-', 'المجموع': draft.total });
       return exportInvoicePdf({ quote: pseudoQuote, items: draft.items, notes, company, fileName: 'عرض_سعر_معاينة.pdf', installment: draft.installment });
     },
   },
@@ -562,8 +613,10 @@ export const api = {
       return data || [];
     },
     async remove(id) {
+      const { data: old } = await supabase.from('leads').select('full_name, phone').eq('id', id).maybeSingle();
       const { error } = await supabase.from('leads').delete().eq('id', id);
       throwIf(error);
+      logActivity('حذف جهة تواصل زائر', 'الطلبات', old ? { 'الاسم': old.full_name || '-', 'الهاتف': old.phone || '-' } : { 'المعرف': id });
       return { ok: true };
     },
   },
@@ -584,9 +637,20 @@ export const api = {
       return data || [];
     },
     async remove(id) {
+      const { data: old } = await supabase.from('quote_requests').select('full_name, phone').eq('id', id).maybeSingle();
       const { error } = await supabase.from('quote_requests').delete().eq('id', id);
       throwIf(error);
+      logActivity('حذف طلب عرض زبون', 'الطلبات', old ? { 'الاسم': old.full_name || '-', 'الهاتف': old.phone || '-' } : { 'المعرف': id });
       return { ok: true };
+    },
+  },
+
+  // سجل الحركات — القراءة محصورة بحساب المشرف أحمد عبر RLS (غيره يستلم قائمة فارغة)
+  history: {
+    async list(limit = 400) {
+      const { data, error } = await supabase.from('activity_log').select('*').order('id', { ascending: false }).limit(limit);
+      throwIf(error);
+      return data || [];
     },
   },
 
@@ -603,6 +667,15 @@ export const api = {
     async set(key, value) {
       const { error } = await supabase.from('app_config').upsert({ key, value: JSON.stringify(value) });
       throwIf(error);
+      // نسجل الإعدادات المشتركة فقط — مفاتيح quote_* الداخلية لها تسجيلها الخاص بمكان الاستدعاء
+      if (!key.startsWith('quote_')) {
+        const labels = {
+          secondary_defaults: 'القائمة الافتراضية للمواد الثانوية',
+          battery_factors: 'معاملات أمان البطاريات',
+          installment: 'إعدادات التقسيط المصرفي',
+        };
+        logActivity('تعديل إعداد مشترك', 'الإعدادات', { 'الإعداد': labels[key] || key });
+      }
       return { ok: true };
     },
   },
@@ -616,8 +689,15 @@ export const api = {
     async update(data) {
       const payload = { ...data };
       delete payload.id;
+      const { data: old } = await supabase.from('settings').select('*').eq('id', 1).maybeSingle();
       const { data: row, error } = await supabase.from('settings').update(payload).eq('id', 1).select().single();
       throwIf(error);
+      // نسجل فقط الحقول اللي تغيرت فعلاً بقيمها القديمة والجديدة
+      const changed = {};
+      for (const k of Object.keys(payload)) {
+        if (old && String(old[k]) !== String(row[k])) changed[k] = `${old[k]} ← ${row[k]}`;
+      }
+      if (Object.keys(changed).length) logActivity('تعديل إعدادات الحساب', 'الإعدادات', changed);
       return row;
     },
   },
@@ -641,6 +721,7 @@ export const api = {
         notes_default: data.notes_default || [],
       }).eq('id', 1).select().single();
       throwIf(error);
+      logActivity('تعديل ملف الشركة', 'الإعدادات', { 'الاسم': row.company_name });
       return { ...row, notes_default: Array.isArray(row.notes_default) ? row.notes_default : JSON.parse(row.notes_default || '[]') };
     },
     async pickLogo() {
