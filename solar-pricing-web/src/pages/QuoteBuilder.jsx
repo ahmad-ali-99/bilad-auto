@@ -2,7 +2,10 @@ import React, { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'rea
 import SecondaryPickerModal from '../components/SecondaryPickerModal.jsx';
 // العرض التفاعلي 3D يُحمّل عند الطلب فقط (يجرّ three.js) حتى ما يثقل فتح الصفحة
 const SystemShowcase = lazy(() => import('../components/SystemShowcase.jsx'));
+// مساحة المضخة الزراعية: تنفتح تلقائياً إذا العرض بيه انفيرتر مضخة (VFD)
+const PumpShowcase = lazy(() => import('../components/PumpShowcase.jsx'));
 import { buildEditPrefill } from '../lib/editPrefill.js';
+import { detectSceneType } from '../lib/sceneType.js';
 import { getIsAdmin, getCurrentUsername, ADMIN_USERS } from '../lib/agent.js';
 import { computeSecondaryDefaults } from '../lib/secondaryDefaults.js';
 
@@ -912,16 +915,26 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
 
           {showcaseOpen && showcaseAllowed && (
             <Suspense fallback={null}>
-              <SystemShowcase
-                panels={draft.counts?.panel ?? (draft.panelBreakdown ? draft.panelBreakdown.feedPanels + draft.panelBreakdown.chargePanels : 0)}
-                batteries={draft.counts?.battery ?? 0}
-                inverters={draft.counts?.inverter ?? 1}
-                nightHours={draft.capability?.nightHours ?? null}
-                dayAmps={draft.capability?.dayAmps ?? null}
-                ampDay={Number(ampDay) || 0}
-                ampNight={Number(ampNight) || 0}
-                onClose={() => setShowcaseOpen(false)}
-              />
+              {detectSceneType(draft) === 'pump' ? (
+                // البرنامج فهم أن العرض منظومة مضخة ماء — يعرض مساحتها الزراعية
+                <PumpShowcase
+                  panels={draft.counts?.panel ?? 0}
+                  inverters={draft.counts?.inverter ?? 1}
+                  ampDay={Number(ampDay) || 0}
+                  onClose={() => setShowcaseOpen(false)}
+                />
+              ) : (
+                <SystemShowcase
+                  panels={draft.counts?.panel ?? (draft.panelBreakdown ? draft.panelBreakdown.feedPanels + draft.panelBreakdown.chargePanels : 0)}
+                  batteries={draft.counts?.battery ?? 0}
+                  inverters={draft.counts?.inverter ?? 1}
+                  nightHours={draft.capability?.nightHours ?? null}
+                  dayAmps={draft.capability?.dayAmps ?? null}
+                  ampDay={Number(ampDay) || 0}
+                  ampNight={Number(ampNight) || 0}
+                  onClose={() => setShowcaseOpen(false)}
+                />
+              )}
             </Suspense>
           )}
         </>
