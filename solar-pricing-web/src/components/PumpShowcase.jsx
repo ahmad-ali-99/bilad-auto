@@ -110,17 +110,9 @@ export default function PumpShowcase({ panels = 0, inverters = 1, ampDay = 0, on
       scene.add(new THREE.HemisphereLight(0xcfe2ff, 0xb9a878, 0.85));
       scene.add(new THREE.AmbientLight(0xffffff, 0.22));
 
-      // ===== الأرض: ساحة ترابية للمصفوفة + حقول محاصيل حواليها =====
-      scene.add(mesh(track(new THREE.PlaneGeometry(600, 600)), M({ map: dirtT, roughness: 1 }), 0, -0.02, 0, false).rotateX(-Math.PI / 2));
-      const field = (x, z, w, d) => {
-        const m = mesh(track(new THREE.PlaneGeometry(w, d)), M({ map: cropT, roughness: 1 }), x, 0.02, z, false);
-        m.rotateX(-Math.PI / 2);
-        scene.add(m);
-      };
-      field(0, -60, 210, 108); // الحقل الرئيسي گدام المصفوفة (يُروى من الساقية)
-      field(-98, 20, 85, 150);
-      field(98, 20, 85, 150);
-      field(0, 68, 210, 85); // حقل خلف ساحة المصفوفة — التراب يبقى ساحة عمل فقط
+      // ===== الأرض: حقول محاصيل بكل مكان — والساحة الترابية لاحقاً بگد المنظومة فقط =====
+      const cropBase = cropT.clone(); track(cropBase); cropBase.repeat.set(20, 20); cropBase.needsUpdate = true;
+      scene.add(mesh(track(new THREE.PlaneGeometry(600, 600)), M({ map: cropBase, roughness: 1 }), 0, -0.02, 0, false).rotateX(-Math.PI / 2));
 
       // ===== مصفوفة الألواح الأرضية — بعدد ألواح العرض الحقيقي =====
       const structs = splitStructures(panels);
@@ -128,40 +120,61 @@ export default function PumpShowcase({ panels = 0, inverters = 1, ampDay = 0, on
       const metal = M({ color: 0x9aa2ab, roughness: 0.45, metalness: 0.8 });
       const concrete = M({ color: 0xd8d8d4, roughness: 0.95 });
       const panelMat = M({ map: panelT, roughness: 0.28, metalness: 0.25 });
+      const sinT = Math.sin(TILT), cosT = Math.cos(TILT);
+      const legTop = 1.0; // ارتفاع الحافة الأمامية
+      const backZ = 0.15 + 2 * PL * cosT;
+      const backH = legTop + 2 * PL * sinT;
       let az = 0;
+      let placed = 0; // عدّاد الألواح المرسومة — يطابق عدد ألواح العرض بالضبط
       const arrayGrp = new THREE.Group();
       structs.forEach((s) => {
         const W = s.cols * PW;
         const g = new THREE.Group();
-        const surf = mesh(B(W, 0.09, PL * 2), panelMat, W / 2, 0, PL * Math.cos(TILT));
-        const mm = panelMat.clone(); track(mm); mm.map = rep(panelT, s.cols, 2);
-        surf.material = mm;
-        surf.position.y = 1.1 + PL * Math.sin(TILT);
-        surf.rotation.x = -TILT;
-        g.add(surf);
-        for (let c = 0; c <= s.cols; c++) {
-          const x = c * PW;
-          g.add(mesh(B(0.09, 1.15, 0.09), metal, x, 0.575, 0.15));
-          g.add(mesh(B(0.09, 1.15 + 2 * PL * Math.sin(TILT), 0.09), metal, x, (1.15 + 2 * PL * Math.sin(TILT)) / 2, 0.15 + 2 * PL * Math.cos(TILT) * 0.92));
-          g.add(mesh(B(0.42, 0.3, 0.42), concrete, x, 0.15, 0.15));
-          g.add(mesh(B(0.42, 0.3, 0.42), concrete, x, 0.15, 0.15 + 2 * PL * Math.cos(TILT) * 0.92));
+        // كل لوح قطعة مستقلة بإطارها — العدد المرسوم = عدد العرض حرفياً (والفردي مسموح)
+        for (let r = 0; r < 2; r++) {
+          for (let c = 0; c < s.cols; c++) {
+            if (placed >= panels) break;
+            const sc = (r + 0.5) * PL;
+            const p = mesh(B(PW - 0.08, 0.06, PL - 0.08), panelMat, (c + 0.5) * PW, legTop + sc * sinT, 0.15 + sc * cosT);
+            p.rotation.x = -TILT;
+            g.add(p);
+            placed++;
+          }
         }
+        // أرجل وصبّات كل عمودين + عمود النهاية، وعارضتان تربطان الأرجل
+        const xs = new Set();
+        for (let c = 0; c <= s.cols; c += 2) xs.add(Math.min(c * PW, W));
+        xs.add(W);
+        xs.forEach((x) => {
+          g.add(mesh(B(0.09, legTop, 0.09), metal, x, legTop / 2, 0.15));
+          g.add(mesh(B(0.09, backH, 0.09), metal, x, backH / 2, backZ));
+          g.add(mesh(B(0.42, 0.3, 0.42), concrete, x, 0.15, 0.15));
+          g.add(mesh(B(0.42, 0.3, 0.42), concrete, x, 0.15, backZ));
+        });
+        g.add(mesh(B(W, 0.07, 0.07), metal, W / 2, legTop, 0.15));
+        g.add(mesh(B(W, 0.07, 0.07), metal, W / 2, backH, backZ));
         g.position.set(-W / 2, 0, az);
         arrayGrp.add(g);
-        az += PL * 2 * Math.cos(TILT) + 2.6; // ممر بين الصفوف
+        az += 2 * PL * cosT + 2.6; // ممر بين الصفوف
       });
-      arrayGrp.position.z = -az / 2 + 4;
+      const arrDepth = az - 2.6 + backZ; // العمق الفعلي المستخدم
+      arrayGrp.position.z = -arrDepth / 2;
       scene.add(arrayGrp);
-      function rep(t, x, y) { const c = t.clone(); track(c); c.repeat.set(x, y); c.needsUpdate = true; return c; }
 
-      // سياج حول المصفوفة: أعمدة رفيعة + 3 قضبان أفقية (مو كتل صلدة)
+      // سياج ضيّق حول المصفوفة (هامش ~1.2م): أعمدة رفيعة + 3 قضبان أفقية
       const fenceMat = M({ color: 0x8f979e, roughness: 0.5, metalness: 0.8 });
-      const maxW = Math.max(...structs.map((s) => s.cols * PW), 8) + 6;
-      const fenceD = az + 6;
-      const fz0 = -fenceD / 2 + 1, fz1 = fenceD / 2 + 1;
+      const maxW = Math.max(...structs.map((s) => s.cols * PW), 8) + 2.4;
+      const fenceD = arrDepth + 2.4;
+      const fz0 = -fenceD / 2, fz1 = fenceD / 2;
+
+      // الساحة الترابية بگد المنظومة فقط: المصفوفة المسيّجة + شريط المعدات شرقها
+      const padW = maxW + 13, padD = fenceD + 7;
+      const pad = mesh(track(new THREE.PlaneGeometry(padW, padD)), M({ map: dirtT, roughness: 1 }), 2.5, 0.02, 0, false);
+      pad.rotateX(-Math.PI / 2);
+      scene.add(pad);
       const rail = (w, d, x, z) => [0.55, 1.05, 1.55].forEach((y) => scene.add(mesh(B(w || 0.05, 0.05, d || 0.05), fenceMat, x, y, z)));
       rail(maxW, 0, 0, fz0); rail(maxW, 0, 0, fz1);
-      rail(0, fenceD, -maxW / 2, 1); rail(0, fenceD, maxW / 2, 1);
+      rail(0, fenceD, -maxW / 2, 0); rail(0, fenceD, maxW / 2, 0);
       for (let fx = -maxW / 2; fx <= maxW / 2 + 0.01; fx += maxW / Math.round(maxW / 3)) {
         scene.add(mesh(B(0.07, 1.65, 0.07), fenceMat, fx, 0.825, fz0));
         scene.add(mesh(B(0.07, 1.65, 0.07), fenceMat, fx, 0.825, fz1));
@@ -246,10 +259,9 @@ export default function PumpShowcase({ panels = 0, inverters = 1, ampDay = 0, on
         const dt = clock.getDelta();
         waterT.offset.y -= dt * 0.9; // جريان الماء بالساقية
         if (!userMoved) {
-          const t = clock.elapsedTime * 0.08;
-          camera.position.x = Math.sin(t) * 48;
-          camera.position.z = Math.cos(t) * 48;
-          camera.position.y = 17;
+          // تأرجح بالجهة الجنوبية — وجه الألواح الأزرق والساقية دائماً بالكادر
+          const a = Math.PI + Math.sin(clock.elapsedTime * 0.1) * 0.8;
+          camera.position.set(Math.sin(a) * 46, 15, Math.cos(a) * 46);
           camera.lookAt(0, 2, -5);
         }
         controls.update();
