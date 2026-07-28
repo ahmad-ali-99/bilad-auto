@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { buildEditPrefill } from '../lib/editPrefill.js';
+import { getCurrentUsername } from '../lib/agent.js';
 
 const TIER_LABELS = { economy: 'اقتصادي', standard: 'متوسط', premium: 'ممتاز' };
 const MAX_ATTACH_MB = 8;
@@ -44,6 +45,13 @@ export default function Quotes({ onEditQuote }) {
   const [statusEdit, setStatusEdit] = useState(null);
   const fileRef = useRef(null);
   const attachTargetRef = useRef(null);
+  // تفريغ السلة نهائياً: صلاحية حصرية لحساب أحمد
+  const [isAhmad, setIsAhmad] = useState(false);
+  useEffect(() => {
+    getCurrentUsername()
+      .then((n) => setIsAhmad((n || '').replace(/[أإآ]/g, 'ا').trim() === 'احمد'))
+      .catch(() => {});
+  }, []);
 
   function reload() {
     window.api.quotes.list().then(setQuotes);
@@ -100,6 +108,19 @@ export default function Quotes({ onEditQuote }) {
     await window.api.quotes.restore(id);
     setMessage(`تم استرداد العرض رقم ${quoteNumber} ✔`);
     reload();
+  }
+
+  // تفريغ السلة نهائياً — لحساب أحمد فقط، ولا يمكن التراجع عنه
+  async function handlePurge() {
+    if (!confirm(`سيُحذف نهائياً ${deleted.length} عرض من سلة المحذوفات ولا يمكن استردادها أبداً. متأكد؟`)) return;
+    setMessage('');
+    try {
+      const { count } = await window.api.quotes.purgeDeleted();
+      setMessage(`تم تفريغ السلة — حُذف ${count} عرض نهائياً 🧹`);
+      reload();
+    } catch (err) {
+      setMessage('خطأ في التفريغ: ' + err.message);
+    }
   }
 
   function pickAttachment(quote) {
@@ -176,7 +197,14 @@ export default function Quotes({ onEditQuote }) {
 
       {showTrash && (
         <div className="card" style={{ border: '1px solid #e0b4b4' }}>
-          <h3 style={{ marginTop: 0, color: '#a33' }}>سلة المحذوفات — تنحذف نهائياً بعد أسبوع من الحذف</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <h3 style={{ margin: 0, color: '#a33', flex: 1 }}>سلة المحذوفات — تنحذف نهائياً بعد أسبوع من الحذف</h3>
+            {isAhmad && deleted.length > 0 && (
+              <button className="btn btn-danger btn-sm" style={{ background: '#a33', color: '#fff', border: 'none' }} onClick={handlePurge}>
+                🧹 تفريغ السلة نهائياً
+              </button>
+            )}
+          </div>
           <div className="table-scroll">
           <table className="data-table">
             <thead>

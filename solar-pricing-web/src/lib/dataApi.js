@@ -500,6 +500,22 @@ export const api = {
       }
       return deleted.filter((q) => new Date(q.deleted_at).getTime() >= weekAgo);
     },
+    // تفريغ السلة نهائياً (صلاحية حساب أحمد بالواجهة): حذف كل المحذوفات فوراً بلا انتظار الأسبوع
+    async purgeDeleted() {
+      const { data, error: selError } = await supabase.from('quotes').select('id, quote_number').not('deleted_at', 'is', null);
+      throwIf(selError);
+      const ids = (data || []).map((q) => q.id);
+      if (ids.length) {
+        // البنود والملاحظات تنحذف تلقائياً (on delete cascade)
+        const { error } = await supabase.from('quotes').delete().in('id', ids);
+        throwIf(error);
+      }
+      logActivity('تفريغ سلة المحذوفات نهائياً', 'العروض', {
+        'عدد العروض': ids.length,
+        'الأرقام': (data || []).map((q) => q.quote_number).join('، ') || '-',
+      });
+      return { count: ids.length };
+    },
     async restore(id) {
       const { error } = await supabase.from('quotes').update({ deleted_at: null, deleted_by: null }).eq('id', id);
       throwIf(error);
