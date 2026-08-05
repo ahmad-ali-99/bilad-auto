@@ -21,8 +21,16 @@ export async function buildEditPrefill(quoteId) {
       overrides[mat.category] = mat.id;
     }
   }
+  // نوع المنظومة يُستنتج من أرقام العرض نفسه (بلا حقل إضافي بالقاعدة) — يشتغل حتى
+  // للعروض القديمة: نهار صفر = أوف جرد بلا ألواح، ليل صفر = نهارية بلا بطاريات
+  const systemType =
+    Number(full.quote.required_amp_day) === 0 ? 'offgrid'
+      : Number(full.quote.required_amp_night) === 0 ? 'day'
+        : 'full';
+
   return {
     editing: { id: full.quote.id, quote_number: full.quote.quote_number },
+    systemType,
     createdBy: full.quote.created_by || '',
     clientName: full.quote.client_name || '',
     clientPhone: full.quote.client_phone || '',

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { isPanelSideMaterial } from '../lib/secondaryDefaults.js';
 
 function fmt(n) {
   return Math.round(n || 0).toLocaleString('en-US');
@@ -14,14 +15,17 @@ function effectiveQty(material, sel, panelCount) {
 }
 
 // نافذة وحدة لاختيار المواد الثانوية للعرض — الأساسيات محددة افتراضياً والباقي حسب الحاجة
-export default function SecondaryPickerModal({ secondary, selections, panelCount, onChange, onClose }) {
+export default function SecondaryPickerModal({ secondary, selections, panelCount, onChange, onClose, systemType = 'full' }) {
+  // عرض أوف جرد (بلا ألواح): مواد جهة الألواح (هيكل/صبات/بورد DC) ما تنعرض أصلاً —
+  // كميتها تطلع صفر وتنشال من العرض، فعرضها بالقائمة تشويش يغلّط البياع
+  const list = systemType === 'offgrid' ? secondary.filter((m) => !isPanelSideMaterial(m)) : secondary;
   const [maxed, setMaxed] = useState(false);
   const [defaultsMsg, setDefaultsMsg] = React.useState('');
 
   // اعتماد التحديد الحالي كافتراضي دائم مشترك لكل المستخدمين (يخزن بقاعدة البيانات)
   async function saveAsDefaults() {
     try {
-      const ids = secondary.filter((m) => selections[m.id]).map((m) => m.id);
+      const ids = list.filter((m) => selections[m.id]).map((m) => m.id);
       await window.api.config.set('secondary_defaults', ids);
       setDefaultsMsg(`تم ✔ أصبحت هذه المواد (${ids.length}) افتراضية دائمة في كل عرض جديد ولجميع الموظفين`);
     } catch (err) {
@@ -40,7 +44,7 @@ export default function SecondaryPickerModal({ secondary, selections, panelCount
     onChange({ ...selections, [material.id]: { qty: value } });
   }
 
-  const includedTotal = secondary.reduce((sum, m) => {
+  const includedTotal = list.reduce((sum, m) => {
     const sel = selections[m.id];
     if (!sel) return sum;
     return sum + effectiveQty(m, sel, panelCount) * m.price;
@@ -52,8 +56,9 @@ export default function SecondaryPickerModal({ secondary, selections, panelCount
         <button type="button" className="modal-zoom-btn" onClick={() => setMaxed((m) => !m)} title="تكبير / تصغير النافذة">{maxed ? "🗕" : "⛶"}</button>
         <h3>المواد الثانوية للعرض</h3>
         <p className="muted">
-          أشّر على المواد المطلوبة في هذا العرض. الهيكل والصبات محددة تلقائياً (أساسية في كل عرض)، ويمكنك
-          إزالة أو إضافة أي مادة. الكمية الفارغة = تلقائية حسب عدد الألواح، ومواد المتر تحتاج إدخال الأمتار.
+          {systemType === 'offgrid'
+            ? 'منظومة أوف جرد: مواد الألواح (الهيكل والصبات وبوردة الحماية DC) غير معروضة لأنها لا تدخل هذا العرض. أشّر على الأسلاك والبوردات وبقية التفاصيل المطلوبة — ومواد المتر تحتاج إدخال الأمتار.'
+            : 'أشّر على المواد المطلوبة في هذا العرض. الهيكل والصبات محددة تلقائياً (أساسية في كل عرض)، ويمكنك إزالة أو إضافة أي مادة. الكمية الفارغة = تلقائية حسب عدد الألواح، ومواد المتر تحتاج إدخال الأمتار.'}
         </p>
 
         <div className="import-table-wrap">
@@ -69,7 +74,7 @@ export default function SecondaryPickerModal({ secondary, selections, panelCount
               </tr>
             </thead>
             <tbody>
-              {secondary.map((m) => {
+              {list.map((m) => {
                 const sel = selections[m.id];
                 const included = !!sel;
                 const qty = included ? effectiveQty(m, sel, panelCount) : 0;
@@ -102,7 +107,7 @@ export default function SecondaryPickerModal({ secondary, selections, panelCount
                   </tr>
                 );
               })}
-              {secondary.length === 0 && (
+              {list.length === 0 && (
                 <tr>
                   <td colSpan={6} className="muted" style={{ textAlign: 'center', padding: 20 }}>
                     لا توجد مواد ثانوية في المخزون
@@ -117,9 +122,13 @@ export default function SecondaryPickerModal({ secondary, selections, panelCount
         <div className="toolbar" style={{ marginTop: 14, flexWrap: 'wrap', gap: 8 }}>
           <span className="total-badge">مجموع الثانوية المضافة: {fmt(includedTotal)} دينار</span>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-secondary" onClick={saveAsDefaults} title="يصبح التحديد الحالي هو الافتراضي الدائم في كل عرض جديد ولجميع الموظفين">
-              💾 اعتماد كافتراضي دائم للكل
-            </button>
+            {/* بوضع الأوف جرد القائمة منقوصة (بلا مواد الألواح) — اعتمادها كافتراضي دائم
+                راح يمسح الهيكل والصبات من عروض الفريق كلها، فالزر ينحجب بهذا الوضع */}
+            {systemType !== 'offgrid' && (
+              <button className="btn btn-secondary" onClick={saveAsDefaults} title="يصبح التحديد الحالي هو الافتراضي الدائم في كل عرض جديد ولجميع الموظفين">
+                💾 اعتماد كافتراضي دائم للكل
+              </button>
+            )}
             <button className="btn btn-primary" onClick={onClose}>
               تم
             </button>

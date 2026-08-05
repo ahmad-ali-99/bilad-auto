@@ -35,6 +35,12 @@ function densityScale(itemCount) {
 // يرجع HTML داخلي لعنصر بعرض 794px (A4 على 96dpi) جاهز للالتقاط بـhtml2canvas
 export function buildInvoiceInnerHtml({ quote, items, notes, company, installment = null }) {
   const systemAmps = Math.max(quote.required_amp_day || 0, quote.required_amp_night || 0);
+  // هوية العرض حسب نوع المنظومة (مستنتج من أرقام العرض نفسه):
+  // نهار صفر = أوف جرد (انفيرتر وبطاريات بلا ألواح)، ليل صفر = نهارية بلا بطاريات
+  const systemLabel =
+    Number(quote.required_amp_day) === 0 ? 'منظومة أوف جرد (انفيرتر وبطاريات)'
+      : Number(quote.required_amp_night) === 0 ? 'منظومة شمسية نهارية'
+        : 'منظومة شمسية';
   const logo = company.logo_path && company.logo_path.startsWith('data:') ? company.logo_path : null;
   const { fontSize, cellPad } = densityScale(items.length);
 
@@ -122,7 +128,7 @@ export function buildInvoiceInnerHtml({ quote, items, notes, company, installmen
       <td class="label">الموقع</td><td>${escapeHtml(quote.location || '-')}</td>
     </tr>
   </table>
-  <div class="title-bar">عرض سعر منظومة شمسية بسعة ${formatNumber(systemAmps)} أمبير</div>
+  <div class="title-bar">عرض سعر ${systemLabel} بسعة ${formatNumber(systemAmps)} أمبير</div>
   <table class="items-table">
     <thead>
       <tr>

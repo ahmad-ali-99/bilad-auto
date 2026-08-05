@@ -566,3 +566,41 @@ describe('هيكل الألواح: قاعدة التقسيم (2×8 حد أقصى
     expect(buildStructurePageHtml(24, {}, 'data:image/png;base64,x').includes('<img')).toBe(true);
   });
 });
+
+describe('منظومة الأوف جرد (انفيرتر وبطاريات بلا ألواح ولا هيكل)', () => {
+  // أمبير النهار صفر = المحرك يستنتج «بلا ألواح»؛ الأسلاك وبقية التفاصيل تبقى بالعرض
+  const offgrid = () => optionsFor({ roofAreaM2: 0, ampDay: 0, ampNight: 15, nightSupplyHours: 8 });
+
+  it('لا ألواح ولا هيكل ولا صبّات ولا بوردة حماية DC — والانفيرتر والبطارية موجودان', () => {
+    const draft = buildQuoteDraft(offgrid(), { tier: 'economy', cableMeters: {} });
+    const has = (re) => draft.items.some((i) => re.test(i.description));
+    expect(has(/ألواح شمسية/)).toBe(false);
+    expect(has(/هيكل/)).toBe(false);
+    expect(has(/صبات/)).toBe(false);
+    expect(has(/بوردات الحماية DC/)).toBe(false);
+    expect(draft.items.find((i) => /انفيرتر/.test(i.description)).quantity).toBe(1);
+    // 15 أمبير × 220 فولت × 8 ساعات = 26.4kWh ← بمعامل الاقتصادي 0.9 وDOD 0.9 ÷ 16 = بطاريتان
+    expect(draft.items.find((i) => /بطاريات/.test(i.description)).quantity).toBe(2);
+    expect(draft.panelBreakdown).toBe(null);
+    expect(draft.counts.panel).toBe(0);
+  });
+
+  it('ماكو خطأ مساحة سطح ولا خطأ فئة الألواح بهذا الوضع', () => {
+    const draft = buildQuoteDraft(offgrid(), { tier: 'economy', cableMeters: {} });
+    expect(draft.errors.roofArea).toBeUndefined();
+    expect(draft.errors.panel).toBeUndefined();
+  });
+
+  it('الأسلاك بالكمية اليدوية تنضاف عادي وأجور العمل تبقى', () => {
+    const draft = buildQuoteDraft(offgrid(), {
+      tier: 'economy',
+      secondarySelections: { 4: { qty: '' }, 5: { qty: '' }, 6: { qty: 40 }, 7: { qty: '' } },
+    });
+    const cable = draft.items.find((i) => /كيبلات ناقلة/.test(i.description));
+    expect(cable.quantity).toBe(40);
+    expect(cable.subtotal).toBe(40 * 2000);
+    // حتى لو أُشّرت مواد جهة الألواح بالغلط، كميتها صفر فما تدخل العرض
+    expect(draft.items.some((i) => /هيكل|صبات|بوردات الحماية DC/.test(i.description))).toBe(false);
+    expect(draft.items.some((i) => /أجور العمل/.test(i.description))).toBe(true);
+  });
+});

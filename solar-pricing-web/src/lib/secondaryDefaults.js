@@ -9,13 +9,26 @@ export function isDcProtectionBoard(m) {
   return /DC/i.test(name) || /حماية/.test(name);
 }
 
-export function computeSecondaryDefaults(secondaryMaterials, savedIds) {
+// المواد المرتبطة بجهة الألواح (هيكل + صبات + بورد حماية DC) — ما إلها معنى بعرض
+// أوف جرد (انفيرتر وبطاريات بلا ألواح ولا هيكل)، فتُستثنى من الافتراضيات ومن النافذة
+export function isPanelSideMaterial(m) {
+  return (m.qty_per_panel && m.qty_per_panel > 0) || isDcProtectionBoard(m);
+}
+
+export function computeSecondaryDefaults(secondaryMaterials, savedIds, systemType = 'full') {
+  const offgrid = systemType === 'offgrid';
   const defaults = {};
   if (Array.isArray(savedIds) && savedIds.length > 0) {
-    const existing = new Set(secondaryMaterials.map((m) => m.id));
-    for (const id of savedIds) if (existing.has(id)) defaults[id] = { qty: '' };
+    const byId = new Map(secondaryMaterials.map((m) => [m.id, m]));
+    for (const id of savedIds) {
+      const m = byId.get(id);
+      if (!m) continue;
+      if (offgrid && isPanelSideMaterial(m)) continue; // القائمة الدائمة تُنقّى بوضع الأوف جرد
+      defaults[id] = { qty: '' };
+    }
     return defaults;
   }
+  if (offgrid) return defaults; // بلا ألواح = بلا افتراضيات جهة الألواح؛ البياع يختار الأسلاك وبقية التفاصيل
   for (const m of secondaryMaterials) {
     if (m.qty_per_panel && m.qty_per_panel > 0) defaults[m.id] = { qty: '' };
   }

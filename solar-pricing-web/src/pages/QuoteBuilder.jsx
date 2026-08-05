@@ -7,7 +7,7 @@ const PumpShowcase = lazy(() => import('../components/PumpShowcase.jsx'));
 import { buildEditPrefill } from '../lib/editPrefill.js';
 import { detectSceneType } from '../lib/sceneType.js';
 import { getIsAdmin, getCurrentUsername, ADMIN_USERS } from '../lib/agent.js';
-import { computeSecondaryDefaults } from '../lib/secondaryDefaults.js';
+import { computeSecondaryDefaults, isPanelSideMaterial } from '../lib/secondaryDefaults.js';
 
 // مسودة العرض الجارية تنحفظ محلياً — الرفرش أو التنقل بين الصفحات ما يمسح الشغل،
 // والأسعار تتحدث تلقائياً لأن المعاينة تعيد الجلب والحساب من القاعدة بكل مرة
@@ -27,6 +27,13 @@ const TIERS = [
 ];
 
 const CATEGORY_LABELS = { panel: 'اللوح', battery: 'البطارية', inverter: 'الانفيرتر' };
+
+// أنواع المنظومات: المحرك يستنتج النوع من الأمبير، والزر يضبط الحقول ويخفي غير اللازم
+const SYSTEM_TYPES = [
+  { key: 'full', label: 'منظومة كاملة', hint: 'ألواح + انفيرتر + بطاريات' },
+  { key: 'day', label: 'نهارية بلا بطاريات', hint: 'ألواح + انفيرتر فقط (زراعية ونهارية)' },
+  { key: 'offgrid', label: 'أوف جرد (بلا ألواح)', hint: 'انفيرتر + بطاريات وأسلاك — بلا ألواح ولا هيكل' },
+];
 
 function fmt(n) {
   return Math.round(n || 0).toLocaleString('en-US');
@@ -51,6 +58,10 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   const [ampDay, setAmpDay] = useState(savedDraft?.ampDay ?? '');
   const [ampNight, setAmpNight] = useState(savedDraft?.ampNight ?? '');
   const [nightSupplyHours, setNightSupplyHours] = useState(savedDraft?.nightSupplyHours ?? '');
+  // نوع المنظومة: كاملة (ألواح + بطاريات) | نهارية بلا بطاريات | أوف جرد (انفيرتر وبطاريات
+  // بلا ألواح ولا هيكل). المحرك يستنتج النوع من الأمبير (نهار 0 = بلا ألواح، ليل 0 = بلا
+  // بطاريات) — الزر هنا يضبط الحقول ويخفي غير اللازم بدل ما يحفظ البياع الحيلة بباله.
+  const [systemType, setSystemType] = useState(savedDraft?.systemType ?? 'full');
   const [tier, setTier] = useState(savedDraft?.tier ?? 'economy');
   // نسبة الزيادة: علنية (سطر بالعرض) أو موزعة (تنضرب على أسعار البنود نفسها) + نسبة الخصم
   const [markupPercent, setMarkupPercent] = useState(savedDraft?.markupPercent ?? '');
@@ -99,6 +110,12 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   const [calculating, setCalculating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  // مرجع حي للنوع + القائمة الدائمة المحفوظة — يستخدمهما تحميل الافتراضيات وتبديل النوع
+  const systemTypeRef = useRef(systemType);
+  systemTypeRef.current = systemType;
+  const savedSecondaryIdsRef = useRef(null);
+  const isOffgrid = systemType === 'offgrid';
+  const isDayOnly = systemType === 'day';
 
   useEffect(() => {
     // الملاحظات الافتراضية فقط إذا ماكو ملاحظات قائمة (مسودة محفوظة أو عرض مفتوح للتعديل) —
@@ -110,12 +127,50 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
     Promise.all([window.api.materials.list(), window.api.config.get('secondary_defaults')]).then(([all, savedIds]) => {
       const secondary = (all || []).filter((m) => m.category === 'secondary');
       setSecondaryMaterials(secondary);
-      const defaults = computeSecondaryDefaults(secondary, savedIds);
+      savedSecondaryIdsRef.current = savedIds;
+      const defaults = computeSecondaryDefaults(secondary, savedIds, systemTypeRef.current);
       secondaryDefaultsRef.current = defaults;
       // الافتراضيات تنطبق فقط إذا ماكو مسودة محفوظة ولا اختيار قائم — حتى ما ندعس على شغل البياع
       setSecondarySel((prev) => (Object.keys(prev).length > 0 || savedDraft?.secondarySel ? prev : defaults));
     });
   }, []);
+
+  // تبديل نوع المنظومة: يصفّر الحقل غير اللازم (حتى المحرك يستنتج النوع نفسه)
+  // ويعيد ضبط الافتراضيات الثانوية — بالأوف جرد تنشال مواد جهة الألواح (هيكل/صبات/بورد DC)
+  function changeSystemType(next) {
+    if (next === systemType) return;
+    setSystemType(next);
+    systemTypeRef.current = next;
+    if (next === 'offgrid') {
+      setAmpDay('0');
+      setRoofAreaM2('');
+    } else if (next === 'day') {
+      setAmpNight('0');
+      setNightSupplyHours('');
+    } else {
+      // رجوع للمنظومة الكاملة: نفتح الحقول المصفّرة حتى يعبّيها البياع من جديد
+      setAmpDay((v) => (Number(v) === 0 ? '' : v));
+      setAmpNight((v) => (Number(v) === 0 ? '' : v));
+    }
+    const defaults = computeSecondaryDefaults(secondaryMaterials, savedSecondaryIdsRef.current, next);
+    secondaryDefaultsRef.current = defaults;
+    if (next === 'offgrid') {
+      // نشيل المؤشَّر من مواد جهة الألواح فقط — اختيارات البياع الباقية تبقى مثل ما هي
+      setSecondarySel((prev) => {
+        const byId = new Map(secondaryMaterials.map((m) => [m.id, m]));
+        const out = {};
+        for (const [id, sel] of Object.entries(prev)) {
+          const m = byId.get(Number(id));
+          if (m && isPanelSideMaterial(m)) continue;
+          out[id] = sel;
+        }
+        return out;
+      });
+    } else {
+      // رجوع لنوع فيه ألواح: نضيف افتراضيات جهة الألواح الناقصة بلا مساس بالباقي
+      setSecondarySel((prev) => ({ ...defaults, ...prev }));
+    }
+  }
 
   // وضع تعديل عرض محفوظ: {id, quote_number} — الحفظ يحدث نفس العرض
   const [editingQuote, setEditingQuote] = useState(savedDraft?.editingQuote ?? null);
@@ -128,7 +183,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
           DRAFT_KEY,
           JSON.stringify({
             clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours,
-            tier, overrides, secondarySel, markupPercent, markupMode, discountPercent,
+            systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent,
             installment, extraUnits, notes, editingQuote, pricingOpen, createdBy,
           })
         );
@@ -137,11 +192,13 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       }
     }, 500);
     return () => clearTimeout(t);
-  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, extraUnits, notes, editingQuote, pricingOpen, createdBy]);
+  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, extraUnits, notes, editingQuote, pricingOpen, createdBy]);
 
   // 🆕 عرض جديد: تصفير كامل + مسح المسودة المحفوظة + رجوع الثانوية لافتراضياتها
   function startNewQuote() {
     setEditingQuote(null);
+    setSystemType('full');
+    systemTypeRef.current = 'full';
     setClientName('');
     setClientPhone('');
     setLocation('');
@@ -191,6 +248,11 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
     apply('ampDay', setAmpDay, p.ampDay);
     apply('ampNight', setAmpNight, p.ampNight);
     apply('nightSupplyHours', setNightSupplyHours, p.nightSupplyHours);
+    // نوع المنظومة يجي مع تعبئة العرض المفتوح للتعديل (مستنتج من أرقامه)
+    if (p.systemType) {
+      setSystemType(p.systemType);
+      systemTypeRef.current = p.systemType;
+    }
     if (p.tier != null) setTier(p.tier);
     if (p.overrides) setOverrides(p.overrides);
     if (p.secondarySelections) setSecondarySel(p.secondarySelections);
@@ -519,29 +581,66 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
 
       <div className="card">
         <h3 className="card-heading">⚡ متطلبات المنظومة</h3>
-        <div className="big-inputs big-inputs-4">
-          <div className={fieldClass('roofAreaM2')}>
-            <label>مساحة السطح (م²)</label>
-            <input type="number" value={roofAreaM2} onChange={(e) => setRoofAreaM2(e.target.value)} />
-          </div>
-          <div className={fieldClass('ampDay')}>
-            <label>أمبير مطلوب نهاراً</label>
-            <input type="number" value={ampDay} onChange={(e) => setAmpDay(e.target.value)} />
-          </div>
-          <div className={fieldClass('ampNight')}>
-            <label>أمبير مطلوب ليلاً</label>
-            <input type="number" value={ampNight} onChange={(e) => setAmpNight(e.target.value)} />
-          </div>
-          <div className={fieldClass('nightSupplyHours')}>
-            <label>ساعات التجهيز الليلي</label>
-            <input
-              type="number"
-              value={nightSupplyHours}
-              onChange={(e) => setNightSupplyHours(e.target.value)}
-              placeholder="تُحدد في كل عرض"
-            />
-          </div>
+
+        {/* نوع المنظومة: يحدد أي حقول تظهر وأي مواد تنضاف تلقائياً */}
+        <div className="tier-toggle" style={{ marginBottom: 12 }}>
+          {SYSTEM_TYPES.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              className={systemType === t.key ? 'active' : ''}
+              onClick={() => changeSystemType(t.key)}
+              title={t.hint}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
+
+        <div className={isOffgrid ? 'big-inputs' : 'big-inputs big-inputs-4'}>
+          {/* الأوف جرد ما يحتاج مساحة سطح (بلا ألواح ولا هيكل) */}
+          {!isOffgrid && (
+            <div className={fieldClass('roofAreaM2')}>
+              <label>مساحة السطح (م²)</label>
+              <input type="number" value={roofAreaM2} onChange={(e) => setRoofAreaM2(e.target.value)} />
+            </div>
+          )}
+          {!isOffgrid && (
+            <div className={fieldClass('ampDay')}>
+              <label>أمبير مطلوب نهاراً</label>
+              <input type="number" value={ampDay} onChange={(e) => setAmpDay(e.target.value)} />
+            </div>
+          )}
+          {!isDayOnly && (
+            <div className={fieldClass('ampNight')}>
+              <label>{isOffgrid ? 'الأمبير المطلوب' : 'أمبير مطلوب ليلاً'}</label>
+              <input type="number" value={ampNight} onChange={(e) => setAmpNight(e.target.value)} />
+            </div>
+          )}
+          {!isDayOnly && (
+            <div className={fieldClass('nightSupplyHours')}>
+              <label>{isOffgrid ? 'ساعات التجهيز' : 'ساعات التجهيز الليلي'}</label>
+              <input
+                type="number"
+                value={nightSupplyHours}
+                onChange={(e) => setNightSupplyHours(e.target.value)}
+                placeholder="تُحدد في كل عرض"
+              />
+            </div>
+          )}
+          {isDayOnly && (
+            <div className={fieldClass('ampDay')}>
+              <label>أمبير مطلوب نهاراً</label>
+              <input type="number" value={ampDay} onChange={(e) => setAmpDay(e.target.value)} />
+            </div>
+          )}
+        </div>
+        {isOffgrid && (
+          <p className="muted" style={{ margin: '2px 0 0', fontSize: '0.82rem' }}>
+            منظومة انفيرتر وبطاريات بلا ألواح — ما تنضاف ألواح ولا هيكل ولا صبّات ولا بوردة حماية DC،
+            والأسلاك وبقية التفاصيل تنتخب من «المواد الثانوية».
+          </p>
+        )}
 
         <div className="tier-toggle">
           {TIERS.map((t) => (
@@ -666,6 +765,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
 
       {pickerOpen && (
         <SecondaryPickerModal
+          systemType={systemType}
           secondary={secondaryMaterials}
           selections={secondarySel}
           panelCount={preview?.draft?.panelBreakdown ? preview.draft.panelBreakdown.feedPanels + preview.draft.panelBreakdown.chargePanels : 0}
