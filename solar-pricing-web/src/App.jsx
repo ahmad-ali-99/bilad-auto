@@ -82,6 +82,8 @@ export default function App() {
 
   // وضع استعادة كلمة المرور: يتفعل عند فتح رابط الاستعادة المرسل بالإيميل
   const [recovery, setRecovery] = useState(false);
+  // زر التحديث قيد التنفيذ — كل الـhooks لازم تبقى هنا فوق قبل أي return مشروط
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -268,7 +270,6 @@ export default function App() {
   }
 
   // رفرش كامل بضغطة: إجبار جلب آخر نسخة من الشبكة (يتخطى كاش النسخة القديمة)
-  const [refreshing, setRefreshing] = useState(false);
   async function hardRefresh() {
     setRefreshing(true);
     await forceUpdateApp();
