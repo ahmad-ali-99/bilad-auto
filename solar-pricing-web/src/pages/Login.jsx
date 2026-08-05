@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, usernameToEmail, isConfigured } from '../lib/supabase.js';
+import { forceUpdateApp } from '../lib/appUpdate.js';
 
 // شاشة الدخول العامة: حساب جديد بالإيميل / دخول / Google / استرجاع كلمة المرور —
 // ومدخل الموظفين مخفي خلف مربع «موظفو الشركة» أسفل البطاقة.
@@ -301,15 +302,7 @@ export default function Login({ onLoggedIn }) {
           type="button"
           className="login-link"
           style={{ fontSize: '0.75rem' }}
-          onClick={async () => {
-            try {
-              const reg = await navigator.serviceWorker?.getRegistration();
-              await reg?.update();
-            } catch {
-              /* نكمل */
-            }
-            window.location.reload();
-          }}
+          onClick={forceUpdateApp}
         >
           🔄 تحديث التطبيق لآخر نسخة
         </button>

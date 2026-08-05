@@ -11,6 +11,7 @@ import Requests from './pages/Requests.jsx';
 import History from './pages/History.jsx';
 import { supabase } from './lib/supabase.js';
 import { isAdminName } from './lib/agent.js';
+import { forceUpdateApp } from './lib/appUpdate.js';
 
 const PAGES = [
   { key: 'quote', label: 'عرض سعر', icon: '🧮' },
@@ -266,15 +267,11 @@ export default function App() {
     }
   }
 
-  // رفرش كامل بضغطة: يفحص وجود نسخة أحدث من التطبيق ثم يعيد التحميل بأحدث بيانات
+  // رفرش كامل بضغطة: إجبار جلب آخر نسخة من الشبكة (يتخطى كاش النسخة القديمة)
+  const [refreshing, setRefreshing] = useState(false);
   async function hardRefresh() {
-    try {
-      const reg = await navigator.serviceWorker?.getRegistration();
-      await reg?.update();
-    } catch {
-      /* نكمل للتحديث */
-    }
-    window.location.reload();
+    setRefreshing(true);
+    await forceUpdateApp();
   }
 
   return (
@@ -294,8 +291,8 @@ export default function App() {
           </span>
         </span>
         <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <button className="topbar-chip" onClick={hardRefresh} title="تحديث التطبيق والبيانات">
-            🔄
+          <button className="topbar-chip" onClick={hardRefresh} disabled={refreshing} title="تحديث التطبيق لآخر نسخة">
+            {refreshing ? '⏳' : '🔄'}
           </button>
           <button className="topbar-chip" onClick={logout} title="تسجيل الخروج">
             {currentUser ? `${currentUser} ⏻` : 'خروج'}
