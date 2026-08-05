@@ -120,7 +120,7 @@ export default function SystemShowcase({
       const fadeMats = [];
       // ميزة الدخول للبيت ملغاة حالياً — الجدران صلبة دائماً (الزوم يبقى سكرول عادي)
       const fadeMat = (opt) => { const m = M(opt); fadeMats.push(m); return m; };
-      const whiteWall = fadeMat({ map: rep(plasterT, 4, 2), bumpMap: rep(plasterB, 4, 2), bumpScale: 0.6, roughness: 0.9 });
+      const whiteWall = fadeMat({ map: rep(plasterT, 10, 6), bumpMap: rep(plasterB, 10, 6), bumpScale: 0.6, roughness: 0.9 });
       // رمادي غامق صافٍ (النقشة المخططة كانت تسبب تشويش موارية على البرج)
       const charcoal = fadeMat({ color: 0x4a4f52, roughness: 0.85 });
       const charcoalDark = fadeMat({ color: 0x3d4245, roughness: 0.85 });
@@ -260,8 +260,34 @@ export default function SystemShowcase({
 
       // ================= الأرضيات والشارع =================
       // الأرضية 560م: توصل ورة اكتمال الضباب — ماكو نقطة تشوف بيها «نهاية الأرض»
+      // مرج واقعي: بقع خضرة متدرجة + خطوط قص ناعمة + حبيبات — بدل لون أخضر فاقع واحد
+      // (خامة PBR للعشب على الأرض الكاملة فشلت ثلاث مرات سابقاً — «شظايا سودة»، فالكانفاس هو الحل الثابت)
+      const fieldT = (() => {
+        const c = mkCanvas(512); const g = c.getContext('2d');
+        g.fillStyle = '#6b8250'; g.fillRect(0, 0, 512, 512);
+        // بقع كبيرة ناعمة (تفاوت ري وتربة)
+        for (let i = 0; i < 90; i++) {
+          const x = Math.random() * 512, y = Math.random() * 512, r = 30 + Math.random() * 110;
+          const grd = g.createRadialGradient(x, y, 0, x, y, r);
+          const dark = Math.random() < 0.5;
+          grd.addColorStop(0, dark ? 'rgba(78,96,58,0.55)' : 'rgba(146,158,104,0.42)');
+          grd.addColorStop(1, 'rgba(0,0,0,0)');
+          g.fillStyle = grd; g.beginPath(); g.arc(x, y, r, 0, 6.3); g.fill();
+        }
+        // خطوط قص عريضة متعاكسة الاتجاه (توقيع المرج المشذب)
+        for (let y = 0; y < 512; y += 64) {
+          g.fillStyle = (y / 64) % 2 ? 'rgba(255,255,255,0.022)' : 'rgba(0,0,0,0.022)';
+          g.fillRect(0, y, 512, 64);
+        }
+        const img = g.getImageData(0, 0, 512, 512); const d = img.data;
+        for (let i = 0; i < d.length; i += 4) { const n = (Math.random() - 0.5) * 26; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+        g.putImageData(img, 0, 0);
+        const t = track(new THREE.CanvasTexture(c));
+        t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.colorSpace = THREE.SRGBColorSpace;
+        return t;
+      })();
       const groundAll = new THREE.Mesh(track(new THREE.PlaneGeometry(560, 560)),
-        TECH_MODE ? M({ map: rep(lawnT, 130, 130), color: 0xaac479, roughness: 1, envMapIntensity: 0.05 }) // مرج أخضر بلون الرفرنس
+        TECH_MODE ? M({ map: rep(fieldT, 26, 26), roughness: 1, envMapIntensity: 0.06 })
                   : M({ map: rep(dirtT, 112, 112), roughness: 1, envMapIntensity: 0.05 }));
       groundAll.rotation.x = -Math.PI / 2; groundAll.position.y = -0.02; groundAll.receiveShadow = true; scene.add(groundAll);
       const lot = new THREE.Mesh(track(new THREE.PlaneGeometry(HW + 8, HD + LOT_FRONT + 4)), M({ map: rep(sideT, 9, 11), roughness: 0.96, envMapIntensity: 0.05 }));
@@ -341,11 +367,16 @@ export default function SystemShowcase({
 
       // ================= السياج + اللوحة + البوابة =================
       const wallH = 1.7;
-      const fenceFront1 = new THREE.Mesh(B(HW + 8 - 3.4, wallH, 0.22), whiteWall);
+      // جدار القطعة بخامته الخاصة: جص فاتح كريمي — لو نفس جص البيت يصير المشهد كتلة
+      // برتقالية وحدة ويقرأ «قلعة»، والواقع دائماً الجدار أفتح من الواجهة
+      const boundaryWall = TECH_MODE
+        ? fadeMat({ color: 0xe6ded0, roughness: 0.95 })
+        : whiteWall;
+      const fenceFront1 = new THREE.Mesh(B(HW + 8 - 3.4, wallH, 0.22), boundaryWall);
       fenceFront1.position.set(-1.7, wallH / 2, WALL_Z); fenceFront1.castShadow = true; fenceFront1.receiveShadow = true; scene.add(fenceFront1);
       const capF = new THREE.Mesh(B(HW + 8 - 3.3, 0.08, 0.3), curbM); capF.position.set(-1.7, wallH + 0.04, WALL_Z); scene.add(capF);
       const gateW = 3.2;
-      const fenceSideL = new THREE.Mesh(B(0.22, wallH, HD + LOT_FRONT + 3), whiteWall);
+      const fenceSideL = new THREE.Mesh(B(0.22, wallH, HD + LOT_FRONT + 3), boundaryWall);
       fenceSideL.position.set(-(HW + 8) / 2, wallH / 2, -LOT_FRONT / 2 + 0.6); fenceSideL.receiveShadow = true; scene.add(fenceSideL);
       const fenceSideR = fenceSideL.clone(); fenceSideR.position.x = (HW + 8) / 2; scene.add(fenceSideR);
       const board = new THREE.Mesh(B(3.6, 1.15, 0.06), charcoal); board.position.set(0.4, 0.95, WALL_Z - 0.15); scene.add(board);
@@ -441,7 +472,7 @@ export default function SystemShowcase({
         // خفيفة (خدعة العرض المعماري) حتى يقرأ كزجاج نهاري حي
         // بستايل الرفرنس: زجاج كحلي غامق عاكس؛ بالوضع القديم: سماوي فاتح
         const gm = TECH_MODE
-          ? M({ color: 0x7d95b8, roughness: 0.12, metalness: 0.35, emissive: 0x46608f, emissiveIntensity: 0.55, envMapIntensity: 1.5 })
+          ? M({ color: 0x6d8399, roughness: 0.06, metalness: 0.3, emissive: 0x33465c, emissiveIntensity: 0.5, envMapIntensity: 2.4 })
           : M({ color: 0xa8c0d4, roughness: 0.15, metalness: 0.3, emissive: 0x8fa8bc, emissiveIntensity: 0.4, envMapIntensity: 1.4 });
         const gl = new THREE.Mesh(B(w2, h2, 0.04), gm); gl.position.set(x, y, zFace + 0.15); host.add(gl);
         const mull = new THREE.Mesh(B(0.05, h2, 0.05), frameMat); mull.position.set(x, y, zFace + 0.12); host.add(mull);
@@ -466,7 +497,7 @@ export default function SystemShowcase({
       if (TECH_MODE) {
         // ============ ستايل الرفرنس (IMG_4989): بيت طيني موحد على مرج مفتوح ============
         tower.material = whiteWall;                       // بلا برج أسود — كتلة موحدة
-        whiteWall.color = new THREE.Color(0xfaf3ec); // الخامة نفسها معايرة على تراكوتا الرفرنس
+        whiteWall.color = new THREE.Color(0xfff6ea); // تفتيح خفيف: جص رملي دافئ مو تراكوتا مشبعة
         // قاعدة كونكريت بيضاء حول محيط البيت
         const plinth = new THREE.Mesh(B(HW + 0.4, 0.55, HD + 0.4), M({ color: 0xe9e5db, roughness: 0.85 }));
         plinth.position.set(0, 0.27, 0); plinth.receiveShadow = true; house.add(plinth);
@@ -547,6 +578,12 @@ export default function SystemShowcase({
       const parX = B(HW + 0.15, parH, 0.12), parZ = B(0.12, parH, HD + 0.15);
       [[0, HD / 2], [0, -HD / 2]].forEach(([px, pz]) => { const p = new THREE.Mesh(parX, whiteWall); p.position.set(px, HH + parH / 2 + 0.15, pz); house.add(p); });
       [[HW / 2, 0], [-HW / 2, 0]].forEach(([px, pz]) => { const p = new THREE.Mesh(parZ, whiteWall); p.position.set(px, HH + parH / 2 + 0.15, pz); house.add(p); });
+      // كاب كونكريت فاتح فوق الحاجب — خط أفقي نظيف يفصل كتلة الجدار عن السماء (واقعية معمارية)
+      if (TECH_MODE) {
+        const capX = B(HW + 0.34, 0.09, 0.3), capZ = B(0.3, 0.09, HD + 0.34);
+        [[0, HD / 2], [0, -HD / 2]].forEach(([px, pz]) => { const c2 = new THREE.Mesh(capX, curbM); c2.position.set(px, HH + parH + 0.2, pz); c2.castShadow = true; house.add(c2); });
+        [[HW / 2, 0], [-HW / 2, 0]].forEach(([px, pz]) => { const c2 = new THREE.Mesh(capZ, curbM); c2.position.set(px, HH + parH + 0.2, pz); c2.castShadow = true; house.add(c2); });
+      }
       scene.add(house);
 
       // ================= الداخل المؤثث =================
@@ -737,19 +774,41 @@ export default function SystemShowcase({
         ap.rotation.x = -Math.PI / 2; ap.position.set(ax, 0.006, az); ap.receiveShadow = true; scene.add(ap);
       });
       // حوض ورد مرتب بمحاذاة السياج الداخلي: شريط تربة بحافة كونكريتية رفيعة
-      const bedSoil = new THREE.Mesh(track(new THREE.PlaneGeometry(13, 0.85)), M({ color: 0x8a7358, roughness: 1 }));
+      const bedSoil = new THREE.Mesh(track(new THREE.PlaneGeometry(13, 0.85)), M({ color: 0xb59a7c, roughness: 1, envMapIntensity: 0.2 }));
       bedSoil.rotation.x = -Math.PI / 2; bedSoil.position.set(-2.5, 0.012, WALL_Z + 0.75); scene.add(bedSoil);
       const bedEdge = new THREE.Mesh(B(13.1, 0.08, 0.06), M({ color: 0xb8b2a6, roughness: 0.85 }));
       bedEdge.position.set(-2.5, 0.04, WALL_Z + 1.2); scene.add(bedEdge);
-      const path = new THREE.Mesh(track(new THREE.PlaneGeometry(1.4, LOT_FRONT)), M({ map: rep(sideT, 1, 4), roughness: 0.9 }));
+      const interlockT = (() => {
+        const c = mkCanvas(256); const g = c.getContext('2d');
+        g.fillStyle = '#cfc9bd'; g.fillRect(0, 0, 256, 256);
+        const bw = 42, bh = 21;
+        for (let row = 0, y = 0; y < 256; y += bh, row++) {
+          const off = (row % 2) * (bw / 2);
+          for (let x = -bw; x < 256 + bw; x += bw) {
+            const sh = 0.9 + ((row * 7 + x) % 5) * 0.035;
+            g.fillStyle = `rgb(${Math.round(214 * sh)},${Math.round(207 * sh)},${Math.round(194 * sh)})`;
+            g.fillRect(x + off + 1, y + 1, bw - 2, bh - 2);
+          }
+        }
+        const img = g.getImageData(0, 0, 256, 256); const d = img.data;
+        for (let i = 0; i < d.length; i += 4) { const n = (Math.random() - 0.5) * 12; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+        g.putImageData(img, 0, 0);
+        const t = track(new THREE.CanvasTexture(c));
+        t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.colorSpace = THREE.SRGBColorSpace;
+        return t;
+      })();
+      const path = new THREE.Mesh(track(new THREE.PlaneGeometry(1.4, LOT_FRONT)),
+        TECH_MODE ? M({ map: rep(interlockT, 1, 4), roughness: 0.92, envMapIntensity: 0.15 })
+                  : M({ map: rep(sideT, 1, 4), roughness: 0.9 }));
       path.rotation.x = -Math.PI / 2; path.position.set(-HW / 2 + towerW + 0.9, 0.02, -HD / 2 - LOT_FRONT / 2); scene.add(path);
-      const drive = new THREE.Mesh(track(new THREE.PlaneGeometry(3.2, LOT_FRONT)), M({ map: rep(asphaltT, 2, 3), color: 0x9a9a9a, roughness: 0.96, envMapIntensity: 0.04 }));
+      const drive = new THREE.Mesh(track(new THREE.PlaneGeometry(3.2, LOT_FRONT)),
+        TECH_MODE ? M({ map: rep(interlockT, 2, 4), roughness: 0.92, envMapIntensity: 0.15 })
+                  : M({ map: rep(asphaltT, 2, 3), color: 0x9a9a9a, roughness: 0.96, envMapIntensity: 0.04 }));
       drive.rotation.x = -Math.PI / 2; drive.position.set(gateX, 0.02, -HD / 2 - LOT_FRONT / 2); drive.receiveShadow = true; scene.add(drive);
       if (TECH_MODE) {
-        // ستايل الرفرنس: مرج أخضر مفتوح — بلا شارع/سياج/لوحة/أرصفة/ممرات
-        [road, walk, walk2, curb, lawn, path, drive, bedSoil, bedEdge,
-         fenceFront1, fenceSideL, fenceSideR, capF, board].forEach((o) => { o.visible = false; });
-        procGate.forEach((o) => { o.visible = false; });
+        // الوضع الواقعي: يبقى سياج القطعة وبوابتها والممر ودخول السيارة والثيل —
+        // وينشال الشارع والأرصفة واللوحة (سياق حي كامل ما إله داعي بعرض بيت واحد)
+        [road, walk, walk2, curb, board].forEach((o) => { o.visible = false; });
       }
       const bladeGeo = track(new THREE.ConeGeometry(0.028, 0.34, 4, 1)); bladeGeo.translate(0, 0.17, 0);
       const grassMat = M({ color: 0xffffff, roughness: 1 });
@@ -803,6 +862,8 @@ export default function SystemShowcase({
       mkTree(-14, WALL_Z - SIDEWALK - ROAD_W - SIDEWALK - 2.2, 1.1);
       const shrubG = track(new THREE.IcosahedronGeometry(0.3, 1));
       for (let i = 0; i < 6; i++) { const s = new THREE.Mesh(shrubG, leafM2); s.position.set(-HW / 2 + 1 + i * 1.4, 0.28, WALL_Z + 0.65); s.scale.y = 1.25; scene.add(s); procShrubs.push(s); }
+      // الوضع الواقعي: الشجر والشجيرات الإجرائية (كرات) تنخفي — بديلها موديلات Poly Haven
+      if (TECH_MODE) { procTrees.forEach((o) => { o.visible = false; }); procShrubs.forEach((o) => { o.visible = false; }); }
 
       // ================= أوراق تتطاير بالرياح =================
       const leafGeo = track(new THREE.PlaneGeometry(0.09, 0.07));
@@ -1310,6 +1371,7 @@ export default function SystemShowcase({
       const frondDryM = M({ map: frondTexture('#a8935c', '#b8a570'), alphaTest: 0.35, transparent: true, side: THREE.DoubleSide, roughness: 0.95 });
       // نخلة: تاج منفصل يتنفس + ميلان جذع عشوائي 1-4 درجات (قسم 7)
       const mkPalm = (x, z, hgt = 4.2, sc = 1) => {
+        if (TECH_MODE) return; // الوضع الواقعي: أشجار Poly Haven الحقيقية بدل النخيل الإجرائي
         const pg = new THREE.Group();
         // جذع بنسيج الكرب (بدل الحلقات البلاستيكية) — تكرار عمودي حسب الطول
         const trM = palmBarkM.clone(); track(trM);
@@ -1645,25 +1707,30 @@ export default function SystemShowcase({
       const housePoint = new THREE.Vector3(0, FLOOR - 0.3, HD * 0.1);
       addWire(invWorld.clone(), housePoint, new THREE.Vector3(invWorld.x + 0.5, HH * 0.6, HD * 0.25), 'load', 0xffcf66);
 
-      // ===== المسح الهندسي: إخفاء كل الزينة — يبقى البيت والهيكل والألواح والمعدات والوايرات =====
+      // ===== الوضع الواقعي: يبقى البيت وحديقته وسياجه — وينشال الحي والشارع البعيد =====
+      // (سابقاً كنا نمسح الحديقة والسياج كلها فيصير البيت واقف بفراغ أخضر — «المنظر يخزي»)
       if (TECH_MODE) {
-        const keepSet = new Set([skyA, skyB, groundAll, lot, house, structsGroup, room, interior, grass, leaves]);
+        const keepSet = new Set([skyA, skyB, groundAll, lot, house, structsGroup, room, interior, grass, leaves, lawn]);
         const cc = new THREE.Vector3(); const bb3 = new THREE.Box3();
+        // حدود قطعة الأرض: كل شي داخلها يبقى (سياج/بوابة/ممر/حديقة)، وبراها ينشال
+        const LOT_X = HW / 2 + 5.5, LOT_Z_BACK = HD / 2 + 5, LOT_Z_FRONT = WALL_Z - 1.2;
         scene.children.forEach((o) => {
           if (keepSet.has(o) || o.isLight || o.isInstancedMesh) return;
           bb3.setFromObject(o); if (bb3.isEmpty()) return;
           bb3.getCenter(cc); if (!isFinite(cc.x)) return;
-          const outside = cc.x < -10.5 || cc.x > 10.5 || cc.z < -13.8 || cc.z > 9.8;
-          const frontYard = cc.z < -5.9 && cc.y < 7; // الحديقة والسياج والشارع قدام البيت
-          const sz3 = bb3.getSize(new THREE.Vector3());
-          const fence = cc.y < 3 && (sz3.x < 0.6 || sz3.z < 0.6) && (Math.abs(cc.x) > 7.5 || cc.z > 4.5); // جدران السياج الجانبية/الخلفية
-          if (outside || frontYard || fence) o.visible = false;
+          const outside = cc.x < -LOT_X || cc.x > LOT_X || cc.z < LOT_Z_FRONT || cc.z > LOT_Z_BACK;
+          if (outside) o.visible = false;
         });
       }
 
       // ================= رندر + كاميرا + Bloom =================
       const camera = new THREE.PerspectiveCamera(45, W() / H(), 0.1, 600);
-      camera.position.set(3.5, 6, WALL_Z - SIDEWALK - ROAD_W - 4.5);
+      camera.position.set(TECH_MODE ? 13 : 3.5, TECH_MODE ? 9.5 : 6, TECH_MODE ? WALL_Z - 7 : WALL_Z - SIDEWALK - ROAD_W - 4.5);
+      // شاشة عمودية (موبايل): نفس الزاوية بس أبعد — بلاها البيت يملأ الكادر وتضيع المنظومة والحديقة
+      if (TECH_MODE && W() / H() < 0.85) {
+        const tgt = new THREE.Vector3(0, 4.2, -1);
+        camera.position.sub(tgt).multiplyScalar(1.62).add(tgt);
+      }
       renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowPerf ? 1.25 : 2));
       renderer.setSize(W(), H());
@@ -1768,7 +1835,7 @@ export default function SystemShowcase({
       controls.minDistance = 6; controls.maxDistance = 55;
       controls.minDistance = 2.5; controls.maxDistance = 70;
       controls.minPolarAngle = 0.15; controls.maxPolarAngle = Math.PI / 2 - 0.02;
-      controls.target.set(0, 3.4, -1);
+      controls.target.set(0, TECH_MODE ? 4.2 : 3.4, -1);
       let lastUserAct = 0;
       controls.addEventListener('start', () => { controls.autoRotate = false; lastUserAct = performance.now(); });
       controls.update();
@@ -1841,11 +1908,13 @@ export default function SystemShowcase({
           };
           await Promise.all([
             // بستايل الرفرنس: جص طيني (clay_plaster) بتينت التراكوتا المضبوط مسبقاً
-            applyPBR(whiteWall, TECH_MODE ? 'plaster' : 'wall', 4, 2, TECH_MODE ? { keepColor: true } : {}),
-            (TECH_MODE ? Promise.resolve() : applyPBR(rWall, 'wall', 2, 1)), // بالوضع الكيني تبقى فلات بيضاء
+            applyPBR(whiteWall, TECH_MODE ? 'plaster' : 'wall', TECH_MODE ? 10 : 4, TECH_MODE ? 6 : 2, TECH_MODE ? { keepColor: true } : {}),
+            (TECH_MODE ? applyPBR(boundaryWall, 'concrete', 10, 1, { color: new THREE.Color(0xe6ded0) }) : Promise.resolve()),
+            applyPBR(rWall, 'wall', 2, 1), // بيتونة المعدات بخامة جدار حقيقية
             applyPBR(road.material, 'asphalt', 12, 2),
-            applyPBR(drive.material, 'asphalt', 1.2, 2, { color: new THREE.Color(0xbbbbbb) }),
+            (TECH_MODE ? Promise.resolve() : applyPBR(drive.material, 'asphalt', 1.2, 2, { color: new THREE.Color(0xbbbbbb) })),
             applyPBR(walk.material, 'pavers', 18, 1),
+
             applyPBR(lot.material, 'pavers', 6, 7),
             applyPBR(slabMat, 'concrete', 4, 4),
             applyPBR(woodSlat, 'wood', 1, 2),
@@ -1853,8 +1922,8 @@ export default function SystemShowcase({
             // أرضية حصى رملي ناعم مرتب (sandy_gravel_02) — مو صحراء متشققة
             (TECH_MODE ? Promise.resolve() : applyPBR(groundAll.material, 'ground', 46, 46, { color: new THREE.Color(0xd8d2c2) })),
             // ثيل الحديقة بخامة العشب الحقيقية بتينت هادئ (بدل الأخضر الفاقع)
-            (TECH_MODE ? Promise.resolve() : applyPBR(lawn.material, 'grass', 5, 3, { color: new THREE.Color(0x9db06a) })),
-            (TECH_MODE ? Promise.resolve() : applyPBR(apronM, 'pavers', 9, 9)),
+            applyPBR(lawn.material, 'grass', 5, 3, { color: new THREE.Color(0x9db06a) }),
+            applyPBR(apronM, 'pavers', 9, 9),
             // بيوت الجيران: خامة جص حقيقية مع الاحتفاظ بتينت اللوحة الرملية لكل بيت
             applyPBR(villaBodyMats, 'wall', 3, 2, { keepColor: true }),
             applyPBR(stoneDarkM, 'wall', 2.5, 1.5, { keepColor: true }),
@@ -2101,103 +2170,109 @@ export default function SystemShowcase({
           }
           } // نهاية !TECH_MODE
           // بالوضع الهندسي الطبيعي: شجرتان حقيقيتان فقط (طلب المستخدم — «بس مو أكثر»)
+          // ============ الوضع الواقعي: فيلا إجرائية بخامات PBR + أصول Poly Haven ============
+          // طقم كيني الكرتوني انشال نهائياً: كان يقيس البيت على صندوقه الكلي مو على سطحه،
+          // فالهياكل تطلع من حافة السطح وأقدامها تطوف بالهوا. الفيلا الإجرائية مقاسة أصلاً
+          // على المصفوفة (HW/HD/HH) — فكل قدم تجلس على صبّتها فوق بلاطة السطح بالبناء.
           if (TECH_MODE) {
-            // ============ تركيب موديلات كيني الجاهزة (قرار المستخدم: ملفات مو كود) ============
-            const loadKit = (p) => new Promise((res, rej) => glbL.load(baseURL + 'kit/' + p, res, undefined, rej));
-            const prepKit = (g) => {
-              if (!g) return null;
-              g.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.material.envMapIntensity = 0.35; } });
+            const realOpt = (path) => loadGlb(path).then((g) => {
+              g.scene.traverse((o) => {
+                if (!o.isMesh) return;
+                o.castShadow = true; o.receiveShadow = true;
+                // أصول Poly Haven تطلع غامقة كئيبة تحت الـACES — تفتيح موحّد
+                if (!o.userData.brightened) {
+                  o.userData.brightened = 1;
+                  o.material = o.material.clone(); track(o.material);
+                  o.material.color.multiplyScalar(1.55);
+                  o.material.envMapIntensity = 1.0;
+                }
+              });
               return g.scene;
-            };
-            const [kHouse, kFence, kPath, kDrive, kTreeL, kTreeS, kPlanter] = (await Promise.all([
-              loadKit('building-type-p.glb').catch(() => null),
-              loadKit('fence-1x4.glb').catch(() => null),
-              loadKit('path-long.glb').catch(() => null),
-              loadKit('driveway-long.glb').catch(() => null),
-              loadKit('tree-large.glb').catch(() => null),
-              loadKit('tree-small.glb').catch(() => null),
-              loadKit('planter.glb').catch(() => null),
-            ])).map(prepKit);
+            }).catch(() => null);
+
+            const [mTree, mShrubA, mShrubB, mPlanter, mPot, mLamp, mGate, mAC] = await Promise.all([
+              realOpt('island_tree_02/island_tree_02_1k.gltf'),
+              realOpt('shrub_01/shrub_01_1k.gltf'),
+              realOpt('shrub_03/shrub_03_1k.gltf'),
+              realOpt('planter_box_01/planter_box_01_1k.gltf'),
+              (lowPerf ? Promise.resolve(null) : realOpt('potted_plant_01/potted_plant_01_1k.gltf')),
+              realOpt('street_lamp_01/street_lamp_01_1k.gltf'),
+              realOpt('large_iron_gate/large_iron_gate_1k.gltf'),
+              realOpt('exterior_aircon_unit/exterior_aircon_unit_1k.gltf'),
+            ]);
             if (disposed) return;
 
-            if (kHouse) {
-              // البيت الإجرائي كله يختفي — بيت كيني الجاهز بمكانه
-              house.visible = false;
-              // قياس الموديل وضبط المقياس: سقفه المسطح لازم يستلم الألواح والبيتونة
-              // الموجودين عند ارتفاع HH — والفوتبرنت يغطي امتداد الهياكل
-              const hb = new THREE.Box3().setFromObject(kHouse);
-              const hSize = hb.getSize(new THREE.Vector3());
-              // صندوق المنظومة كاملة: الهياكل + البيتونة بمعداتها — كله لازم يجلس فوق السقف
-              const sBox = new THREE.Box3().setFromObject(structsGroup);
-              sBox.union(new THREE.Box3().setFromObject(room));
-              const sSize = sBox.getSize(new THREE.Vector3());
-              const sy = (HH + 0.15) / hSize.y;                       // قمة البيت = مستوى جلوس المنظومة
-              const sx = Math.max(sy, (sSize.x + 2.4) / hSize.x);     // يغطي عرض المنظومة
-              const sz = Math.max(sy, (sSize.z + 2.4) / hSize.z);     // وعمقها
-              kHouse.scale.set(sx, sy, sz);
-              // توسيطه بحيث مركز سقفه تحت مركز المنظومة الكاملة
-              const hb2 = new THREE.Box3().setFromObject(kHouse);
-              const hc = hb2.getCenter(new THREE.Vector3());
-              const sc2 = sBox.getCenter(new THREE.Vector3());
-              kHouse.position.x += sc2.x - hc.x;
-              kHouse.position.z += sc2.z - hc.z;
-              kHouse.position.y -= hb2.min.y;                          // قاعدته على الأرض
-              scene.add(kHouse);
-              mkAO(sc2.x, sc2.z, hSize.x * sx * 0.62, hSize.z * sz * 0.62, 0.45);
+            const put = (src, x, z, sc = 1, ry = 0, y = 0) => {
+              if (!src) return null;
+              const cl = src.clone(true);
+              cl.position.set(x, y, z); cl.rotation.y = ry; cl.scale.setScalar(sc);
+              scene.add(cl); return cl;
+            };
+
+            // ===== أشجار حقيقية تؤطر البيت (بمواقع مدروسة مو نثر عشوائي) =====
+            [[-HW / 2 - 3.6, -HD / 2 - 1.2, 1.7, 0.5],
+             [HW / 2 + 3.8, -HD / 2 + 1.6, 1.45, 2.3],
+             [HW / 2 + 3.4, HD / 2 - 1.0, 1.6, 4.1],
+             [-HW / 2 - 4.0, HD / 2 - 2.2, 1.5, 1.2]].forEach(([tx, tz, ts, tr]) => {
+              if (put(mTree, tx, tz, ts, tr)) mkAO(tx, tz, 4.6 * ts, 4.6 * ts, 0.5);
+            });
+
+            // ===== شجيرات مرتبة على طول الواجهة والجدار =====
+            for (let i = 0; i < 5; i++) {
+              const bx = -HW / 2 + 1.6 + i * 1.9;
+              if (put(i % 2 ? mShrubA : mShrubB, bx, WALL_Z + 1.0, 0.95, i * 1.1)) mkAO(bx, WALL_Z + 1.0, 1.5, 1.5, 0.35);
             }
-            // سياج كيني حول الحديقة (فجوة بالجهة الأمامية للممر)
-            if (kFence) {
-              const fb = new THREE.Box3().setFromObject(kFence);
-              const fLen = fb.getSize(new THREE.Vector3()).x || 4;
-              const FS = 2.2; // تكبير السياج ليتناسب مع مقياس المشهد
-              const seg = fLen * FS;
-              const half = 13;
-              const runFence = (x0, z0, ry, count, skip = -1) => {
-                for (let i = 0; i < count; i++) {
-                  if (i === skip) continue;
-                  const c = kFence.clone(true);
-                  c.scale.setScalar(FS);
-                  c.rotation.y = ry;
-                  c.position.set(x0 + Math.cos(ry) * seg * (i + 0.5), 0, z0 - Math.sin(ry) * seg * (i + 0.5));
-                  scene.add(c);
+            // أصص عند المدخل + حوضا زرع على جانبي الممر
+            put(mPlanter, -1.9, -HD / 2 - 1.5, 1.0, 0);
+            put(mPlanter, 2.9, -HD / 2 - 1.5, 1.0, 0);
+            put(mPot, -0.9, -HD / 2 - 0.6, 1.0, 0.6);
+            put(mPot, 1.9, -HD / 2 - 0.6, 1.0, 2.4);
+
+            // ===== عمود إنارة عند البوابة + بوابة حديد حقيقية =====
+            put(mLamp, HW / 2 + 1.2, WALL_Z + 1.4, 1.0, Math.PI);
+            if (mGate) {
+              const gclone = mGate.clone(true);
+              const gb = new THREE.Box3().setFromObject(gclone);
+              const gs = gb.getSize(new THREE.Vector3());
+              const want = 3.4; // عرض فتحة البوابة بالجدار
+              gclone.scale.setScalar(want / (gs.x || 1));
+              gclone.position.set(gateX, 0, WALL_Z);
+              scene.add(gclone);
+            }
+            // مكيّف خارجي على جنب البيت — تفصيلة واقعية تكسر الجدار الفاضي
+            put(mAC, HW / 2 - 0.35, -HD / 2 + 3.2, 1.0, -Math.PI / 2, 2.2);
+
+            // ===== حزام أفق: خط أشجار بعيد يسدّ الحد الحاد بين الأرض والسماء =====
+            // بيلبورد كانفاس (مو موديلات) — عشرات الأشجار بكلفة رسم شبه معدومة حتى على الموبايل
+            {
+              const c = mkCanvas(1024); c.height = 256;
+              const g = c.getContext('2d');
+              g.clearRect(0, 0, 1024, 256);
+              const crown = (cx, base, w, h, tone) => {
+                g.fillStyle = tone;
+                g.beginPath();
+                g.moveTo(cx - w / 2, base);
+                for (let a = Math.PI; a >= 0; a -= 0.25) {
+                  const rr = 1 + Math.sin(a * 5 + cx) * 0.09;
+                  g.lineTo(cx + Math.cos(a) * (w / 2) * rr, base - h * Math.sin(a) * rr);
                 }
+                g.closePath(); g.fill();
+                g.fillRect(cx - w * 0.05, base - h * 0.22, w * 0.1, h * 0.28); // جذع
               };
-              const count = Math.ceil((half * 2) / seg);
-              runFence(-half, -half, 0, count, count - 2);        // أمامي — فجوة دخول
-              runFence(-half, half, 0, count);                    // خلفي
-              runFence(-half, half, Math.PI / 2, count);          // يسار
-              runFence(half, half, Math.PI / 2, count);           // يمين
-            }
-            // ممر للباب + دخول سيارة — مقاس ديناميكياً على طول المسافة الفعلية
-            const layStrip = (m, x, zFrom, zTo, width) => {
-              if (!m) return;
-              const mb = new THREE.Box3().setFromObject(m);
-              const ms = mb.getSize(new THREE.Vector3());
-              const c = m.clone(true);
-              const len = Math.abs(zTo - zFrom);
-              c.scale.set(width / (ms.x || 1), 2, len / (ms.z || 1));
-              c.position.set(x, 0.02, (zFrom + zTo) / 2);
-              scene.add(c);
-            };
-            layStrip(kPath, 0.6, -6.6, -12.8, 1.7);   // من الباب لفجوة السياج
-            layStrip(kDrive, 7.4, -5.8, -12.8, 3.4);  // دخول السيارة
-            // أشجار كيني بالتأطير + أحواض عند المدخل — نفس عائلة الستايل
-            const putTree = (m, tx, tz, s) => {
-              if (!m) return;
-              const c = m.clone(true);
-              c.position.set(tx, 0, tz); c.rotation.y = (tx * 7.3) % 6.28; c.scale.setScalar(s);
-              scene.add(c);
-              mkAO(tx, tz, 2.2 * s, 2.2 * s, 0.4);
-            };
-            putTree(kTreeL, -9.5, -3, 3.2);
-            putTree(kTreeL, 10.2, 2.5, 2.7);
-            putTree(kTreeS, -10.5, 6.5, 2.6);
-            putTree(kTreeS, 11, -7.5, 2.2);
-            if (kPlanter) {
-              [[-1.4, -7.0], [2.6, -7.0]].forEach(([px, pz]) => {
-                const c = kPlanter.clone(true);
-                c.scale.setScalar(2.0); c.position.set(px, 0, pz); scene.add(c);
-              });
+              for (let i = 0; i < 46; i++) {
+                const cx = 12 + i * 22 + Math.sin(i * 2.7) * 7;
+                const h = 120 + Math.sin(i * 1.7) * 45;
+                crown(cx, 244, 60 + Math.cos(i * 2.1) * 18, h, i % 3 ? '#4a6b46' : '#3d5c3c');
+              }
+              const tex = track(new THREE.CanvasTexture(c));
+              tex.wrapS = THREE.RepeatWrapping; tex.repeat.set(9, 1); tex.colorSpace = THREE.SRGBColorSpace;
+              const ringMat = track(new THREE.MeshBasicMaterial({
+                map: tex, transparent: true, side: THREE.DoubleSide, depthWrite: false, fog: true,
+              }));
+              const ring = new THREE.Mesh(track(new THREE.CylinderGeometry(96, 96, 15, 48, 1, true)), ringMat);
+              ring.position.y = 7.5;
+              ring.renderOrder = -5;
+              scene.add(ring);
             }
           }
         } catch {
