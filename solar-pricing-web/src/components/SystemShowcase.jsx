@@ -114,7 +114,7 @@ export default function SystemShowcase({
       const scene = new THREE.Scene();
       // ضباب جوي (القسم 9): بلون الأفق، يبدأ 80م ويكتمل 300م — يصنع طبقات العمق
       // ضباب جوي: بالعرض الهندسي يقرب حتى الأرض تذوب بالسماء قبل ما «تخلص» — بلا حافة أفق
-      scene.fog = TECH_MODE ? new THREE.Fog(0xd3dcba, 55, 210) : (ENG_MODE ? new THREE.Fog(0xd4ccba, 55, 210) : new THREE.Fog(0xc8d4dc, 60, 220));
+      scene.fog = TECH_MODE ? new THREE.Fog(0xc3d2de, 130, 460) : (ENG_MODE ? new THREE.Fog(0xd4ccba, 55, 210) : new THREE.Fog(0xc8d4dc, 60, 220));
 
       // ================= خامات البناء =================
       const fadeMats = [];
@@ -151,12 +151,31 @@ export default function SystemShowcase({
       const slotAt = () => SKY_SLOTS[0];
       const SUN_MIN = 7.0, SUN_MAX = 16.5; // مدى سلايدر الشمس
       const skyGeoBig = track(new THREE.SphereGeometry(380, 40, 24));
-      const mkSkySphere = () => {
+      // سماء احتياطية فورية: تدرج أزرق → أفق فاتح بغيوم خفيفة، تظهر من أول فريم
+      const fallbackSkyTex = (() => {
+        const c = mkCanvas(64); c.width = 16; c.height = 256;
+        const g = c.getContext('2d');
+        const gr = g.createLinearGradient(0, 0, 0, 256);
+        gr.addColorStop(0.00, '#2f6fb5');
+        gr.addColorStop(0.38, '#6ba3d8');
+        gr.addColorStop(0.70, '#a8c8e4');
+        gr.addColorStop(0.88, '#d6e2ea');
+        gr.addColorStop(1.00, '#e6e6dc');
+        g.fillStyle = gr; g.fillRect(0, 0, 16, 256);
+        const t = track(new THREE.CanvasTexture(c));
+        t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping;
+        return t;
+      })();
+      const mkSkySphere = (withFallback = false) => {
         // toneMapped:false — خلفية الـJPG معالجة مسبقاً، ما تمر بـACES مرة ثانية
-        const m2 = track(new THREE.MeshBasicMaterial({ side: THREE.BackSide, fog: false, depthWrite: false, transparent: true, opacity: 0, toneMapped: false }));
+        const m2 = track(new THREE.MeshBasicMaterial({
+          side: THREE.BackSide, fog: false, depthWrite: false, transparent: true,
+          opacity: withFallback ? 1 : 0, toneMapped: false,
+          map: withFallback ? fallbackSkyTex : null,
+        }));
         const mesh2 = new THREE.Mesh(skyGeoBig, m2); mesh2.renderOrder = -10; scene.add(mesh2); return mesh2;
       };
-      const skyA = mkSkySphere(), skyB = mkSkySphere();
+      const skyA = mkSkySphere(true), skyB = mkSkySphere();
       const hdriSky = { ready: false, cur: null, fade: null, slots: {} };
       // ===== جدول الإضاءة لأوقات اليوم (لون/شدة الشمس، ضوء السماء، تعريض احتياطي) =====
       const hex2 = (h) => new THREE.Color(h);
@@ -206,7 +225,7 @@ export default function SystemShowcase({
       sunLight.castShadow = true; sunLight.shadow.mapSize.set(lowPerf ? 1024 : 2048, lowPerf ? 1024 : 2048); sunLight.shadow.bias = -0.0002;
       sunLight.shadow.normalBias = 1.0;
       sunLight.shadow.radius = 4; // نعومة حواف الظل
-      Object.assign(sunLight.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 0.5, far: 160 });
+      Object.assign(sunLight.shadow.camera, { left: -42, right: 42, top: 42, bottom: -42, near: 0.5, far: 200 });
       scene.add(sunLight);
       // ضوء سماء: علوي #B8D4E8 / سفلي #D8C8A8 (ارتداد أرض) — الظلال ملونة مو سوداء
       const hemi = track(new THREE.HemisphereLight(0xb8d4e8, 0xd8c8a8, 0.6)); scene.add(hemi);
@@ -270,17 +289,18 @@ export default function SystemShowcase({
           const x = Math.random() * 512, y = Math.random() * 512, r = 30 + Math.random() * 110;
           const grd = g.createRadialGradient(x, y, 0, x, y, r);
           const dark = Math.random() < 0.5;
-          grd.addColorStop(0, dark ? 'rgba(78,96,58,0.55)' : 'rgba(146,158,104,0.42)');
+          grd.addColorStop(0, dark ? 'rgba(88,104,66,0.16)' : 'rgba(138,150,102,0.14)');
           grd.addColorStop(1, 'rgba(0,0,0,0)');
           g.fillStyle = grd; g.beginPath(); g.arc(x, y, r, 0, 6.3); g.fill();
         }
-        // خطوط قص عريضة متعاكسة الاتجاه (توقيع المرج المشذب)
-        for (let y = 0; y < 512; y += 64) {
-          g.fillStyle = (y / 64) % 2 ? 'rgba(255,255,255,0.022)' : 'rgba(0,0,0,0.022)';
-          g.fillRect(0, y, 512, 64);
+        // بقع صغيرة إضافية تكسر أي إحساس بنمط متكرر (بلا خطوط قص — كانت تعطي شطرنج لعبة)
+        for (let i = 0; i < 260; i++) {
+          const x = Math.random() * 512, y = Math.random() * 512, r = 4 + Math.random() * 16;
+          g.fillStyle = Math.random() < 0.5 ? 'rgba(92,112,68,0.11)' : 'rgba(146,156,106,0.10)';
+          g.beginPath(); g.arc(x, y, r, 0, 6.3); g.fill();
         }
         const img = g.getImageData(0, 0, 512, 512); const d = img.data;
-        for (let i = 0; i < d.length; i += 4) { const n = (Math.random() - 0.5) * 26; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+        for (let i = 0; i < d.length; i += 4) { const n = (Math.random() - 0.5) * 14; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
         g.putImageData(img, 0, 0);
         const t = track(new THREE.CanvasTexture(c));
         t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.colorSpace = THREE.SRGBColorSpace;
@@ -290,6 +310,35 @@ export default function SystemShowcase({
         TECH_MODE ? M({ map: rep(fieldT, 26, 26), roughness: 1, envMapIntensity: 0.06 })
                   : M({ map: rep(dirtT, 112, 112), roughness: 1, envMapIntensity: 0.05 }));
       groundAll.rotation.x = -Math.PI / 2; groundAll.position.y = -0.02; groundAll.receiveShadow = true; scene.add(groundAll);
+      if (TECH_MODE) {
+        // حلقة أرض جافة حول المرج: المرج الأخضر ينتهي طبيعياً بأرض العراق الكاكية
+        // بدل ما يمتد أخضر للأفق (أكبر سبب يخلي المشهد يقرأ «ملعب غولف»)
+        const dryT = (() => {
+          const c = mkCanvas(256); const g = c.getContext('2d');
+          g.fillStyle = '#b9ab86'; g.fillRect(0, 0, 256, 256);
+          for (let i = 0; i < 150; i++) {
+            const x = Math.random() * 256, y = Math.random() * 256, r = 6 + Math.random() * 26;
+            g.fillStyle = Math.random() < 0.5 ? 'rgba(150,138,104,0.4)' : 'rgba(198,188,158,0.4)';
+            g.beginPath(); g.arc(x, y, r, 0, 6.3); g.fill();
+          }
+          const t = track(new THREE.CanvasTexture(c));
+          t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.colorSpace = THREE.SRGBColorSpace;
+          return t;
+        })();
+        const dry = new THREE.Mesh(track(new THREE.RingGeometry(46, 300, 64, 1)), M({ map: rep(dryT, 30, 30), roughness: 1, envMapIntensity: 0.06 }));
+        dry.rotation.x = -Math.PI / 2; dry.position.y = -0.015; dry.receiveShadow = true; scene.add(dry);
+        // حلقة انتقال ناعمة بين الأخضر والجاف (تدرّج شفاف) — بلا حد حاد
+        const fadeT = (() => {
+          const c = mkCanvas(64); const g = c.getContext('2d');
+          const gr = g.createLinearGradient(0, 0, 64, 0);
+          gr.addColorStop(0, 'rgba(185,171,134,0)'); gr.addColorStop(1, 'rgba(185,171,134,1)');
+          g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+          const t = track(new THREE.CanvasTexture(c)); t.colorSpace = THREE.SRGBColorSpace; return t;
+        })();
+        const blend = new THREE.Mesh(track(new THREE.RingGeometry(30, 62, 64, 1)),
+          track(new THREE.MeshBasicMaterial({ map: fadeT, transparent: true, depthWrite: false })));
+        blend.rotation.x = -Math.PI / 2; blend.position.y = 0.004; blend.renderOrder = 2; scene.add(blend);
+      }
       const lot = new THREE.Mesh(track(new THREE.PlaneGeometry(HW + 8, HD + LOT_FRONT + 4)), M({ map: rep(sideT, 9, 11), roughness: 0.96, envMapIntensity: 0.05 }));
       lot.rotation.x = -Math.PI / 2; lot.position.set(0, 0, -LOT_FRONT / 2 + 1); lot.receiveShadow = true; scene.add(lot);
       if (TECH_MODE) lot.visible = false; // الأرض عشبية بالكامل حتى تحت محيط البيت
@@ -369,8 +418,23 @@ export default function SystemShowcase({
       const wallH = 1.7;
       // جدار القطعة بخامته الخاصة: جص فاتح كريمي — لو نفس جص البيت يصير المشهد كتلة
       // برتقالية وحدة ويقرأ «قلعة»، والواقع دائماً الجدار أفتح من الواجهة
+      const wallSkinT = (() => {
+        const c = mkCanvas(256); const g = c.getContext('2d');
+        g.fillStyle = '#ddd6c8'; g.fillRect(0, 0, 256, 256);
+        for (let i = 0; i < 120; i++) {
+          const x = Math.random() * 256, y = Math.random() * 256, r = 8 + Math.random() * 30;
+          g.fillStyle = Math.random() < 0.5 ? 'rgba(198,190,176,0.25)' : 'rgba(240,235,224,0.25)';
+          g.beginPath(); g.arc(x, y, r, 0, 6.3); g.fill();
+        }
+        const img = g.getImageData(0, 0, 256, 256); const d = img.data;
+        for (let i = 0; i < d.length; i += 4) { const n = (Math.random() - 0.5) * 10; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+        g.putImageData(img, 0, 0);
+        const t = track(new THREE.CanvasTexture(c));
+        t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.colorSpace = THREE.SRGBColorSpace;
+        return t;
+      })();
       const boundaryWall = TECH_MODE
-        ? fadeMat({ color: 0xe6ded0, roughness: 0.95 })
+        ? fadeMat({ map: rep(wallSkinT, 12, 1), roughness: 0.95, envMapIntensity: 0.25 })
         : whiteWall;
       const fenceFront1 = new THREE.Mesh(B(HW + 8 - 3.4, wallH, 0.22), boundaryWall);
       fenceFront1.position.set(-1.7, wallH / 2, WALL_Z); fenceFront1.castShadow = true; fenceFront1.receiveShadow = true; scene.add(fenceFront1);
@@ -744,7 +808,9 @@ export default function SystemShowcase({
       scene.add(structsGroup);
 
       // ================= الحديقة والعشب والأشجار =================
-      const lawn = new THREE.Mesh(track(new THREE.PlaneGeometry(HW + 4, LOT_FRONT - 0.8)), M({ map: rep(lawnT, 6, 3), roughness: 1, envMapIntensity: 0.05 }));
+      const lawn = new THREE.Mesh(track(new THREE.PlaneGeometry(HW + 4, LOT_FRONT - 0.8)),
+        TECH_MODE ? M({ map: rep(fieldT, 2.2, 1.2), roughness: 1, envMapIntensity: 0.06 })
+                  : M({ map: rep(lawnT, 6, 3), roughness: 1, envMapIntensity: 0.05 }));
       lawn.rotation.x = -Math.PI / 2; lawn.position.set(-2, 0.01, -HD / 2 - LOT_FRONT / 2 + 0.3); lawn.receiveShadow = true; scene.add(lawn);
       // مواقع خصل العشب الحقيقية: إطار محيطي منتظم حول الثيل (مو نثر عشوائي مطشر)
       const tuftSpots = [];
@@ -785,14 +851,11 @@ export default function SystemShowcase({
         for (let row = 0, y = 0; y < 256; y += bh, row++) {
           const off = (row % 2) * (bw / 2);
           for (let x = -bw; x < 256 + bw; x += bw) {
-            const sh = 0.9 + ((row * 7 + x) % 5) * 0.035;
+            const sh = 0.965 + ((row * 7 + x) % 5) * 0.012;
             g.fillStyle = `rgb(${Math.round(214 * sh)},${Math.round(207 * sh)},${Math.round(194 * sh)})`;
             g.fillRect(x + off + 1, y + 1, bw - 2, bh - 2);
           }
         }
-        const img = g.getImageData(0, 0, 256, 256); const d = img.data;
-        for (let i = 0; i < d.length; i += 4) { const n = (Math.random() - 0.5) * 12; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
-        g.putImageData(img, 0, 0);
         const t = track(new THREE.CanvasTexture(c));
         t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.colorSpace = THREE.SRGBColorSpace;
         return t;
@@ -1785,7 +1848,7 @@ export default function SystemShowcase({
             // بالعرض الهندسي: نسحب الضباب صوب رملي دافئ — يلطف حدة الحزام الأبيض بالأفق
             if (ENG_MODE) fogC2.lerp(new THREE.Color(0xd9cdb4), 0.45);
             // بالوضع الهندسي البحت: الضباب بلون الأرضية المحايدة نفسه — الأرض تذوب بلا حزام
-            if (TECH_MODE) fogC2.set(0xd3dcba);
+            if (TECH_MODE) fogC2.set(0xc3d2de); // ضباب بلون الأفق مو ستارة خضراء
             // المحاذاة: نثبّت أزيموث شمس المشهد على قوس الوقت بمنتصف الفترة، وندوّر الـHDRI ليطابق
             const midT = (slot.from + Math.min(slot.to, 24)) / 2;
             const dA = ((midT - 6) / 12) * Math.PI;
@@ -1909,7 +1972,7 @@ export default function SystemShowcase({
           await Promise.all([
             // بستايل الرفرنس: جص طيني (clay_plaster) بتينت التراكوتا المضبوط مسبقاً
             applyPBR(whiteWall, TECH_MODE ? 'plaster' : 'wall', TECH_MODE ? 10 : 4, TECH_MODE ? 6 : 2, TECH_MODE ? { keepColor: true } : {}),
-            (TECH_MODE ? applyPBR(boundaryWall, 'concrete', 10, 1, { color: new THREE.Color(0xe6ded0) }) : Promise.resolve()),
+            (TECH_MODE ? Promise.resolve() : applyPBR(boundaryWall, 'concrete', 10, 1)),
             applyPBR(rWall, 'wall', 2, 1), // بيتونة المعدات بخامة جدار حقيقية
             applyPBR(road.material, 'asphalt', 12, 2),
             (TECH_MODE ? Promise.resolve() : applyPBR(drive.material, 'asphalt', 1.2, 2, { color: new THREE.Color(0xbbbbbb) })),
@@ -1922,7 +1985,8 @@ export default function SystemShowcase({
             // أرضية حصى رملي ناعم مرتب (sandy_gravel_02) — مو صحراء متشققة
             (TECH_MODE ? Promise.resolve() : applyPBR(groundAll.material, 'ground', 46, 46, { color: new THREE.Color(0xd8d2c2) })),
             // ثيل الحديقة بخامة العشب الحقيقية بتينت هادئ (بدل الأخضر الفاقع)
-            applyPBR(lawn.material, 'grass', 5, 3, { color: new THREE.Color(0x9db06a) }),
+            // ممنوع خامة العشب PBR على الثيل — تطلع شظايا سودة (تكررت 4 مرات). الكانفاس فقط.
+            (TECH_MODE ? Promise.resolve() : applyPBR(lawn.material, 'grass', 5, 3, { color: new THREE.Color(0x9db06a) })),
             applyPBR(apronM, 'pavers', 9, 9),
             // بيوت الجيران: خامة جص حقيقية مع الاحتفاظ بتينت اللوحة الرملية لكل بيت
             applyPBR(villaBodyMats, 'wall', 3, 2, { keepColor: true }),
@@ -2306,7 +2370,8 @@ export default function SystemShowcase({
         const P = skyAt(t);
         hemi.intensity = P.hemiI;
         amb.intensity = P.hemiI * 0.3;
-        fillL.intensity = isDay ? (TECH_MODE ? 0.5 : 0.25) : 0.06; // بستايل الرفرنس: تعبئة أقوى ترفع ظل الواجهة
+        // تعبئة خفيفة فقط: التعبئة القوية كانت تمسح الظل فيطلع المشهد مسطحاً بلا شمس
+        fillL.intensity = isDay ? (TECH_MODE ? 0.18 : 0.25) : 0.06;
         sunLight.color.copy(P.sunC);
         sunLight.intensity = P.sunI;
         moonLight.position.set(-30, 32, -34); moonLight.intensity = isDay ? 0 : 0.25;
