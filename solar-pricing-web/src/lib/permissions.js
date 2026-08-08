@@ -29,8 +29,8 @@ export function canEditSettings(username) {
   return isAdminName(username);
 }
 
-// الاطلاع على سجل العروض المحفوظة (صفحة «العروض») — للمشرفين حصراً.
-// البياع الاعتيادي يسوي عروضه ويصدّرها، بس ما يتصفح عروض الفريق وأسعارهم وزبائنهم.
+// الاطلاع على عروض *الفريق كلها* — للمشرفين حصراً.
+// البياع الاعتيادي يفتح صفحة العروض عادي لكن يشوف عروضه هو فقط (فلترة بـdataApi).
 export function canViewQuotes(username) {
   return isAdminName(username);
 }

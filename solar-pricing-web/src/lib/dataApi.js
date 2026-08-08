@@ -79,8 +79,17 @@ async function nextQuoteNumber() {
 
 // حارس الصلاحيات: الحسابات المقيّدة ممنوعة من الكتابة على المخزون والأجور والإعدادات.
 // المنع هنا (طبقة البيانات) مو بالواجهة فقط — أي مسار يوصل للدالة ينمنع.
+// نقرأ المستخدم من الجلسة المخزّنة محلياً (بلا طلب شبكة) — أسرع ويشتغل حتى لو الشبكة متذبذبة،
+// ومع رجوع لـgetUser إذا الجلسة ماكو بالذاكرة لأي سبب.
+async function currentUser() {
+  const { data } = await supabase.auth.getSession();
+  if (data?.session?.user) return data.session.user;
+  const { data: u } = await supabase.auth.getUser();
+  return u?.user || null;
+}
+
 async function currentUsername() {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await currentUser();
   return user?.user_metadata?.username || '';
 }
 
@@ -97,11 +106,16 @@ async function assertAdminSettings(what = 'الإعدادات') {
   }
 }
 
-// سجل العروض: القراءة للمشرفين حصراً (فحص التكرار يبقى شغالاً للجميع)
-async function assertCanViewQuotes() {
-  if (!canViewQuotes(await currentUsername())) {
-    throw new Error('الاطلاع على سجل العروض محصور بحسابات الإدارة');
-  }
+// سجل العروض: المشرف يشوف عروض الفريق كلها، والبياع يشوف عروضه هو فقط.
+// المطابقة متسامحة مع فروقات الهمزة، وتقبل الإيميل للعروض القديمة اللي انحفظت بيه.
+async function onlyMyQuotes(rows) {
+  const user = await currentUser();
+  const name = user?.user_metadata?.username || '';
+  if (canViewQuotes(name)) return rows;
+  const norm = (x) => String(x || '').trim().replace(/[أإآ]/g, 'ا');
+  const me = norm(name);
+  const email = String(user?.email || '');
+  return rows.filter((q) => norm(q.created_by) === me || (email && q.created_by === email));
 }
 
 export const api = {
@@ -528,15 +542,13 @@ export const api = {
       return quote;
     },
     async list() {
-      await assertCanViewQuotes();
       const { data, error } = await supabase.from('quotes').select('*').order('id', { ascending: false });
       throwIf(error);
       // نستثني المحذوفة (سلة المهملات) — الفلترة محلية حتى تشتغل حتى قبل إضافة العمود
-      return (data || []).filter((q) => !q.deleted_at);
+      return onlyMyQuotes((data || []).filter((q) => !q.deleted_at));
     },
     // سلة المحذوفات: آخر أسبوع فقط، مع تنظيف نهائي تلقائي للأقدم من 7 أيام
     async listDeleted() {
-      await assertCanViewQuotes();
       const { data, error } = await supabase.from('quotes').select('*').order('id', { ascending: false });
       throwIf(error);
       const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
@@ -546,7 +558,8 @@ export const api = {
         // البنود والملاحظات تنحذف تلقائياً معها (on delete cascade)
         supabase.from('quotes').delete().in('id', expired.map((q) => q.id)).then(() => {});
       }
-      return deleted.filter((q) => new Date(q.deleted_at).getTime() >= weekAgo);
+      // البياع يشوف محذوفاته هو فقط — والتنظيف التلقائي للأسبوع يبقى على مستوى الجدول
+      return onlyMyQuotes(deleted.filter((q) => new Date(q.deleted_at).getTime() >= weekAgo));
     },
     // تفريغ السلة نهائياً (صلاحية حساب أحمد بالواجهة): حذف كل المحذوفات فوراً بلا انتظار الأسبوع
     async purgeDeleted() {

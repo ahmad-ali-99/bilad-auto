@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { buildEditPrefill } from '../lib/editPrefill.js';
 import { getCurrentUsername } from '../lib/agent.js';
+import { canViewQuotes } from '../lib/permissions.js';
 
 const TIER_LABELS = { economy: 'اقتصادي', standard: 'متوسط', premium: 'ممتاز' };
 const MAX_ATTACH_MB = 8;
@@ -47,9 +48,14 @@ export default function Quotes({ onEditQuote }) {
   const attachTargetRef = useRef(null);
   // تفريغ السلة نهائياً: صلاحية حصرية لحساب أحمد
   const [isAhmad, setIsAhmad] = useState(false);
+  // البياع الاعتيادي يشوف عروضه هو فقط — نوضحها بالعنوان حتى ما يظن أن عروضاً ضاعت
+  const [seesAll, setSeesAll] = useState(true);
   useEffect(() => {
     getCurrentUsername()
-      .then((n) => setIsAhmad((n || '').replace(/[أإآ]/g, 'ا').trim() === 'احمد'))
+      .then((n) => {
+        setIsAhmad((n || '').replace(/[أإآ]/g, 'ا').trim() === 'احمد');
+        setSeesAll(canViewQuotes(n));
+      })
       .catch(() => {});
   }, []);
 
@@ -176,7 +182,10 @@ export default function Quotes({ onEditQuote }) {
 
   return (
     <div>
-      <h2 className="page-title">العروض المحفوظة</h2>
+      <h2 className="page-title">{seesAll ? 'العروض المحفوظة' : 'عروضي المحفوظة'}</h2>
+      {!seesAll && (
+        <p className="muted" style={{ marginTop: -6 }}>تظهر هنا العروض التي أنشأتها بحسابك فقط.</p>
+      )}
       {message && <div className="alert alert-info">{message}</div>}
 
       <div className="toolbar" style={{ gap: 10, flexWrap: 'wrap' }}>
