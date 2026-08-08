@@ -228,13 +228,22 @@ export const api = {
   quotes: {
     // إعدادات التقسيط المصرفي المشتركة (نسبة الفائدة كمعامل ضرب + عدد الأشهر) —
     // تتعدل من صفحة الإعدادات وتنسحب تلقائياً على كل عرض مؤشر عليه التقسيط
+    // خطتا التقسيط: نظام الشركة (المصرف المتعامل معه) أو مبادرة البنك المركزي.
+    // كل خطة نسبتها وأشهرها من الإعدادات المشتركة — والقيم هنا احتياط إذا ما انحفظت بعد.
     async _installment(input) {
       if (!input.installment) return null;
-      const cfg = await api.config.get('installment');
+      const plan = input.installmentPlan === 'cbi' ? 'cbi' : 'company';
+      const key = plan === 'cbi' ? 'installment_cbi' : 'installment';
+      const fallback = plan === 'cbi'
+        ? { rate: 1.26, months: 84, label: 'مبادرة البنك المركزي' }   // 26% لسبع سنوات
+        : { rate: 1.35, months: 60, label: 'التقسيط المصرفي' };
+      const cfg = await api.config.get(key);
       return {
         enabled: true,
-        rate: Number(cfg?.rate) > 0 ? Number(cfg.rate) : 1.35,
-        months: Number(cfg?.months) > 0 ? Number(cfg.months) : 60,
+        plan,
+        label: fallback.label,
+        rate: Number(cfg?.rate) > 0 ? Number(cfg.rate) : fallback.rate,
+        months: Number(cfg?.months) > 0 ? Number(cfg.months) : fallback.months,
       };
     },
     async _adjustments(input) {

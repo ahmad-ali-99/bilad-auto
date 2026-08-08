@@ -28,6 +28,10 @@ export default function Settings() {
   const [instRate, setInstRate] = useState('1.35');
   const [instMonths, setInstMonths] = useState('60');
   const [instMsg, setInstMsg] = useState('');
+  // مبادرة البنك المركزي: فائدة 26% لسبع سنوات (قابلة للتعديل إذا تغيّرت شروط المبادرة)
+  const [cbiRate, setCbiRate] = useState('1.26');
+  const [cbiMonths, setCbiMonths] = useState('84');
+  const [cbiMsg, setCbiMsg] = useState('');
   // معاملات أمان البطاريات لكل مستوى — تضرب حاجة الليل قبل حساب عدد البطاريات
   const [battFactors, setBattFactors] = useState({ economy: '0.9', standard: '0.85', premium: '0.8' });
   const [battMsg, setBattMsg] = useState('');
@@ -38,6 +42,10 @@ export default function Settings() {
     window.api.config.get('installment').then((cfg) => {
       if (cfg?.rate > 0) setInstRate(String(cfg.rate));
       if (cfg?.months > 0) setInstMonths(String(cfg.months));
+    }).catch(() => {});
+    window.api.config.get('installment_cbi').then((cfg) => {
+      if (cfg?.rate > 0) setCbiRate(String(cfg.rate));
+      if (cfg?.months > 0) setCbiMonths(String(cfg.months));
     }).catch(() => {});
     window.api.config.get('battery_factors').then((cfg) => {
       if (cfg) {
@@ -77,6 +85,18 @@ export default function Settings() {
     }
     await window.api.config.set('installment', { rate, months });
     setInstMsg(`تم الحفظ ✔ كل عرض مؤشَّر عليه التقسيط سيُحسب: المجموع × ${rate} ÷ ${months} شهراً`);
+  }
+
+  async function saveCbi(e) {
+    e.preventDefault();
+    const rate = Number(cbiRate);
+    const months = Math.round(Number(cbiMonths));
+    if (!(rate > 0) || !(months > 0)) {
+      setCbiMsg('أدخل نسبة وأشهر صحيحة — النسبة معامل ضرب مثل 1.26');
+      return;
+    }
+    await window.api.config.set('installment_cbi', { rate, months });
+    setCbiMsg(`تم الحفظ ✔ عروض مبادرة البنك المركزي: المجموع × ${rate} ÷ ${months} شهراً`);
   }
 
   useEffect(reload, []);
@@ -222,6 +242,28 @@ export default function Settings() {
           حفظ إعدادات التقسيط
         </button>
         {instMsg && <div className="alert alert-info" style={{ marginTop: 10, marginBottom: 0 }}>{instMsg}</div>}
+      </form>
+
+      <form className="card" onSubmit={saveCbi}>
+        <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>🏛 مبادرة البنك المركزي</h3>
+        <p className="muted" style={{ marginTop: 0 }}>
+          خطة التقسيط الثانية اللي تظهر للبياع عند تأشير التقسيط. الافتراضي حسب المبادرة:
+          <b> فائدة 26% (معامل 1.26) لمدة 7 سنوات = 84 شهراً</b> — عدّلها هنا إذا تغيّرت شروط المبادرة.
+        </p>
+        <div className="grid-2">
+          <div className="field">
+            <label>نسبة الفائدة (معامل الضرب)</label>
+            <input type="number" step="any" min="0" value={cbiRate} onChange={(e) => setCbiRate(e.target.value)} placeholder="1.26" />
+          </div>
+          <div className="field">
+            <label>عدد الأشهر</label>
+            <input type="number" min="1" value={cbiMonths} onChange={(e) => setCbiMonths(e.target.value)} placeholder="84" />
+          </div>
+        </div>
+        <button className="btn btn-primary" type="submit">
+          حفظ إعدادات المبادرة
+        </button>
+        {cbiMsg && <div className="alert alert-info" style={{ marginTop: 10, marginBottom: 0 }}>{cbiMsg}</div>}
       </form>
 
       <form className="card" onSubmit={saveAgentKey}>

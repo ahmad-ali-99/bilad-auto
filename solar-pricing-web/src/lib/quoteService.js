@@ -159,7 +159,11 @@ function applyAdjustments(items, total, adjustments) {
     const months = Math.max(1, Math.round(Number(inst.months) || 60));
     if (rate > 0) {
       const totalWithInterest = Math.round(total * rate);
-      summary.installment = { rate, months, totalWithInterest, monthly: Math.round(totalWithInterest / months) };
+      summary.installment = {
+        rate, months, totalWithInterest, monthly: Math.round(totalWithInterest / months),
+        plan: inst.plan === 'cbi' ? 'cbi' : 'company',
+        label: inst.label || 'التقسيط المصرفي',
+      };
     }
   }
 

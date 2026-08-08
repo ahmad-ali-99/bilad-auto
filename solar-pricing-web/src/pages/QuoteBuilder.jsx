@@ -69,6 +69,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   const [discountPercent, setDiscountPercent] = useState(savedDraft?.discountPercent ?? '');
   // التقسيط المصرفي: جيك بوينت — النسبة والأشهر من الإعدادات، والمعادلة: المجموع × النسبة ÷ الأشهر
   const [installment, setInstallment] = useState(savedDraft?.installment ?? false);
+  // خطة التقسيط: 'company' = نظام الشركة/المصرف، 'cbi' = مبادرة البنك المركزي (26% لسبع سنوات)
+  const [installmentPlan, setInstallmentPlan] = useState(savedDraft?.installmentPlan ?? 'company');
   // زيادة/نقصان يدوي بالوحدات (لوح ±2، بطارية وانفيرتر ±1) — للمستخدمين الرئيسيين فقط
   const [extraUnits, setExtraUnits] = useState(savedDraft?.extraUnits ?? { panel: 0, battery: 0, inverter: 0 });
   // قسم الزيادة/الخصم/التقسيط مطوي افتراضياً حتى الشاشة تبقى مرتبة
@@ -188,7 +190,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
           JSON.stringify({
             clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours,
             systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent,
-            installment, extraUnits, notes, editingQuote, pricingOpen, createdBy,
+            installment, installmentPlan, extraUnits, notes, editingQuote, pricingOpen, createdBy,
           })
         );
       } catch {
@@ -196,7 +198,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       }
     }, 500);
     return () => clearTimeout(t);
-  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, extraUnits, notes, editingQuote, pricingOpen, createdBy]);
+  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits, notes, editingQuote, pricingOpen, createdBy]);
 
   // 🆕 عرض جديد: تصفير كامل + مسح المسودة المحفوظة + رجوع الثانوية لافتراضياتها
   function startNewQuote() {
@@ -216,6 +218,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
     setMarkupMode('visible');
     setDiscountPercent('');
     setInstallment(false);
+    setInstallmentPlan('company');
     setExtraUnits({ panel: 0, battery: 0, inverter: 0 });
     setCreatedBy('');
     setSecondarySel(secondaryDefaultsRef.current);
@@ -267,6 +270,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       setMarkupMode(a.markupMode === 'distributed' ? 'distributed' : 'visible');
       setDiscountPercent(Number(a.discountPercent) > 0 ? String(a.discountPercent) : '');
       setInstallment(!!a.installment?.enabled);
+      setInstallmentPlan(a.installment?.plan === 'cbi' ? 'cbi' : 'company');
       const x = p.extraUnits || a.extraUnits || {};
       setExtraUnits({ panel: Number(x.panel) || 0, battery: Number(x.battery) || 0, inverter: Number(x.inverter) || 0 });
     }
@@ -372,8 +376,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
 
   // useMemo ضروري: بدونه الكائن يتجدد بكل رندر → المؤقت ينعاد → حلقة إعادة حساب لا نهائية
   const inputs = useMemo(
-    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, extraUnits }),
-    [roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, extraUnits]
+    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits }),
+    [roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits]
   );
   const debouncedInputs = useDebouncedValue(inputs, 300);
 
@@ -406,6 +410,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
           discountPercent: Number(debouncedInputs.discountPercent) || 0,
         },
         installment: debouncedInputs.installment,
+        installmentPlan: debouncedInputs.installmentPlan,
         extraUnits: debouncedInputs.extraUnits,
       })
       .then(setPreview)
@@ -434,6 +439,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
         discountPercent: Number(discountPercent) || 0,
       },
       installment,
+      installmentPlan,
       extraUnits,
       // الإسناد لحساب أحمد فقط — null = الحساب الحالي عند الحفظ، وإبقاء المنشئ الأصلي عند التعديل
       createdBy: (canAttribute && createdBy) || null,
@@ -677,7 +683,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
                 )}
                 {installment && (
                   <span style={{ background: '#e6f0fb', color: '#1a5a9c', borderRadius: 12, padding: '2px 10px', fontSize: '0.8rem', fontWeight: 700 }}>
-                    🏦 تقسيط
+                    🏦 {installmentPlan === 'cbi' ? 'تقسيط — البنك المركزي' : 'تقسيط — نظام الشركة'}
                   </span>
                 )}
               </span>
@@ -732,8 +738,34 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
           </div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontWeight: 700, color: 'var(--navy)', cursor: 'pointer' }}>
             <input type="checkbox" checked={installment} onChange={(e) => setInstallment(e.target.checked)} style={{ width: 18, height: 18 }} />
-            🏦 إدراج التقسيط المصرفي بالعرض
+            🏦 إدراج التقسيط بالعرض
           </label>
+          {/* خطتان: نظام الشركة المعتاد، أو مبادرة البنك المركزي (26% لسبع سنوات) */}
+          {installment && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+              {[
+                { key: 'company', label: 'نظام الشركة', hint: 'نسبة وأشهر الشركة من الإعدادات' },
+                { key: 'cbi', label: 'مبادرة البنك المركزي', hint: 'فائدة 26% لمدة 7 سنوات' },
+              ].map((pl) => (
+                <button
+                  key={pl.key}
+                  type="button"
+                  onClick={() => setInstallmentPlan(pl.key)}
+                  style={{
+                    flex: '1 1 190px', textAlign: 'right', cursor: 'pointer', borderRadius: 12, padding: '9px 12px',
+                    border: installmentPlan === pl.key ? '2px solid var(--navy)' : '1px solid #ccd6e2',
+                    background: installmentPlan === pl.key ? '#e9f0f9' : '#fff',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <div style={{ fontWeight: 700, color: 'var(--navy)' }}>
+                    {installmentPlan === pl.key ? '◉' : '○'} {pl.label}
+                  </div>
+                  <div className="muted" style={{ fontSize: '0.78rem' }}>{pl.hint}</div>
+                </button>
+              ))}
+            </div>
+          )}
           </>
           )}
         </div>
@@ -836,7 +868,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
 
             {draft.installment && (
               <div className="alert alert-info" style={{ marginTop: 6, display: 'flex', gap: 16, flexWrap: 'wrap', fontWeight: 700 }}>
-                <span>🏦 المجموع مع فائدة المصرف (×{draft.installment.rate}): {fmt(draft.installment.totalWithInterest)} دينار</span>
+                <span>🏦 {draft.installment.label} (×{draft.installment.rate}): {fmt(draft.installment.totalWithInterest)} دينار</span>
                 <span>القسط الشهري لمدة {draft.installment.months} شهر: {fmt(draft.installment.monthly)} دينار</span>
               </div>
             )}
@@ -869,7 +901,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
               </p>
             )}
 
-            {isAdmin && draft.counts && (
+            {draft.counts && (
               <div style={{ background: '#f2f6fb', border: '1px dashed #b9c9da', borderRadius: 12, padding: '10px 12px', marginBottom: 12 }}>
                 <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
                   <b style={{ color: 'var(--navy)' }}>🛠 زيادة / نقصان يدوي:</b>

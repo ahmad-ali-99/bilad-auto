@@ -140,7 +140,7 @@ export function buildInvoiceInnerHtml({ quote, items, notes, company, installmen
       ${rowsHtml}
       <tr class="total-row"><td colspan="5">المجموع الكلي</td><td>${formatNumber(quote.total_price)}</td></tr>
       ${installment ? `
-      <tr class="inst-row"><td colspan="5">المجموع الكلي مع فائدة المصرف (بالتقسيط)</td><td>${formatNumber(installment.totalWithInterest)}</td></tr>
+      <tr class="inst-row"><td colspan="5">المجموع الكلي بالتقسيط — ${escapeHtml(installment.label || 'التقسيط المصرفي')}</td><td>${formatNumber(installment.totalWithInterest)}</td></tr>
       <tr class="inst-row inst-monthly"><td colspan="5">القسط الشهري لمدة ${formatNumber(installment.months)} شهر</td><td>${formatNumber(installment.monthly)}</td></tr>` : ''}
     </tbody>
   </table>
