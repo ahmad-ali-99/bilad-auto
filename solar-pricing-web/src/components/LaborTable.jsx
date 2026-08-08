@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-export default function LaborTable() {
+export default function LaborTable({ canEdit = true }) {
   const [rows, setRows] = useState([]);
   const [newRow, setNewRow] = useState({ system_amps: '', price: '', note: '' });
 
@@ -49,31 +49,34 @@ export default function LaborTable() {
             <th>الحجم (أمبير)</th>
             <th>السعر (دينار)</th>
             <th>ملاحظة</th>
-            <th>إجراءات</th>
+            {canEdit && <th>إجراءات</th>}
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.id}>
               <td>
-                <input type="number" defaultValue={r.system_amps} onBlur={(e) => handleUpdate(r, 'system_amps', e.target.value)} />
+                <input type="number" defaultValue={r.system_amps} disabled={!canEdit} onBlur={(e) => handleUpdate(r, 'system_amps', e.target.value)} />
               </td>
               <td>
-                <input type="number" defaultValue={r.price} onBlur={(e) => handleUpdate(r, 'price', e.target.value)} />
+                <input type="number" defaultValue={r.price} disabled={!canEdit} onBlur={(e) => handleUpdate(r, 'price', e.target.value)} />
               </td>
               <td>
-                <input type="text" defaultValue={r.note || ''} onBlur={(e) => handleUpdate(r, 'note', e.target.value)} />
+                <input type="text" defaultValue={r.note || ''} disabled={!canEdit} onBlur={(e) => handleUpdate(r, 'note', e.target.value)} />
               </td>
-              <td>
-                <button className="btn btn-danger btn-sm" onClick={() => handleDelete(r.id)}>
-                  حذف
-                </button>
-              </td>
+              {canEdit && (
+                <td>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(r.id)}>
+                    حذف
+                  </button>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
       </table>
 
+      {canEdit && (
       <form className="card" onSubmit={handleAdd} style={{ marginTop: 14 }}>
         <div className="grid-3">
           <div className="field">
@@ -93,6 +96,7 @@ export default function LaborTable() {
           + إضافة حجم جديد
         </button>
       </form>
+      )}
     </div>
   );
 }

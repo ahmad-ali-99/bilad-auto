@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { getAgentKey, setAgentKey, SHARE_KEY_SQL } from '../lib/agent.js';
+import { getCurrentUsername } from '../lib/agent.js';
+import { canEditSettings } from '../lib/permissions.js';
 
 const SETTINGS_FIELDS = [
   { key: 'system_voltage', label: 'فولتية النظام (لتحويل الأمبير لواط)' },
@@ -12,6 +14,11 @@ const SETTINGS_FIELDS = [
 ];
 
 export default function Settings() {
+  // حسابات مقيّدة: صفحة الإعدادات كلها للقراءة — بلا تعديل ثوابت أو ملف شركة أو مفاتيح
+  const [canEdit, setCanEdit] = useState(true);
+  useEffect(() => {
+    getCurrentUsername().then((n) => setCanEdit(canEditSettings(n))).catch(() => {});
+  }, []);
   const [settings, setSettings] = useState(null);
   const [company, setCompany] = useState(null);
   const [message, setMessage] = useState('');
@@ -137,6 +144,12 @@ export default function Settings() {
     <div>
       <h2 className="page-title">الإعدادات</h2>
       {message && <div className="alert alert-info">{message}</div>}
+      {!canEdit && (
+        <div className="alert alert-warning">
+          👁 هذا الحساب للاطلاع فقط — يمكنك رؤية الإعدادات لكن التعديل محصور بحسابات الإدارة.
+        </div>
+      )}
+      <fieldset disabled={!canEdit} style={{ border: 'none', padding: 0, margin: 0, minInlineSize: 'auto' }}>
 
       <form className="card" onSubmit={saveSettings}>
         <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>ثوابت المعادلات</h3>
@@ -319,6 +332,7 @@ export default function Settings() {
           أي تعديل من أي جهاز يظهر عند الجميع فوراً. لا حاجة لنسخ احتياطية يدوية.
         </p>
       </div>
+      </fieldset>
     </div>
   );
 }

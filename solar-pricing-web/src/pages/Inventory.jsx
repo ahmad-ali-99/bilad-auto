@@ -2,6 +2,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import MaterialFormModal from '../components/MaterialFormModal.jsx';
 import LaborTable from '../components/LaborTable.jsx';
 import ImportPreviewModal from '../components/ImportPreviewModal.jsx';
+import { getCurrentUsername } from '../lib/agent.js';
+import { canEditInventory } from '../lib/permissions.js';
 
 const TABS = [
   { key: 'panel', label: 'الألواح' },
@@ -19,6 +21,11 @@ function capacityLabel(category) {
 
 export default function Inventory({ initialSearch }) {
   const [tab, setTab] = useState('panel');
+  // حسابات مقيّدة: تشوف المخزون والأسعار كاملة بس بلا أي تعديل
+  const [canEdit, setCanEdit] = useState(true);
+  useEffect(() => {
+    getCurrentUsername().then((n) => setCanEdit(canEditInventory(n))).catch(() => {});
+  }, []);
   const [materials, setMaterials] = useState([]);
   const [search, setSearch] = useState('');
 
@@ -102,14 +109,16 @@ export default function Inventory({ initialSearch }) {
     <div>
       <div className="toolbar">
         <h2 className="page-title" style={{ margin: 0 }}>المخزون</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-secondary" onClick={handleDownloadTemplate}>
-            تحميل قالب Excel
-          </button>
-          <button className="btn btn-primary" onClick={handleImportExcel}>
-            ⬆ استيراد من Excel
-          </button>
-        </div>
+        {canEdit && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary" onClick={handleDownloadTemplate}>
+              تحميل قالب Excel
+            </button>
+            <button className="btn btn-primary" onClick={handleImportExcel}>
+              ⬆ استيراد من Excel
+            </button>
+          </div>
+        )}
       </div>
       {importMessage && <div className="alert alert-info">{importMessage}</div>}
       <div className="tabs">
@@ -121,7 +130,7 @@ export default function Inventory({ initialSearch }) {
       </div>
 
       {tab === 'labor' ? (
-        <LaborTable />
+        <LaborTable canEdit={canEdit} />
       ) : (
         <>
           <div className="toolbar">
@@ -132,9 +141,11 @@ export default function Inventory({ initialSearch }) {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <button className="btn btn-primary" onClick={openAddForm}>
-              + إضافة مادة
-            </button>
+            {canEdit && (
+              <button className="btn btn-primary" onClick={openAddForm}>
+                + إضافة مادة
+              </button>
+            )}
           </div>
 
           <div className="table-scroll">
@@ -147,7 +158,7 @@ export default function Inventory({ initialSearch }) {
                 <th>{capacityLabel(tab)}</th>
                 <th>السعر (دينار)</th>
                 <th>الضمان (شهر)</th>
-                <th>إجراءات</th>
+                {canEdit && <th>إجراءات</th>}
               </tr>
             </thead>
             <tbody>
@@ -161,19 +172,21 @@ export default function Inventory({ initialSearch }) {
                   <td>{m.watt_or_capacity ?? '-'}</td>
                   <td>{Number(m.price).toLocaleString('en-US')}</td>
                   <td>{m.warranty_months ?? '-'}</td>
-                  <td>
-                    <button className="btn btn-secondary btn-sm" onClick={() => openEditForm(m)}>
-                      تعديل
-                    </button>{' '}
-                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(m.id)}>
-                      حذف
-                    </button>
-                  </td>
+                  {canEdit && (
+                    <td>
+                      <button className="btn btn-secondary btn-sm" onClick={() => openEditForm(m)}>
+                        تعديل
+                      </button>{' '}
+                      <button className="btn btn-danger btn-sm" onClick={() => handleDelete(m.id)}>
+                        حذف
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="muted" style={{ textAlign: 'center', padding: 20 }}>
+                  <td colSpan={canEdit ? 7 : 6} className="muted" style={{ textAlign: 'center', padding: 20 }}>
                     لا توجد مواد بهذه الفئة بعد
                   </td>
                 </tr>

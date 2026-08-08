@@ -6,6 +6,7 @@ import * as calc from './calc.js';
 import * as excelImport from './excelImport.js';
 import { exportInvoicePdf } from './pdfExport.js';
 import { logActivity } from './activityLog.js';
+import { isRestrictedUser } from './permissions.js';
 
 function throwIf(error) {
   if (error) throw new Error(error.message || 'خطأ بالاتصال بقاعدة البيانات');
@@ -75,6 +76,17 @@ async function nextQuoteNumber() {
   return Math.max((maxNum || 0) + 1, start);
 }
 
+
+// حارس الصلاحيات: الحسابات المقيّدة ممنوعة من الكتابة على المخزون والأجور والإعدادات.
+// المنع هنا (طبقة البيانات) مو بالواجهة فقط — أي مسار يوصل للدالة ينمنع.
+async function assertCanEdit(what = 'هذه البيانات') {
+  const { data: { user } } = await supabase.auth.getUser();
+  const name = user?.user_metadata?.username || '';
+  if (isRestrictedUser(name)) {
+    throw new Error(`حسابك للاطلاع فقط — تعديل ${what} محصور بحسابات الإدارة`);
+  }
+}
+
 export const api = {
   materials: {
     async list(category) {
@@ -85,12 +97,14 @@ export const api = {
       return data || [];
     },
     async create(data) {
+      await assertCanEdit('المخزون');
       const { data: row, error } = await supabase.from('materials').insert(materialPayload(data)).select().single();
       throwIf(error);
       logActivity('إضافة مادة', 'المخزون', { 'المادة': row.full_description, 'السعر': row.price });
       return row;
     },
     async update(id, data) {
+      await assertCanEdit('المخزون');
       // نلتقط القيم القديمة قبل التعديل — حتى يبين بالسجل شنو تغيّر بالضبط
       const { data: old } = await supabase.from('materials').select('full_description, price').eq('id', id).maybeSingle();
       const { data: row, error } = await supabase.from('materials').update(materialPayload(data)).eq('id', id).select().single();
@@ -102,6 +116,7 @@ export const api = {
       return row;
     },
     async remove(id) {
+      await assertCanEdit('المخزون');
       const { data: old } = await supabase.from('materials').select('full_description, price').eq('id', id).maybeSingle();
       const { error } = await supabase.from('materials').delete().eq('id', id);
       throwIf(error);
@@ -123,6 +138,7 @@ export const api = {
       };
     },
     async importRows({ materials = [], labor = [] }) {
+      await assertCanEdit('المخزون');
       const existing = await allMaterials();
       let added = 0;
       let updated = 0;
@@ -182,12 +198,14 @@ export const api = {
       return data || [];
     },
     async create(data) {
+      await assertCanEdit('أجور العمل');
       const { data: row, error } = await supabase.from('labor_tiers').insert({ system_amps: data.system_amps, price: data.price, note: data.note || null }).select().single();
       throwIf(error);
       logActivity('إضافة أجور عمل', 'المخزون', { 'الحجم (أمبير)': row.system_amps, 'السعر': row.price });
       return row;
     },
     async update(id, data) {
+      await assertCanEdit('أجور العمل');
       const { data: old } = await supabase.from('labor_tiers').select('system_amps, price').eq('id', id).maybeSingle();
       const { data: row, error } = await supabase.from('labor_tiers').update({ system_amps: data.system_amps, price: data.price, note: data.note || null }).eq('id', id).select().single();
       throwIf(error);
@@ -198,6 +216,7 @@ export const api = {
       return row;
     },
     async remove(id) {
+      await assertCanEdit('أجور العمل');
       const { data: old } = await supabase.from('labor_tiers').select('system_amps, price').eq('id', id).maybeSingle();
       const { error } = await supabase.from('labor_tiers').delete().eq('id', id);
       throwIf(error);
@@ -748,6 +767,7 @@ export const api = {
       return data;
     },
     async update(data) {
+      await assertCanEdit('الإعدادات');
       const payload = { ...data };
       delete payload.id;
       const { data: old } = await supabase.from('settings').select('*').eq('id', 1).maybeSingle();
@@ -771,6 +791,7 @@ export const api = {
       return { ...data, notes_default: notes, logo_data: data.logo_path && data.logo_path.startsWith('data:') ? data.logo_path : null };
     },
     async update(data) {
+      await assertCanEdit('ملف الشركة');
       const { data: row, error } = await supabase.from('company_profile').update({
         company_name: data.company_name,
         company_name_en: data.company_name_en,
