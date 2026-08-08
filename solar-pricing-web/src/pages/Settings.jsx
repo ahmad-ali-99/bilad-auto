@@ -223,9 +223,9 @@ export default function Settings() {
       </form>
 
       <form className="card" onSubmit={saveInstallment}>
-        <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>🏦 التقسيط المصرفي</h3>
+        <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>🏦 التقسيط عبر مصرف النهرين</h3>
         <p className="muted" style={{ marginTop: 0 }}>
-          عند تأشير «التقسيط المصرفي» في أي عرض، يُحسب تلقائياً: <b>المجموع الكلي × نسبة الفائدة ÷ عدد الأشهر</b>{' '}
+          الخطة الأولى اللي تظهر للبياع عند تأشير التقسيط. يُحسب تلقائياً: <b>المجموع الكلي × نسبة الفائدة ÷ عدد الأشهر</b>{' '}
           ويطلع بالعرض المجموع مع الفائدة والقسط الشهري. النسبة معامل ضرب مباشر (مثال: 1.35 يعني المجموع + 35%).
         </p>
         <div className="grid-2">

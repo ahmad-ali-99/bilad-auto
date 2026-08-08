@@ -1,5 +1,7 @@
 // قالب فاتورة الموبايل — نفس تصميم نسخة سطح المكتب لكن بدون تضمين الخط
 // (الخط Cairo محمّل أصلاً بالتطبيق، وhtml2canvas يلتقطه من الـDOM مباشرة)
+import { installmentPlanLabel } from './installment.js';
+
 function formatNumber(n) {
   return Math.round(n).toLocaleString('en-US');
 }
@@ -140,7 +142,7 @@ export function buildInvoiceInnerHtml({ quote, items, notes, company, installmen
       ${rowsHtml}
       <tr class="total-row"><td colspan="5">المجموع الكلي</td><td>${formatNumber(quote.total_price)}</td></tr>
       ${installment ? `
-      <tr class="inst-row"><td colspan="5">المجموع الكلي بالتقسيط — ${escapeHtml(installment.label || 'التقسيط المصرفي')}</td><td>${formatNumber(installment.totalWithInterest)}</td></tr>
+      <tr class="inst-row"><td colspan="5">المجموع الكلي بالتقسيط — ${escapeHtml(installment.label || installmentPlanLabel(installment.plan))}</td><td>${formatNumber(installment.totalWithInterest)}</td></tr>
       <tr class="inst-row inst-monthly"><td colspan="5">القسط الشهري لمدة ${formatNumber(installment.months)} شهر</td><td>${formatNumber(installment.monthly)}</td></tr>` : ''}
     </tbody>
   </table>

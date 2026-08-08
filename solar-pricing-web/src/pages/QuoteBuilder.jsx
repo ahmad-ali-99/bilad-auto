@@ -69,7 +69,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   const [discountPercent, setDiscountPercent] = useState(savedDraft?.discountPercent ?? '');
   // التقسيط المصرفي: جيك بوينت — النسبة والأشهر من الإعدادات، والمعادلة: المجموع × النسبة ÷ الأشهر
   const [installment, setInstallment] = useState(savedDraft?.installment ?? false);
-  // خطة التقسيط: 'company' = نظام الشركة/المصرف، 'cbi' = مبادرة البنك المركزي (26% لسبع سنوات)
+  // خطة التقسيط: 'company' = التقسيط عبر مصرف النهرين، 'cbi' = مبادرة البنك المركزي (26% لسبع سنوات)
   const [installmentPlan, setInstallmentPlan] = useState(savedDraft?.installmentPlan ?? 'company');
   // زيادة/نقصان يدوي بالوحدات (لوح ±2، بطارية وانفيرتر ±1) — للمستخدمين الرئيسيين فقط
   const [extraUnits, setExtraUnits] = useState(savedDraft?.extraUnits ?? { panel: 0, battery: 0, inverter: 0 });
@@ -684,7 +684,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
                 )}
                 {installment && (
                   <span style={{ background: '#e6f0fb', color: '#1a5a9c', borderRadius: 12, padding: '2px 10px', fontSize: '0.8rem', fontWeight: 700 }}>
-                    🏦 {installmentPlan === 'cbi' ? 'تقسيط — البنك المركزي' : 'تقسيط — نظام الشركة'}
+                    🏦 {installmentPlan === 'cbi' ? 'تقسيط — البنك المركزي' : 'تقسيط — مصرف النهرين'}
                   </span>
                 )}
               </span>
@@ -748,7 +748,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
           {installment && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
               {[
-                { key: 'company', label: 'نظام الشركة', hint: 'نسبة وأشهر الشركة من الإعدادات' },
+                { key: 'company', label: 'مصرف النهرين', hint: 'نسبة وأشهر التقسيط من الإعدادات' },
                 { key: 'cbi', label: 'مبادرة البنك المركزي', hint: 'فائدة 26% لمدة 7 سنوات' },
               ].map((pl) => (
                 <button

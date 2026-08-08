@@ -2,6 +2,7 @@
 // طبقة البيانات السحابية (dataApi.js) تجلب الصفوف من Supabase ثم تنادي هذه الدوال.
 import * as calc from './calc.js';
 import { isDcProtectionBoard } from './secondaryDefaults.js';
+import { installmentPlanLabel } from './installment.js';
 
 const CATEGORY_LABELS_AR = {
   panel: 'الألواح',
@@ -159,10 +160,10 @@ function applyAdjustments(items, total, adjustments) {
     const months = Math.max(1, Math.round(Number(inst.months) || 60));
     if (rate > 0) {
       const totalWithInterest = Math.round(total * rate);
+      const plan = inst.plan === 'cbi' ? 'cbi' : 'company';
       summary.installment = {
         rate, months, totalWithInterest, monthly: Math.round(totalWithInterest / months),
-        plan: inst.plan === 'cbi' ? 'cbi' : 'company',
-        label: inst.label || 'التقسيط المصرفي',
+        plan, label: installmentPlanLabel(plan),
       };
     }
   }

@@ -7,6 +7,7 @@ import * as excelImport from './excelImport.js';
 import { exportInvoicePdf } from './pdfExport.js';
 import { logActivity } from './activityLog.js';
 import { isRestrictedUser, canViewQuotes, canEditSettings } from './permissions.js';
+import { installmentPlanLabel } from './installment.js';
 
 function throwIf(error) {
   if (error) throw new Error(error.message || 'خطأ بالاتصال بقاعدة البيانات');
@@ -259,20 +260,20 @@ export const api = {
   quotes: {
     // إعدادات التقسيط المصرفي المشتركة (نسبة الفائدة كمعامل ضرب + عدد الأشهر) —
     // تتعدل من صفحة الإعدادات وتنسحب تلقائياً على كل عرض مؤشر عليه التقسيط
-    // خطتا التقسيط: نظام الشركة (المصرف المتعامل معه) أو مبادرة البنك المركزي.
+    // خطتا التقسيط: التقسيط عبر مصرف النهرين، أو مبادرة البنك المركزي.
     // كل خطة نسبتها وأشهرها من الإعدادات المشتركة — والقيم هنا احتياط إذا ما انحفظت بعد.
     async _installment(input) {
       if (!input.installment) return null;
       const plan = input.installmentPlan === 'cbi' ? 'cbi' : 'company';
       const key = plan === 'cbi' ? 'installment_cbi' : 'installment';
       const fallback = plan === 'cbi'
-        ? { rate: 1.26, months: 84, label: 'مبادرة البنك المركزي' }   // 26% لسبع سنوات
-        : { rate: 1.35, months: 60, label: 'التقسيط المصرفي' };
+        ? { rate: 1.26, months: 84 }   // 26% لسبع سنوات
+        : { rate: 1.35, months: 60 };
       const cfg = await api.config.get(key);
       return {
         enabled: true,
         plan,
-        label: fallback.label,
+        label: installmentPlanLabel(plan),
         rate: Number(cfg?.rate) > 0 ? Number(cfg.rate) : fallback.rate,
         months: Number(cfg?.months) > 0 ? Number(cfg.months) : fallback.months,
       };
@@ -638,7 +639,12 @@ export const api = {
       if (inst?.enabled && Number(inst.rate) > 0) {
         const months = Math.max(1, Math.round(Number(inst.months) || 60));
         const totalWithInterest = Math.round(quote.total_price * Number(inst.rate));
-        installment = { rate: Number(inst.rate), months, totalWithInterest, monthly: Math.round(totalWithInterest / months) };
+        const plan = inst.plan === 'cbi' ? 'cbi' : 'company';
+        installment = {
+          rate: Number(inst.rate), months, totalWithInterest,
+          monthly: Math.round(totalWithInterest / months),
+          plan, label: installmentPlanLabel(plan),
+        };
       }
       // قدرة المنظومة لعرض محفوظ: تُعاد من بنوده (عدد وسعة البطاريات والانفيرترات)
       // وأمبيريته وإعدادات النظام — بنفس معادلة المعاينة الحية (calc.capabilityOf)
@@ -793,7 +799,7 @@ export const api = {
         const labels = {
           secondary_defaults: 'القائمة الافتراضية للمواد الثانوية',
           battery_factors: 'معاملات أمان البطاريات',
-          installment: 'إعدادات التقسيط المصرفي',
+          installment: 'إعدادات التقسيط عبر مصرف النهرين',
         };
         logActivity('تعديل إعداد مشترك', 'الإعدادات', { 'الإعداد': labels[key] || key });
       }
