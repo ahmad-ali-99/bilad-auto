@@ -95,7 +95,11 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   // إسناد العرض لموظف آخر: صلاحية حصرية لحساب أحمد فقط (مو كل المشرفين)
   const canAttribute = isAdmin && (myName || '').replace(/[أإآ]/g, 'ا').trim() === 'احمد';
   // العرض التفاعلي موقوف مؤقتاً عن الجميع عدا حساب أحمد الشخصي — إلى أن يكتمل ترتيبه
-  const showcaseAllowed = isAdmin && (myName || '').replace(/[أإآ]/g, 'ا').trim() === 'احمد';
+  // ⏸ العرض التفاعلي 3D موقوف بقرار المستخدم: المشهد المبني بالكود ما يوصل لواقعية مقنعة،
+  // والانتظار لموديلات حقيقية (فيلا فوتوريالستك) قبل إرجاعه. الكود كله باقٍ كما هو —
+  // الإرجاع بتبديل هذا السطر لـ: isAdmin && (myName...) === 'احمد'
+  const SHOWCASE_PAUSED = true;
+  const showcaseAllowed = !SHOWCASE_PAUSED && isAdmin && (myName || '').replace(/[أإآ]/g, 'ا').trim() === 'احمد';
   // الحسابات المرقمة تظهر بالرقم فقط — نفس تنسيق عمود «أنشأه» بصفحة العروض
   const displayCreator = (n) => (n || '').replace(/^مستخدم(?=[0-9])/, '');
   const [overrides, setOverrides] = useState(savedDraft?.overrides ?? {});
