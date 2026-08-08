@@ -325,6 +325,24 @@ function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, pane
   return assignTiers(combos, pickInverterPremium, pickFewestThenIp, pickFewestThenLowestIp);
 }
 
+// القدرة الفعلية للتوليفة: ساعات تجهيز الليل من بنك البطاريات، وأمبير النهار اللي
+// يتحمله الانفيرتر. دالة وحدة يستعملها التطبيق (المعاينة الحية) وملف العرض (صفحة
+// التصميم) — حتى الأرقام تبقى متطابقة بالضبط بلا تكرار معادلة.
+function capabilityOf({
+  batteryUnits = 0, batteryKwh = 0, inverterUnits = 0, inverterW = 0,
+  ampNight = 0, systemVoltage = 220, dod = 0.9, inverterSafetyFactor = 1,
+}) {
+  const nightHours =
+    batteryUnits > 0 && batteryKwh > 0 && ampNight > 0
+      ? Math.round(((batteryUnits * batteryKwh * dod * 1000) / (ampNight * systemVoltage)) * 10) / 10
+      : null;
+  const dayAmps =
+    inverterUnits > 0 && inverterW > 0
+      ? Math.floor((inverterUnits * inverterW) / (systemVoltage * (inverterSafetyFactor || 1)))
+      : null;
+  return { nightHours, dayAmps };
+}
+
 export {
   PANEL_AMPS_PER_WATT,
   PV_OVERSIZE_RATIO,
@@ -341,6 +359,7 @@ export {
   inverterCapacityRequired,
   systemAmpSize,
   pickLaborTier,
+  capabilityOf,
   classifyTiers,
   selectBatteryTiers,
   selectPanelTiers,

@@ -335,15 +335,16 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
     },
     // القدرة الفعلية للتوليفة الحالية — تتحدث فوراً مع كل زيادة/نقصان يدوي:
     // ساعات الليل = سعة البنك × عمق التفريغ ÷ (أمبير الليل × الفولتية)، وأمبير النهار = قدرة الانفيرترات ÷ الفولتية
-    capability: {
-      nightHours:
-        batteryCombo && ampNight > 0
-          ? Math.round(((batteryCombo.units * batteryCombo.material.watt_or_capacity * settings.dod * 1000) / (ampNight * settings.systemVoltage)) * 10) / 10
-          : null,
-      dayAmps: inverterCombo
-        ? Math.floor((inverterCombo.units * inverterCombo.material.watt_or_capacity) / (settings.systemVoltage * (settings.inverterSafetyFactor || 1)))
-        : null,
-    },
+    capability: calc.capabilityOf({
+      batteryUnits: batteryCombo ? batteryCombo.units : 0,
+      batteryKwh: batteryCombo ? batteryCombo.material.watt_or_capacity : 0,
+      inverterUnits: inverterCombo ? inverterCombo.units : 0,
+      inverterW: inverterCombo ? inverterCombo.material.watt_or_capacity : 0,
+      ampNight,
+      systemVoltage: settings.systemVoltage,
+      dod: settings.dod,
+      inverterSafetyFactor: settings.inverterSafetyFactor,
+    }),
     panelTiers,
     inverterTiers,
     internalNotes,

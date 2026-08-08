@@ -2,6 +2,7 @@
 // كل الدوال async؛ الصفحات المشتركة تناديها بنفس الطريقة بدون تعديل يُذكر.
 import { supabase } from './supabase.js';
 import * as quoteService from './quoteService.js';
+import * as calc from './calc.js';
 import * as excelImport from './excelImport.js';
 import { exportInvoicePdf } from './pdfExport.js';
 import { logActivity } from './activityLog.js';
@@ -579,9 +580,43 @@ export const api = {
         const totalWithInterest = Math.round(quote.total_price * Number(inst.rate));
         installment = { rate: Number(inst.rate), months, totalWithInterest, monthly: Math.round(totalWithInterest / months) };
       }
+      // قدرة المنظومة لعرض محفوظ: تُعاد من بنوده (عدد وسعة البطاريات والانفيرترات)
+      // وأمبيريته وإعدادات النظام — بنفس معادلة المعاينة الحية (calc.capabilityOf)
+      let capability = null;
+      try {
+        const [materials, { data: settingsRow }] = await Promise.all([
+          allMaterials(),
+          supabase.from('settings').select('*').eq('id', 1).single(),
+        ]);
+        const byId = new Map((materials || []).map((m) => [m.id, m]));
+        const sumOf = (cat) => (items || []).reduce((acc, it) => {
+          const mat = it.material_id != null ? byId.get(it.material_id) : null;
+          if (!mat || mat.category !== cat) return acc;
+          return { units: acc.units + Number(it.quantity || 0), cap: mat.watt_or_capacity || acc.cap };
+        }, { units: 0, cap: 0 });
+        const bat = sumOf('battery');
+        const inv = sumOf('inverter');
+        const V = settingsRow?.system_voltage || 220;
+        capability = {
+          ...calc.capabilityOf({
+            batteryUnits: bat.units, batteryKwh: bat.cap,
+            inverterUnits: inv.units, inverterW: inv.cap,
+            ampNight: quote.required_amp_night || 0,
+            systemVoltage: V, dod: settingsRow?.dod ?? 0.9,
+            inverterSafetyFactor: settingsRow?.inverter_safety_factor ?? 1,
+          }),
+          ampNight: quote.required_amp_night || 0,
+          ampDay: quote.required_amp_day || 0,
+          batteries: bat.units,
+          inverters: inv.units,
+        };
+      } catch {
+        /* تعذر حساب القدرة — صفحة التصميم تنطبع بلا بطاقات القدرة */
+      }
       logActivity('تصدير PDF لعرض محفوظ', 'العروض', { 'رقم العرض': quote.quote_number, 'العميل': quote.client_name || '-' });
       return exportInvoicePdf({
         installment,
+        capability,
         quote,
         items: (items || []).map((i) => ({ ...i, description: i.description_snapshot })),
         notes: (notes || []).map((n) => n.note_text),
@@ -617,7 +652,17 @@ export const api = {
         required_amp_night: input.ampNight,
       };
       logActivity('تصدير PDF معاينة (بلا حفظ)', 'العروض', { 'العميل': input.clientName || '-', 'المجموع': draft.total });
-      return exportInvoicePdf({ quote: pseudoQuote, items: draft.items, notes, company, fileName: 'عرض_سعر_معاينة.pdf', installment: draft.installment });
+      return exportInvoicePdf({
+        quote: pseudoQuote, items: draft.items, notes, company, fileName: 'عرض_سعر_معاينة.pdf', installment: draft.installment,
+        // تفاصيل قدرة المنظومة تنطبع بصفحة التصميم — نفس اللي يشوفه البياع بالمعاينة
+        capability: {
+          ...(draft.capability || {}),
+          ampNight: Number(input.ampNight) || 0,
+          ampDay: Number(input.ampDay) || 0,
+          batteries: draft.counts?.battery || 0,
+          inverters: draft.counts?.inverter || 0,
+        },
+      });
     },
   },
 

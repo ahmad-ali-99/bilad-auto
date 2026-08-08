@@ -37,7 +37,9 @@ export function panelCountFromItems(items) {
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // imgDataUrl = صورة PNG للرندر 3D (renderStructurePng). إذا فارغة تُرجع '' فتُتخطى الصفحة.
-export function buildStructurePageHtml(panelCount, company = {}, imgDataUrl = '') {
+// capability (اختياري): { nightHours, dayAmps, ampNight, ampDay, batteries, inverters }
+// نفس أرقام «قدرة المنظومة» اللي يشوفها البياع أثناء اختيار البطاريات والانفيرترات
+export function buildStructurePageHtml(panelCount, company = {}, imgDataUrl = '', capability = null) {
   const structs = splitStructures(panelCount);
   if (!structs.length || !imgDataUrl) return '';
   const logo = company.logo_path && String(company.logo_path).startsWith('data:') ? company.logo_path : null;
@@ -47,6 +49,18 @@ export function buildStructurePageHtml(panelCount, company = {}, imgDataUrl = ''
     ['🛡️', 'هيكل مغلون متين', 'مقاوم للرياح والصدأ — يدوم لعشرات السنين'],
     ['🕐', 'صيانة ودعم 24/7', 'خدمة صيانة ومتابعة متوفرة على مدار الساعة'],
   ];
+  // بطاقات القدرة الفعلية للمنظومة — تُبنى من أرقام هذا العرض تحديداً
+  const cap = capability || {};
+  const capCards = [];
+  if (cap.nightHours != null && Number(cap.ampNight) > 0) {
+    capCards.push(['🔋', `البطاريات تُجهّز ${esc(cap.ampNight)} أمبير ليلياً`, `لمدة ≈${esc(cap.nightHours)} ساعة${cap.batteries ? ` — ${esc(cap.batteries)} بطارية` : ''}`]);
+  }
+  if (cap.dayAmps != null) {
+    capCards.push(['⚡', `الانفيرترات تتحمل ≈${esc(cap.dayAmps)} أمبير نهاراً`, cap.inverters ? `${esc(cap.inverters)} انفيرتر بالمنظومة` : 'قدرة التشغيل النهاري']);
+  }
+  const capHtml = capCards.length
+    ? `<div class="caps">${capCards.map((c) => `<div class="cap"><span class="ci">${c[0]}</span><span class="ct"><b>${c[1]}</b><small>${c[2]}</small></span></div>`).join('')}</div>`
+    : '';
   const featHtml = feats
     .map((f) => `<div class="feat"><div class="ic">${f[0]}</div><div class="ft"><b>${esc(f[1])}</b><span>${esc(f[2])}</span></div></div>`)
     .join('');
@@ -69,6 +83,13 @@ export function buildStructurePageHtml(panelCount, company = {}, imgDataUrl = ''
 .mkt-sheet .stage img { max-width: 100%; max-height: 560px; height: auto; filter: drop-shadow(0 16px 22px rgba(20,48,92,0.22)); }
 .mkt-sheet .count { position: relative; text-align: center; margin: 0 0 10px; font-weight: 800; color: #12305c; font-size: 1.05rem; }
 .mkt-sheet .count b { color: #f5a623; }
+.mkt-sheet .caps { position: relative; display: flex; justify-content: center; gap: 10px; padding: 0 26px; margin: 0 0 12px; flex-wrap: nowrap; }
+.mkt-sheet .cap { background: linear-gradient(180deg, #ffffff 0%, #f2f7fd 100%); border: 1px solid #bcd0e6; border-left: 5px solid #f5a623;
+  border-radius: 12px; padding: 9px 13px; display: flex; align-items: center; gap: 9px; box-shadow: 0 4px 10px rgba(20,48,92,0.09); }
+.mkt-sheet .cap .ci { font-size: 1.25rem; line-height: 1; }
+.mkt-sheet .cap .ct { display: flex; flex-direction: column; }
+.mkt-sheet .cap .ct b { color: #12305c; font-size: 0.92rem; white-space: nowrap; }
+.mkt-sheet .cap .ct small { color: #4a5c72; font-size: 0.72rem; }
 .mkt-sheet .feats { position: relative; display: flex; justify-content: center; gap: 12px; padding: 0 26px; flex-wrap: nowrap; }
 .mkt-sheet .feat { flex: 1; background: rgba(255,255,255,0.9); border: 1px solid #cdd9e6; border-radius: 14px; padding: 12px 14px;
   display: flex; align-items: center; gap: 10px; box-shadow: 0 5px 12px rgba(20,48,92,0.1); }
@@ -87,6 +108,7 @@ export function buildStructurePageHtml(panelCount, company = {}, imgDataUrl = ''
   </div>
   <div class="stage"><img src="${imgDataUrl}" alt="مخطط الهيكل"/></div>
   <div class="count">إجمالي الألواح <b>${panelCount}</b> لوح — <b>${structs.length}</b> ${structs.length === 1 ? 'ستركجر' : 'ستركجرات'}</div>
+  ${capHtml}
   <div class="feats">${featHtml}</div>
   <div class="foot">${esc(co)} — نموذج توضيحي، تُثبّت التفاصيل النهائية بعد الكشف الميداني</div>
 </div>`;
