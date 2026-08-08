@@ -405,9 +405,9 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
         overrides: debouncedInputs.overrides,
         secondarySelections: debouncedInputs.secondarySel,
         adjustments: {
-          markupPercent: Number(debouncedInputs.markupPercent) || 0,
+          markupPercent: isAdmin ? Number(debouncedInputs.markupPercent) || 0 : 0,
           markupMode: debouncedInputs.markupMode,
-          discountPercent: Number(debouncedInputs.discountPercent) || 0,
+          discountPercent: isAdmin ? Number(debouncedInputs.discountPercent) || 0 : 0,
         },
         installment: debouncedInputs.installment,
         installmentPlan: debouncedInputs.installmentPlan,
@@ -415,7 +415,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       })
       .then(setPreview)
       .finally(() => setCalculating(false));
-  }, [debouncedInputs, validInputs]);
+  }, [debouncedInputs, validInputs, isAdmin]);
 
   function setOverride(category, materialId) {
     setOverrides((o) => ({ ...o, [category]: materialId ? Number(materialId) : undefined }));
@@ -434,9 +434,10 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       overrides,
       secondarySelections: secondarySel,
       adjustments: {
-        markupPercent: Number(markupPercent) || 0,
+        // الزيادة والخصم صلاحية مشرفين — أي قيمة بمسودة حساب غير مشرف ما تنطبق
+        markupPercent: isAdmin ? Number(markupPercent) || 0 : 0,
         markupMode,
-        discountPercent: Number(discountPercent) || 0,
+        discountPercent: isAdmin ? Number(discountPercent) || 0 : 0,
       },
       installment,
       installmentPlan,
@@ -667,16 +668,16 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
               onClick={() => setPricingOpen((o) => !o)}
               style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: 700, color: 'var(--navy)', fontSize: '1rem' }}
             >
-              💹 زيادة / خصم / تقسيط {pricingOpen ? '▲' : '▼'}
+              💹 {isAdmin ? 'زيادة / خصم / تقسيط' : 'التقسيط'} {pricingOpen ? '▲' : '▼'}
             </button>
-            {!pricingOpen && (Number(markupPercent) > 0 || Number(discountPercent) > 0 || installment) && (
+            {!pricingOpen && ((isAdmin && (Number(markupPercent) > 0 || Number(discountPercent) > 0)) || installment) && (
               <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
-                {Number(markupPercent) > 0 && (
+                {isAdmin && Number(markupPercent) > 0 && (
                   <span style={{ background: '#fdf0d5', color: '#8a5b00', borderRadius: 12, padding: '2px 10px', fontSize: '0.8rem', fontWeight: 700 }}>
                     زيادة {markupPercent}% {markupMode === 'distributed' ? 'موزعة' : 'علنية'}
                   </span>
                 )}
-                {Number(discountPercent) > 0 && (
+                {isAdmin && Number(discountPercent) > 0 && (
                   <span style={{ background: '#e3f2e6', color: '#1c6b2e', borderRadius: 12, padding: '2px 10px', fontSize: '0.8rem', fontWeight: 700 }}>
                     خصم {discountPercent}%
                   </span>
@@ -691,6 +692,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
           </div>
           {pricingOpen && (
           <>
+          {/* الزيادة والخصم: صلاحية المشرفين فقط — البياع الاعتيادي يشوف التقسيط فقط */}
+          {isAdmin && (
           <div className="grid-3" style={{ marginTop: 8 }}>
             <div className={fieldClass('markupPercent')}>
               <label>نسبة الزيادة %</label>
@@ -736,6 +739,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
               />
             </div>
           </div>
+          )}
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontWeight: 700, color: 'var(--navy)', cursor: 'pointer' }}>
             <input type="checkbox" checked={installment} onChange={(e) => setInstallment(e.target.checked)} style={{ width: 18, height: 18 }} />
             🏦 إدراج التقسيط بالعرض
@@ -948,15 +952,17 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
                     </button>
                   )}
                 </div>
-                {draft.capability && (draft.capability.nightHours != null || draft.capability.dayAmps != null) && (
-                  <div style={{ marginTop: 8, fontSize: '0.88rem', color: '#1a5a9c', fontWeight: 700 }}>
-                    {draft.capability.nightHours != null && (
-                      <span>🔋 البطاريات تُجهّز {ampNight} أمبير ليلياً لمدة ≈{draft.capability.nightHours} ساعة</span>
-                    )}
-                    {draft.capability.nightHours != null && draft.capability.dayAmps != null && ' — '}
-                    {draft.capability.dayAmps != null && <span>⚡ الانفيرترات تتحمل ≈{draft.capability.dayAmps} أمبير نهاراً</span>}
-                  </div>
+              </div>
+            )}
+
+            {/* قدرة المنظومة الفعلية — تظهر لكل الحسابات دائماً (مو داخل صندوق الأزرار) */}
+            {draft.capability && (draft.capability.nightHours != null || draft.capability.dayAmps != null) && (
+              <div style={{ background: '#eaf3fb', border: '1px solid #bcd6ec', borderRadius: 12, padding: '9px 12px', marginBottom: 12, fontSize: '0.9rem', color: '#12456f', fontWeight: 700 }}>
+                {draft.capability.nightHours != null && (
+                  <span>🔋 البطاريات تُجهّز {ampNight} أمبير ليلياً لمدة ≈{draft.capability.nightHours} ساعة</span>
                 )}
+                {draft.capability.nightHours != null && draft.capability.dayAmps != null && ' — '}
+                {draft.capability.dayAmps != null && <span>⚡ الانفيرترات تتحمل ≈{draft.capability.dayAmps} أمبير نهاراً</span>}
               </div>
             )}
 
