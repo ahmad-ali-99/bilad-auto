@@ -6,7 +6,7 @@ import * as calc from './calc.js';
 import * as excelImport from './excelImport.js';
 import { exportInvoicePdf } from './pdfExport.js';
 import { logActivity } from './activityLog.js';
-import { isRestrictedUser } from './permissions.js';
+import { isRestrictedUser, canViewQuotes, canEditSettings } from './permissions.js';
 
 function throwIf(error) {
   if (error) throw new Error(error.message || 'خطأ بالاتصال بقاعدة البيانات');
@@ -79,11 +79,28 @@ async function nextQuoteNumber() {
 
 // حارس الصلاحيات: الحسابات المقيّدة ممنوعة من الكتابة على المخزون والأجور والإعدادات.
 // المنع هنا (طبقة البيانات) مو بالواجهة فقط — أي مسار يوصل للدالة ينمنع.
-async function assertCanEdit(what = 'هذه البيانات') {
+async function currentUsername() {
   const { data: { user } } = await supabase.auth.getUser();
-  const name = user?.user_metadata?.username || '';
-  if (isRestrictedUser(name)) {
+  return user?.user_metadata?.username || '';
+}
+
+async function assertCanEdit(what = 'هذه البيانات') {
+  if (isRestrictedUser(await currentUsername())) {
     throw new Error(`حسابك للاطلاع فقط — تعديل ${what} محصور بحسابات الإدارة`);
+  }
+}
+
+// الإعدادات وملف الشركة: للمشرفين حصراً
+async function assertAdminSettings(what = 'الإعدادات') {
+  if (!canEditSettings(await currentUsername())) {
+    throw new Error(`تعديل ${what} محصور بحسابات الإدارة`);
+  }
+}
+
+// سجل العروض: القراءة للمشرفين حصراً (فحص التكرار يبقى شغالاً للجميع)
+async function assertCanViewQuotes() {
+  if (!canViewQuotes(await currentUsername())) {
+    throw new Error('الاطلاع على سجل العروض محصور بحسابات الإدارة');
   }
 }
 
@@ -511,6 +528,7 @@ export const api = {
       return quote;
     },
     async list() {
+      await assertCanViewQuotes();
       const { data, error } = await supabase.from('quotes').select('*').order('id', { ascending: false });
       throwIf(error);
       // نستثني المحذوفة (سلة المهملات) — الفلترة محلية حتى تشتغل حتى قبل إضافة العمود
@@ -518,6 +536,7 @@ export const api = {
     },
     // سلة المحذوفات: آخر أسبوع فقط، مع تنظيف نهائي تلقائي للأقدم من 7 أيام
     async listDeleted() {
+      await assertCanViewQuotes();
       const { data, error } = await supabase.from('quotes').select('*').order('id', { ascending: false });
       throwIf(error);
       const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
@@ -776,7 +795,7 @@ export const api = {
       return data;
     },
     async update(data) {
-      await assertCanEdit('الإعدادات');
+      await assertAdminSettings('الإعدادات');
       const payload = { ...data };
       delete payload.id;
       const { data: old } = await supabase.from('settings').select('*').eq('id', 1).maybeSingle();
@@ -800,7 +819,7 @@ export const api = {
       return { ...data, notes_default: notes, logo_data: data.logo_path && data.logo_path.startsWith('data:') ? data.logo_path : null };
     },
     async update(data) {
-      await assertCanEdit('ملف الشركة');
+      await assertAdminSettings('ملف الشركة');
       const { data: row, error } = await supabase.from('company_profile').update({
         company_name: data.company_name,
         company_name_en: data.company_name_en,

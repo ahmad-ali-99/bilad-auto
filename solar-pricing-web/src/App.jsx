@@ -252,8 +252,10 @@ export default function App() {
   const isAdmin = isAdminName(session.user?.user_metadata?.username || '');
   // سجل الحركات (الهستوري) لحساب أحمد حصراً — الحماية الفعلية بـRLS بقاعدة البيانات
   const isAhmad = (session.user?.user_metadata?.username || '').replace(/[أإآ]/g, 'ا').trim() === 'احمد';
+  // «العروض» (سجل عروض الفريق) للمشرفين حصراً — البياع يسوي عرضه ويصدّره بلا تصفح السجل
+  const staffPages = PAGES.filter((p) => p.key !== 'quotes');
   const navPages = [
-    ...(isAdmin ? [...PAGES.slice(0, 2), ...ADMIN_PAGES, ...PAGES.slice(2)] : PAGES),
+    ...(isAdmin ? [...PAGES.slice(0, 2), ...ADMIN_PAGES, ...PAGES.slice(2)] : staffPages),
     ...(isAhmad ? [{ key: 'history', label: 'الحركات', icon: '🕓' }] : []),
   ];
 
@@ -304,7 +306,7 @@ export default function App() {
         {page === 'quote' && (
           <QuoteBuilder prefill={quotePrefill} onDraftChange={(d) => (draftRef.current = d)} />
         )}
-        {page === 'quotes' && (
+        {page === 'quotes' && isAdmin && (
           <Quotes
             onEditQuote={(prefill) => {
               setQuotePrefill({ ...prefill, nonce: Date.now() });

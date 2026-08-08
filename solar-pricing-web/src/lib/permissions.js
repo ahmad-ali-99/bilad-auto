@@ -23,9 +23,16 @@ export function canEditInventory(username) {
   return !isRestrictedUser(username);
 }
 
-// تعديل إعدادات الحساب وملف الشركة والملاحظات الافتراضية
+// تعديل إعدادات الحساب وملف الشركة والملاحظات الافتراضية — للمشرفين حصراً
+// (ثوابت المعادلات وأسعار التقسيط وملف الشركة تمس كل عروض الفريق)
 export function canEditSettings(username) {
-  return !isRestrictedUser(username);
+  return isAdminName(username);
+}
+
+// الاطلاع على سجل العروض المحفوظة (صفحة «العروض») — للمشرفين حصراً.
+// البياع الاعتيادي يسوي عروضه ويصدّرها، بس ما يتصفح عروض الفريق وأسعارهم وزبائنهم.
+export function canViewQuotes(username) {
+  return isAdminName(username);
 }
 
 // صلاحيات المشرفين كما هي (تبويب الطلبات، أدوات المساعد الإدارية)
