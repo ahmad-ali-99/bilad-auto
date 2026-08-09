@@ -425,6 +425,55 @@ export const api = {
         /* جدول app_config اختياري — فشله لا يمنع حفظ العرض نفسه */
       }
     },
+    // ── رفع عرض جاهز انعمل خارج البرنامج (PDF/إكسل/وورد/صورة) ──────────────
+    // ينضاف كسجل بقائمة العروض برقم عرض حقيقي من نفس التسلسل، والملف ينخزن
+    // بعمودي المرفقات الموجودين — بلا أي جدول ولا عمود جديد.
+    // بلا بنود ولا ملاحظات: هو ملف جاهز مو عرض مبني من مواد، ولهذا نسجّل رقمه
+    // بقائمة «العروض المرفوعة» حتى الواجهة تميّزه وتعطيه أزراراً مناسبة.
+    UPLOADED_KEY: 'quote_uploaded_ids',
+    async uploadedIds() {
+      const ids = await api.config.get(this.UPLOADED_KEY);
+      return Array.isArray(ids) ? ids : [];
+    },
+    async createUploaded(input) {
+      const file = input.file;
+      if (!file?.data) throw new Error('ما اخترت ملف العرض');
+      const quote_number = await nextQuoteNumber();
+      const user = await currentUser();
+
+      const { data: quote, error } = await supabase.from('quotes').insert({
+        quote_number,
+        client_name: input.clientName || null,
+        client_phone: input.clientPhone || null,
+        location: input.location || null,
+        roof_area_m2: 0,
+        required_amp_day: 0,
+        required_amp_night: 0,
+        night_supply_hours: 0,
+        selected_tier: 'economy',
+        total_price: Math.round(Number(input.totalPrice) || 0),
+        created_by: input.createdBy || user?.user_metadata?.username || user?.email || null,
+        attachment_name: file.name,
+        attachment_data: file.data,
+      }).select().single();
+      throwIf(error);
+
+      // تسجيل الرقم بقائمة المرفوعة — فشل التسجيل ما يلغي العرض نفسه
+      try {
+        const ids = await this.uploadedIds();
+        await api.config.set(this.UPLOADED_KEY, [...new Set([...ids, quote.id])]);
+      } catch {
+        /* app_config اختياري — العرض محفوظ على أي حال */
+      }
+
+      logActivity('رفع عرض جاهز', 'العروض', {
+        'رقم العرض': quote.quote_number,
+        'العميل': quote.client_name || '-',
+        'المجموع': quote.total_price,
+        'الملف': file.name,
+      });
+      return quote;
+    },
     async save(input) {
       const options = await this._options(input);
       const draft = quoteService.buildQuoteDraft(options, {

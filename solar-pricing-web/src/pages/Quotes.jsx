@@ -2,9 +2,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { buildEditPrefill } from '../lib/editPrefill.js';
 import { getCurrentUsername } from '../lib/agent.js';
 import { canViewQuotes } from '../lib/permissions.js';
+import { creatorsOf, filterByCreators, normName } from '../lib/quotesFilter.js';
 
 const TIER_LABELS = { economy: 'اقتصادي', standard: 'متوسط', premium: 'ممتاز' };
 const MAX_ATTACH_MB = 8;
+// اختيار الحسابات ينحفظ محلياً حتى ما يرجع للصفر كل ما يطلع ويرجع للصفحة
+const CREATOR_FILTER_KEY = 'quotes_creator_filter_v1';
+// أنواع ملفات العرض الجاهز المقبولة بالرفع
+const UPLOAD_ACCEPT = '.pdf,.xlsx,.xls,.doc,.docx,image/*,application/pdf';
 
 // حالات العرض: chip ملوّن بالجدول + ملاحظات تظهر عند مرور الماوس
 const STATUS_LEVELS = [
@@ -50,6 +55,24 @@ export default function Quotes({ onEditQuote }) {
   const [isAhmad, setIsAhmad] = useState(false);
   // البياع الاعتيادي يشوف عروضه هو فقط — نوضحها بالعنوان حتى ما يظن أن عروضاً ضاعت
   const [seesAll, setSeesAll] = useState(true);
+  // أرقام العروض المرفوعة (ملفات جاهزة من برة) — تتميّز بشارة وأزرار مختلفة
+  const [uploadedIds, setUploadedIds] = useState([]);
+  // الحسابات المختارة للعرض بالجدول (فاضية = الكل)
+  const [selectedCreators, setSelectedCreators] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CREATOR_FILTER_KEY));
+      return Array.isArray(saved) ? saved : [];
+    } catch {
+      return [];
+    }
+  });
+  // بطاقة رفع عرض جاهز
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadForm, setUploadForm] = useState({ clientName: '', clientPhone: '', location: '', totalPrice: '' });
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const uploadRef = useRef(null);
+
   useEffect(() => {
     getCurrentUsername()
       .then((n) => {
@@ -59,16 +82,29 @@ export default function Quotes({ onEditQuote }) {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(CREATOR_FILTER_KEY, JSON.stringify(selectedCreators));
+    } catch {
+      /* المتصفح ممكن يمنع التخزين — الفلترة تشتغل على أي حال */
+    }
+  }, [selectedCreators]);
+
   function reload() {
     window.api.quotes.list().then(setQuotes);
     window.api.quotes.listDeleted().then(setDeleted).catch(() => setDeleted([]));
     window.api.quotes.statuses().then(setStatuses).catch(() => {});
+    window.api.quotes.uploadedIds?.().then((ids) => setUploadedIds(ids || [])).catch(() => {});
   }
 
   useEffect(reload, []);
 
   const q = search.trim().toLowerCase();
-  const filtered = quotes.filter(
+  // أسماء الحسابات وأعداد عروضها — تُشتق من العروض المحمّلة نفسها بلا استعلام إضافي
+  const creators = seesAll ? creatorsOf(quotes) : [];
+  const uploadedSet = new Set(uploadedIds);
+  const isUploaded = (qt) => uploadedSet.has(qt.id);
+  const filtered = filterByCreators(quotes, seesAll ? selectedCreators : null).filter(
     (x) =>
       !q ||
       String(x.quote_number).includes(q) ||
@@ -77,6 +113,69 @@ export default function Quotes({ onEditQuote }) {
       (x.location || '').toLowerCase().includes(q) ||
       creatorName(x.created_by).toLowerCase().includes(q)
   );
+
+  function toggleCreator(key) {
+    setSelectedCreators((prev) => {
+      const has = prev.some((n) => normName(n) === key);
+      return has ? prev.filter((n) => normName(n) !== key) : [...prev, key];
+    });
+  }
+
+  // ── رفع عرض جاهز انعمل خارج البرنامج ─────────────────────────────────────
+  function pickUploadFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > MAX_ATTACH_MB * 1024 * 1024) {
+      setMessage(`الملف كبير — الحد ${MAX_ATTACH_MB} ميغا`);
+      return;
+    }
+    setUploadFile(file);
+    setMessage('');
+  }
+
+  async function submitUpload() {
+    if (!uploadFile) {
+      setMessage('اختر ملف العرض أولاً');
+      return;
+    }
+    setUploading(true);
+    try {
+      const data = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = reject;
+        r.readAsDataURL(uploadFile);
+      });
+      const quote = await window.api.quotes.createUploaded({
+        ...uploadForm,
+        file: { name: uploadFile.name, data },
+      });
+      setMessage(`أُضيف العرض المرفوع برقم ${quote.quote_number} — "${uploadFile.name}" ✔`);
+      setUploadOpen(false);
+      setUploadForm({ clientName: '', clientPhone: '', location: '', totalPrice: '' });
+      setUploadFile(null);
+      reload();
+    } catch (err) {
+      setMessage('تعذّر رفع العرض: ' + err.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  // تنزيل ملف العرض المرفوع كما هو (مو تصدير PDF — العرض المرفوع بلا بنود)
+  function downloadUploaded(qt) {
+    if (!qt.attachment_data) {
+      setMessage('ملف هذا العرض غير متوفر');
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = qt.attachment_data;
+    a.download = qt.attachment_name || `عرض_${qt.quote_number}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
 
   async function handleExport(id, quoteNumber) {
     setMessage('');
@@ -197,10 +296,120 @@ export default function Quotes({ onEditQuote }) {
           onChange={(e) => setSearch(e.target.value)}
           style={{ flex: 1, minWidth: 220 }}
         />
+        <button className="btn btn-primary" onClick={() => setUploadOpen((v) => !v)}>
+          ⬆ رفع عرض جاهز
+        </button>
         <button className="btn btn-secondary" onClick={() => setShowTrash((v) => !v)}>
           🗑 سلة المحذوفات ({deleted.length})
         </button>
       </div>
+
+      {/* اختيار الحسابات: يظهر للإدارة فقط — البياع أصلاً يشوف عروضه هو */}
+      {seesAll && creators.length > 1 && (
+        <div className="card" style={{ padding: '10px 12px', marginBottom: 10 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <b style={{ color: 'var(--navy)' }}>👥 الحسابات:</b>
+            <button
+              type="button"
+              onClick={() => setSelectedCreators([])}
+              style={{
+                cursor: 'pointer', borderRadius: 20, padding: '5px 14px', fontFamily: 'inherit', fontWeight: 700,
+                border: selectedCreators.length === 0 ? '2px solid var(--navy)' : '1px solid #ccd6e2',
+                background: selectedCreators.length === 0 ? 'var(--navy)' : '#fff',
+                color: selectedCreators.length === 0 ? '#fff' : 'var(--navy)',
+              }}
+            >
+              {selectedCreators.length === 0 ? '✓ ' : ''}الكل ({quotes.length})
+            </button>
+            {creators.map((c) => {
+              const on = selectedCreators.some((n) => normName(n) === c.key);
+              return (
+                <button
+                  key={c.key}
+                  type="button"
+                  onClick={() => toggleCreator(c.key)}
+                  style={{
+                    cursor: 'pointer', borderRadius: 20, padding: '5px 14px', fontFamily: 'inherit', fontWeight: 700,
+                    border: on ? '2px solid var(--navy)' : '1px solid #ccd6e2',
+                    background: on ? '#e9f0f9' : '#fff',
+                    color: 'var(--navy)',
+                  }}
+                >
+                  {on ? '✓ ' : ''}{creatorName(c.name)} ({c.count})
+                </button>
+              );
+            })}
+          </div>
+          {selectedCreators.length > 0 && (
+            <p className="muted" style={{ margin: '6px 0 0', fontSize: '0.8rem' }}>
+              معروض {filtered.length} من {quotes.length} عرضاً — اضغط «الكل» لعرض عروض الفريق كاملة.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* رفع عرض جاهز انعمل خارج البرنامج */}
+      {uploadOpen && (
+        <div className="card" style={{ border: '1px solid #bcd6ec' }}>
+          <h3 style={{ marginTop: 0, color: 'var(--navy)' }}>⬆ رفع عرض جاهز</h3>
+          <p className="muted" style={{ marginTop: 0 }}>
+            للعروض المجهّزة خارج البرنامج (PDF أو إكسل أو وورد أو صورة) — تنضاف لقائمة العروض
+            برقم عرض جديد من نفس التسلسل، ويبقى الملف محفوظاً معها.
+          </p>
+          <div className="grid-2">
+            <div className="field">
+              <label>اسم العميل</label>
+              <input
+                type="text"
+                value={uploadForm.clientName}
+                onChange={(e) => setUploadForm((f) => ({ ...f, clientName: e.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label>رقم الموبايل</label>
+              <input
+                type="text"
+                value={uploadForm.clientPhone}
+                onChange={(e) => setUploadForm((f) => ({ ...f, clientPhone: e.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label>الموقع</label>
+              <input
+                type="text"
+                value={uploadForm.location}
+                onChange={(e) => setUploadForm((f) => ({ ...f, location: e.target.value }))}
+              />
+            </div>
+            <div className="field">
+              <label>المبلغ الكلي (دينار)</label>
+              <input
+                type="number"
+                min="0"
+                value={uploadForm.totalPrice}
+                onChange={(e) => setUploadForm((f) => ({ ...f, totalPrice: e.target.value }))}
+              />
+            </div>
+          </div>
+          <input ref={uploadRef} type="file" accept={UPLOAD_ACCEPT} style={{ display: 'none' }} onChange={pickUploadFile} />
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
+            <button type="button" className="btn btn-secondary" onClick={() => uploadRef.current?.click()}>
+              📄 اختيار الملف
+            </button>
+            <span className={uploadFile ? '' : 'muted'}>
+              {uploadFile ? `✔ ${uploadFile.name}` : `ماكو ملف مختار — الحد ${MAX_ATTACH_MB} ميغا`}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+            <button type="button" className="btn btn-primary" disabled={uploading || !uploadFile} onClick={submitUpload}>
+              {uploading ? 'جاري الرفع...' : '⬆ رفع وإضافة للعروض'}
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={() => { setUploadOpen(false); setUploadFile(null); }}>
+              إلغاء
+            </button>
+          </div>
+        </div>
+      )}
 
       <input ref={fileRef} type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={handleFileChosen} />
 
@@ -275,13 +484,28 @@ export default function Quotes({ onEditQuote }) {
         <tbody>
           {filtered.map((qt, rowIdx) => (
             <tr key={qt.id}>
-              <td>{qt.quote_number}</td>
+              <td style={{ whiteSpace: 'nowrap' }}>
+                {qt.quote_number}
+                {isUploaded(qt) && (
+                  <div
+                    title="عرض جاهز مرفوع من خارج البرنامج"
+                    style={{
+                      display: 'inline-block', marginRight: 4, background: '#eaf3fb', color: '#1a5a9c',
+                      border: '1px solid #bcd6ec', borderRadius: 10, padding: '1px 7px',
+                      fontSize: '0.7rem', fontWeight: 700,
+                    }}
+                  >
+                    📤 مرفوع
+                  </div>
+                )}
+              </td>
               <td>
                 {qt.client_name || '-'}
                 {qt.client_phone && <div className="muted" style={{ fontSize: '0.78rem' }}>{qt.client_phone}</div>}
               </td>
               <td>{qt.location || '-'}</td>
-              <td>{TIER_LABELS[qt.selected_tier] || qt.selected_tier}</td>
+              {/* الفئة (اقتصادي/متوسط/ممتاز) ما إلها معنى بعرض مرفوع جاهز */}
+              <td>{isUploaded(qt) ? 'ملف جاهز' : TIER_LABELS[qt.selected_tier] || qt.selected_tier}</td>
               <td style={{ fontWeight: 700, color: 'var(--navy)' }}>{creatorName(qt.created_by)}</td>
               <td>
                 {(() => {
@@ -342,7 +566,10 @@ export default function Quotes({ onEditQuote }) {
               <td>{fmtDate(qt.created_at)}</td>
               <td>{fmt(qt.total_price)}</td>
               <td>
-                {qt.attachment_name ? (
+                {isUploaded(qt) ? (
+                  /* ملف العرض المرفوع هو العرض نفسه — إزالته تخلي السجل فاضي، فما ننطي زر حذف */
+                  <span title={qt.attachment_name} style={{ whiteSpace: 'nowrap' }}>📎 ملف العرض</span>
+                ) : qt.attachment_name ? (
                   <span title={qt.attachment_name} style={{ whiteSpace: 'nowrap' }}>
                     📎 مرفق{' '}
                     <button className="btn btn-danger btn-sm" onClick={() => handleRemoveAttachment(qt)} title="إزالة المرفق">
@@ -356,12 +583,21 @@ export default function Quotes({ onEditQuote }) {
                 )}
               </td>
               <td style={{ whiteSpace: 'nowrap' }}>
-                <button className="btn btn-primary btn-sm" disabled={busyId === qt.id} onClick={() => handleEdit(qt.id)}>
-                  ✏ تعديل
-                </button>{' '}
-                <button className="btn btn-secondary btn-sm" onClick={() => handleExport(qt.id, qt.quote_number)}>
-                  تصدير PDF{qt.attachment_name ? ' + التصميم' : ''}
-                </button>{' '}
+                {/* العرض المرفوع ملف جاهز بلا بنود: ما ينفتح بشاشة التعديل ولا ينبني منه PDF */}
+                {isUploaded(qt) ? (
+                  <button className="btn btn-secondary btn-sm" onClick={() => downloadUploaded(qt)}>
+                    ⬇ تنزيل الملف
+                  </button>
+                ) : (
+                  <>
+                    <button className="btn btn-primary btn-sm" disabled={busyId === qt.id} onClick={() => handleEdit(qt.id)}>
+                      ✏ تعديل
+                    </button>{' '}
+                    <button className="btn btn-secondary btn-sm" onClick={() => handleExport(qt.id, qt.quote_number)}>
+                      تصدير PDF{qt.attachment_name ? ' + التصميم' : ''}
+                    </button>
+                  </>
+                )}{' '}
                 <button className="btn btn-danger btn-sm" onClick={() => handleDelete(qt.id)}>
                   حذف
                 </button>
