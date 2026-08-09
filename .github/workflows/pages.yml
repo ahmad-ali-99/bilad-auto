@@ -1,0 +1,55 @@
+# نشر الموقع والتطبيق على GitHub Pages من فرع gh-pages.
+#
+# ليش هذا الملف: تعطّل نشر Pages على المستودع والرابط صار يرجّع 404 على كل الموقع،
+# مع إن محتوى فرع gh-pages سليم وواصل. خطوة configure-pages بخيار enablement
+# تشغّل Pages عبر الـAPI إذا كان مطفياً — بلا الحاجة لفتح إعدادات المستودع.
+#
+# ننشر محتوى فرع gh-pages كما هو (موقع الشركة التعريفي + مجلد app للتطبيق سوية)،
+# لأن بناء التطبيق لحاله ونشر dist بس يمحي الموقع التعريفي.
+name: نشر GitHub Pages
+
+on:
+  push:
+    branches: [gh-pages]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# نشرة وحدة بالوقت الواحد، وما نلغي نشرة شغالة حتى ما يضيع نشر بالنص
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: جلب محتوى فرع gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+
+      - name: تشغيل Pages إن كان مطفياً
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: تجهيز المحتوى (بلا ملفات git وملفات سير العمل)
+        run: |
+          mkdir -p _site
+          rsync -a --exclude '.git' --exclude '.github' --exclude '_site' ./ _site/
+
+      - name: رفع المحتوى
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: النشر
+        id: deployment
+        uses: actions/deploy-pages@v4
