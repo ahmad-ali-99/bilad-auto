@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>الإكس راي — بلاد أوتو</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="xray.css">
+</head>
+<body>
+
+<!--
+  ══════════════════════════════════════════════════════════
+  الهيرو التفاعلي — الإكس راي
+  ══════════════════════════════════════════════════════════
+
+  الطبقات (من تحت لفوق):
+    1. layer-base   → صورة السقوف (ثابتة، ظاهرة دائماً)
+    2. layer-xray   → صورة/فيديو الدواخل (يكشفه الكشّاف)
+    3. layer-car    → السيارة (فوق الكل، ظاهرة دائماً)
+
+  ⚠️ شرط أساسي: صورة السقوف وصورة الإكس راي لازم
+     تكون بنفس الأبعاد بالضبط، وإلا الكشّاف ما ينضبط.
+  ══════════════════════════════════════════════════════════
+-->
+
+<section class="hero" id="hero">
+
+  <!-- ── الطبقة 1: السقوف ─────────────────────────── -->
+  <div class="hero-layer layer-base">
+    <img src="images/rooftops.jpg"
+         alt="محلة بغدادية ليلاً — بيوت بألواح شمسية"
+         class="layer-img"
+         fetchpriority="high">
+  </div>
+
+  <!-- ── الطبقة 2: الإكس راي (يكشفها الكشّاف) ─────── -->
+  <div class="hero-layer layer-xray" id="layerXray">
+    <!-- خيار أ: صورة -->
+    <img src="images/xray.jpg"
+         alt="داخل البيوت — الفرق بين من عنده طاقة ومن ينتظر"
+         class="layer-img">
+
+    <!-- خيار ب: فيديو (احذف الصورة فوق واستخدم هذا بدلها)
+    <video class="layer-img" autoplay muted loop playsinline poster="images/xray.jpg">
+      <source src="videos/xray.mp4" type="video/mp4">
+    </video>
+    -->
+  </div>
+
+  <!-- ── الطبقة 3: السيارة (فوق الكل) ──────────────
+  <div class="hero-layer layer-car">
+    <video class="car" autoplay muted loop playsinline>
+      <source src="videos/car.webm" type="video/webm">
+    </video>
+  </div>
+  ──────────────────────────────────────────────── -->
+
+  <!-- ── تدرج التعتيم ─────────────────────────────── -->
+  <div class="hero-overlay"></div>
+
+  <!-- ── النصوص ───────────────────────────────────── -->
+  <div class="hero-content">
+    <span class="hero-eyebrow">بغداد · العراق</span>
+    <h1 class="hero-title">حياتك لا تنتظر الكهرباء</h1>
+    <p class="hero-sub">بلاد أوتو — الطاقة الشمسية التي تضيء بيتك كل ليلة</p>
+    <a href="#" class="hero-btn">احصل على عرض سعر</a>
+  </div>
+
+  <!-- ── تلميح الكشّاف ────────────────────────────── -->
+  <div class="hero-hint" id="hint">
+    <span class="hint-desktop">حرّك الماوس لتكشف القصص</span>
+    <span class="hint-mobile">المس لتكشف القصص</span>
+  </div>
+
+</section>
+
+
+<!-- ══════════════════════════════════════════════════
+     كود الكشّاف
+     ══════════════════════════════════════════════════ -->
+<script>
+(function () {
+  'use strict';
+
+  /* ─────────────────────────────────────────────────
+     ⚙️  الإعدادات — عدّل من هنا
+     ───────────────────────────────────────────────── */
+  var CONFIG = {
+    // نعومة تتبّع الماوس (0.01 = بطيء جداً | 0.3 = سريع)
+    lerpDesktop: 0.08,
+
+    // سرعة الحركة التلقائية على الموبايل
+    lerpMobile: 0.02,
+
+    // كم ثانية يقف الكشّاف عند كل بيت (بالملي ثانية)
+    pauseAtHouse: 1800,
+
+    // المسافة اللي يعتبرها "وصل" للنقطة
+    arriveDistance: 1.5,
+
+    // إخفاء التلميح بعد كم ملي ثانية
+    hintTimeout: 4000,
+
+    // 🏠 نقاط البيوت — عدّل الإحداثيات حسب صورتك
+    //    x = المسافة من اليسار (%) | y = المسافة من فوق (%)
+    waypoints: [
+      { x: 22, y: 28 },   // بيت 1
+      { x: 62, y: 22 },   // بيت 2
+      { x: 45, y: 48 },   // بيت 3
+      { x: 78, y: 42 },   // بيت 4
+      { x: 30, y: 62 },   // بيت 5
+      { x: 68, y: 70 },   // بيت 6
+      { x: 18, y: 45 },   // بيت 7
+      { x: 50, y: 78 }    // بيت 8
+    ]
+  };
+  /* ───────────────────────────────────────────────── */
+
+
+  var xray = document.getElementById('layerXray');
+  var hero = document.getElementById('hero');
+  var hint = document.getElementById('hint');
+  if (!xray || !hero) return;
+
+  // الموضع الهدف والموضع الحالي (نسبة مئوية)
+  var targetX = 50, targetY = 50;
+  var currX   = 50, currY   = 50;
+
+  var wpIndex   = 0;
+  var waiting   = false;
+  var waitTimer = null;
+
+  // هل الجهاز باللمس؟
+  function isTouch() {
+    return !window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  }
+
+  // ── تتبّع الماوس ──────────────────────────────────
+  hero.addEventListener('mousemove', function (e) {
+    var r = hero.getBoundingClientRect();
+    targetX = ((e.clientX - r.left) / r.width)  * 100;
+    targetY = ((e.clientY - r.top)  / r.height) * 100;
+  });
+
+  // ── تتبّع اللمس ───────────────────────────────────
+  hero.addEventListener('touchmove', function (e) {
+    var t = e.touches[0];
+    var r = hero.getBoundingClientRect();
+    targetX = ((t.clientX - r.left) / r.width)  * 100;
+    targetY = ((t.clientY - r.top)  / r.height) * 100;
+
+    // إيقاف الحركة التلقائية مؤقتاً عند اللمس
+    userTouching = true;
+    clearTimeout(touchReleaseTimer);
+    touchReleaseTimer = setTimeout(function () { userTouching = false; }, 2500);
+  }, { passive: true });
+
+  var userTouching = false;
+  var touchReleaseTimer = null;
+
+  // ── إخفاء التلميح ─────────────────────────────────
+  var hintGone = false;
+  function hideHint() {
+    if (hintGone || !hint) return;
+    hintGone = true;
+    hint.classList.add('is-hidden');
+  }
+  setTimeout(hideHint, CONFIG.hintTimeout);
+  hero.addEventListener('mousemove', hideHint, { once: true });
+  hero.addEventListener('touchstart', hideHint, { once: true, passive: true });
+
+  // ── الانتقال للبيت التالي ─────────────────────────
+  function nextWaypoint() {
+    wpIndex = (wpIndex + 1) % CONFIG.waypoints.length;
+    waiting = false;
+    waitTimer = null;
+  }
+
+  // ── حلقة الحركة ───────────────────────────────────
+  function tick() {
+    if (document.visibilityState === 'hidden') {
+      requestAnimationFrame(tick);
+      return;
+    }
+
+    if (isTouch() && !userTouching) {
+      // الموبايل: حركة تلقائية بين البيوت
+      var wp = CONFIG.waypoints[wpIndex];
+      currX += (wp.x - currX) * CONFIG.lerpMobile;
+      currY += (wp.y - currY) * CONFIG.lerpMobile;
+
+      var dx = wp.x - currX;
+      var dy = wp.y - currY;
+      if (Math.sqrt(dx * dx + dy * dy) < CONFIG.arriveDistance && !waiting) {
+        waiting = true;
+        waitTimer = setTimeout(nextWaypoint, CONFIG.pauseAtHouse);
+      }
+    } else {
+      // اللابتوب (أو أثناء اللمس): تتبّع الإصبع/الماوس
+      var speed = isTouch() ? 0.12 : CONFIG.lerpDesktop;
+      currX += (targetX - currX) * speed;
+      currY += (targetY - currY) * speed;
+    }
+
+    xray.style.setProperty('--mx', currX + '%');
+    xray.style.setProperty('--my', currY + '%');
+
+    requestAnimationFrame(tick);
+  }
+
+  // تنظيف المؤقّت عند إخفاء التبويب
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden' && waitTimer) {
+      clearTimeout(waitTimer);
+      waitTimer = null;
+      waiting = false;
+    }
+  });
+
+  tick();
+})();
+</script>
+
+</body>
+</html>

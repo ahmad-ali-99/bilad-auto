@@ -1,0 +1,304 @@
+/* ══════════════════════════════════════════════════════
+   الإكس راي — بلاد أوتو
+   ══════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────
+   ⚙️  المتغيّرات — عدّل من هنا
+   ───────────────────────────────────────────────── */
+:root {
+  /* الألوان */
+  --gold:      #ffc83d;
+  --gold-soft: #ffd666;
+  --dark:      #0a0e1a;
+  --text:      #e8e0d0;
+  --text-dim:  #c8bfa8;
+
+  /* 🔦 حجم الكشّاف */
+  --spot-size:        190px;   /* اللابتوب */
+  --spot-size-tablet: 150px;
+  --spot-size-mobile: 110px;
+
+  /* نعومة حافة الكشّاف (0 = حافة حادة) */
+  --spot-feather: 24px;
+}
+
+/* ─────────────────────────────────────────────────
+   أساسيات
+   ───────────────────────────────────────────────── */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Cairo', system-ui, sans-serif;
+  background: var(--dark);
+  color: var(--text);
+  overflow-x: hidden;
+}
+
+/* ─────────────────────────────────────────────────
+   حاوية الهيرو
+   ───────────────────────────────────────────────── */
+.hero {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;          /* أدق على الموبايل */
+  min-height: 560px;
+  overflow: hidden;
+  background: var(--dark);
+  cursor: crosshair;       /* مؤشر الكشّاف */
+}
+
+/* ─────────────────────────────────────────────────
+   الطبقات — كلها فوق بعض بنفس المقاس
+   ───────────────────────────────────────────────── */
+.hero-layer {
+  position: absolute;
+  inset: 0;                /* = top/right/bottom/left: 0 */
+  width: 100%;
+  height: 100%;
+}
+
+.layer-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;       /* يملأ الشاشة بدون تشويه */
+  object-position: center;
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* ── الطبقة 1: السقوف ──────────────────────────── */
+.layer-base {
+  z-index: 1;
+}
+
+/* ── الطبقة 2: الإكس راي ───────────────────────── */
+.layer-xray {
+  z-index: 2;
+
+  /* 🔦 الكشّاف: دائرة تكشف هذه الطبقة فقط */
+  clip-path: circle(var(--spot-size) at var(--mx, 50%) var(--my, 50%));
+
+  /* حافة ناعمة للدائرة */
+  -webkit-mask-image: radial-gradient(
+    circle var(--spot-size) at var(--mx, 50%) var(--my, 50%),
+    #000 calc(100% - var(--spot-feather)),
+    transparent 100%
+  );
+  mask-image: radial-gradient(
+    circle var(--spot-size) at var(--mx, 50%) var(--my, 50%),
+    #000 calc(100% - var(--spot-feather)),
+    transparent 100%
+  );
+
+  /* الحركة الناعمة تجي من JS (lerp) — هذا للاحتياط فقط */
+  will-change: clip-path;
+}
+
+/* حلقة ذهبية خفيفة حول الكشّاف */
+.layer-xray::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    circle var(--spot-size) at var(--mx, 50%) var(--my, 50%),
+    transparent calc(100% - 3px),
+    rgba(255, 200, 61, 0.35) calc(100% - 1px),
+    transparent 100%
+  );
+}
+
+/* ── الطبقة 3: السيارة ─────────────────────────── */
+.layer-car {
+  z-index: 3;
+  pointer-events: none;
+}
+
+.car {
+  position: absolute;
+  top: 12%;
+  left: 8%;
+  width: clamp(140px, 20vw, 260px);
+  height: auto;
+  animation: float 6s ease-in-out infinite;
+  filter: drop-shadow(0 20px 40px rgba(255, 200, 61, 0.22));
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0)     rotate(-1deg); }
+  33%      { transform: translateY(-12px) rotate(0.5deg); }
+  66%      { transform: translateY(-6px)  rotate(1deg); }
+}
+
+/* ─────────────────────────────────────────────────
+   تدرّج التعتيم — يخلي النص مقروء
+   ───────────────────────────────────────────────── */
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(10, 14, 26, 0.35) 0%,
+    rgba(10, 14, 26, 0.00) 28%,
+    rgba(10, 14, 26, 0.00) 45%,
+    rgba(10, 14, 26, 0.75) 78%,
+    rgba(10, 14, 26, 0.96) 100%
+  );
+}
+
+/* ─────────────────────────────────────────────────
+   النصوص
+   ───────────────────────────────────────────────── */
+.hero-content {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  padding: 3rem 2rem 4.5rem;
+  text-align: center;
+}
+
+.hero-eyebrow {
+  display: inline-block;
+  background: rgba(255, 200, 61, 0.12);
+  border: 1px solid rgba(255, 200, 61, 0.35);
+  color: var(--gold);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 0.35rem 1.1rem;
+  border-radius: 20px;
+  margin-bottom: 1.2rem;
+  backdrop-filter: blur(6px);
+}
+
+.hero-title {
+  font-size: clamp(2rem, 5.5vw, 4.5rem);
+  font-weight: 900;
+  line-height: 1.15;
+  margin-bottom: 1rem;
+  text-shadow: 0 2px 40px rgba(0, 0, 0, 0.85);
+}
+
+.hero-sub {
+  font-size: clamp(0.95rem, 2vw, 1.25rem);
+  color: var(--text-dim);
+  max-width: 620px;
+  margin: 0 auto 2rem;
+  line-height: 1.75;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.7);
+}
+
+.hero-btn {
+  display: inline-block;
+  background: var(--gold);
+  color: var(--dark);
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 1.05rem;
+  padding: 1rem 2.6rem;
+  border-radius: 50px;
+  text-decoration: none;
+  transition: transform 0.3s, box-shadow 0.3s, background 0.3s;
+}
+
+.hero-btn:hover {
+  background: var(--gold-soft);
+  transform: translateY(-3px);
+  box-shadow: 0 14px 40px rgba(255, 200, 61, 0.4);
+}
+
+/* ─────────────────────────────────────────────────
+   تلميح الكشّاف
+   ───────────────────────────────────────────────── */
+.hero-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 6;
+  pointer-events: none;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.65);
+  background: rgba(10, 14, 26, 0.5);
+  border: 1px solid rgba(255, 200, 61, 0.25);
+  padding: 0.6rem 1.4rem;
+  border-radius: 30px;
+  backdrop-filter: blur(8px);
+  animation: pulse-hint 2.2s ease-in-out infinite;
+  transition: opacity 0.6s, transform 0.6s;
+}
+
+.hero-hint.is-hidden {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.9);
+}
+
+@keyframes pulse-hint {
+  0%, 100% { opacity: 0.75; }
+  50%      { opacity: 1; }
+}
+
+/* إظهار التلميح المناسب حسب الجهاز */
+.hint-mobile  { display: none; }
+@media (hover: none), (pointer: coarse) {
+  .hint-desktop { display: none; }
+  .hint-mobile  { display: inline; }
+  .hero { cursor: default; }
+}
+
+/* ─────────────────────────────────────────────────
+   الاستجابة
+   ───────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .layer-xray {
+    clip-path: circle(var(--spot-size-tablet) at var(--mx, 50%) var(--my, 50%));
+    -webkit-mask-image: radial-gradient(
+      circle var(--spot-size-tablet) at var(--mx, 50%) var(--my, 50%),
+      #000 calc(100% - var(--spot-feather)), transparent 100%);
+    mask-image: radial-gradient(
+      circle var(--spot-size-tablet) at var(--mx, 50%) var(--my, 50%),
+      #000 calc(100% - var(--spot-feather)), transparent 100%);
+  }
+  .layer-xray::after {
+    background: radial-gradient(
+      circle var(--spot-size-tablet) at var(--mx, 50%) var(--my, 50%),
+      transparent calc(100% - 3px),
+      rgba(255, 200, 61, 0.35) calc(100% - 1px),
+      transparent 100%);
+  }
+}
+
+@media (max-width: 640px) {
+  .layer-xray {
+    clip-path: circle(var(--spot-size-mobile) at var(--mx, 50%) var(--my, 50%));
+    -webkit-mask-image: radial-gradient(
+      circle var(--spot-size-mobile) at var(--mx, 50%) var(--my, 50%),
+      #000 calc(100% - 18px), transparent 100%);
+    mask-image: radial-gradient(
+      circle var(--spot-size-mobile) at var(--mx, 50%) var(--my, 50%),
+      #000 calc(100% - 18px), transparent 100%);
+  }
+  .layer-xray::after {
+    background: radial-gradient(
+      circle var(--spot-size-mobile) at var(--mx, 50%) var(--my, 50%),
+      transparent calc(100% - 2px),
+      rgba(255, 200, 61, 0.3) calc(100% - 1px),
+      transparent 100%);
+  }
+
+  .hero-content { padding: 2rem 1.25rem 3rem; }
+  .car { width: 110px; top: 6%; left: 4%; }
+  .hero-hint { font-size: 0.78rem; padding: 0.5rem 1.1rem; }
+}
+
+/* احترام تفضيل تقليل الحركة */
+@media (prefers-reduced-motion: reduce) {
+  .car { animation: none; }
+  .hero-hint { animation: none; }
+}
