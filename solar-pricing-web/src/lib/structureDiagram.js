@@ -96,8 +96,8 @@ export function buildStructurePageHtml(panelCount, company = {}, imgDataUrl = ''
     .join('');
   return `
 <style>
-.mkt-sheet * { box-sizing: border-box; }
-.mkt-sheet { font-family: 'Cairo', sans-serif; direction: rtl; width: 794px; min-height: 1080px; padding: 0 0 26px; position: relative; overflow: hidden;
+.mkt-sheet, .mkt-sheet * { box-sizing: border-box; }
+.mkt-sheet { font-family: 'Cairo', sans-serif; direction: rtl; width: 794px; height: 1122px; padding: 0 0 26px; position: relative; overflow: hidden;
   display: flex; flex-direction: column; background:
   radial-gradient(120% 80% at 82% -12%, #ffe8a8 0%, rgba(255,232,168,0) 40%),
   linear-gradient(180deg, #dff0ff 0%, #eaf6ff 38%, #f3f6f4 70%, #e7eee0 100%); }
@@ -109,8 +109,8 @@ export function buildStructurePageHtml(panelCount, company = {}, imgDataUrl = ''
 .mkt-sheet .hero { position: relative; text-align: center; margin: 8px 24px 0; }
 .mkt-sheet .hero h1 { font-size: 1.68rem; font-weight: 800; color: #12305c; margin: 6px 0 2px; text-shadow: 0 1px 0 #fff; }
 .mkt-sheet .hero p { font-size: 1rem; color: #2c4a72; margin: 0; font-weight: 600; }
-.mkt-sheet .stage { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; padding: 6px 20px; }
-.mkt-sheet .stage img { max-width: 100%; max-height: 560px; height: auto; filter: drop-shadow(0 16px 22px rgba(20,48,92,0.22)); }
+.mkt-sheet .stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 6px 20px; }
+.mkt-sheet .stage img { max-width: 100%; max-height: 100%; height: auto; object-fit: contain; filter: drop-shadow(0 16px 22px rgba(20,48,92,0.22)); }
 .mkt-sheet .count { position: relative; text-align: center; margin: 0 0 10px; font-weight: 800; color: #12305c; font-size: 1.05rem; }
 .mkt-sheet .count b { color: #f5a623; }
 .mkt-sheet .caps { position: relative; display: flex; justify-content: center; gap: 10px; padding: 0 26px; margin: 0 0 12px; flex-wrap: nowrap; }
