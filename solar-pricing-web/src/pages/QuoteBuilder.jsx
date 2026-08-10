@@ -33,6 +33,7 @@ const SYSTEM_TYPES = [
   { key: 'full', label: 'منظومة كاملة', hint: 'ألواح + انفيرتر + بطاريات' },
   { key: 'day', label: 'نهارية بلا بطاريات', hint: 'ألواح + انفيرتر فقط (زراعية ونهارية)' },
   { key: 'offgrid', label: 'أوف جرد (بلا ألواح)', hint: 'انفيرتر + بطاريات وأسلاك — بلا ألواح ولا هيكل' },
+  { key: 'integrated', label: 'سستم متكامل', hint: 'كابينة تجمع البطاريات والانفيرتر بجهاز واحد + ألواح' },
 ];
 
 function fmt(n) {
@@ -122,6 +123,9 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   const savedSecondaryIdsRef = useRef(null);
   const isOffgrid = systemType === 'offgrid';
   const isDayOnly = systemType === 'day';
+  // السستم المتكامل: كابينة وحدة محل البطاريات والانفيرتر، وعددها يدوي
+  const isIntegrated = systemType === 'integrated';
+  const [integratedSel, setIntegratedSel] = useState(savedDraft?.integratedSel ?? { materialId: 0, units: 1 });
 
   useEffect(() => {
     // الملاحظات الافتراضية فقط إذا ماكو ملاحظات قائمة (مسودة محفوظة أو عرض مفتوح للتعديل) —
@@ -190,7 +194,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
           JSON.stringify({
             clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours,
             systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent,
-            installment, installmentPlan, extraUnits, notes, editingQuote, pricingOpen, createdBy,
+            installment, installmentPlan, extraUnits, integratedSel, notes, editingQuote, pricingOpen, createdBy,
           })
         );
       } catch {
@@ -198,7 +202,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       }
     }, 500);
     return () => clearTimeout(t);
-  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits, notes, editingQuote, pricingOpen, createdBy]);
+  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits, integratedSel, notes, editingQuote, pricingOpen, createdBy]);
 
   // 🆕 عرض جديد: تصفير كامل + مسح المسودة المحفوظة + رجوع الثانوية لافتراضياتها
   function startNewQuote() {
@@ -259,6 +263,13 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
     if (p.systemType) {
       setSystemType(p.systemType);
       systemTypeRef.current = p.systemType;
+    }
+    // الكابينة المتكاملة المحفوظة مع العرض ترجع كما هي (اختيارها وعددها)
+    if (p.integratedSel) {
+      setIntegratedSel({
+        materialId: Number(p.integratedSel.materialId) || 0,
+        units: Math.max(1, Number(p.integratedSel.units) || 1),
+      });
     }
     if (p.tier != null) setTier(p.tier);
     if (p.overrides) setOverrides(p.overrides);
@@ -376,8 +387,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
 
   // useMemo ضروري: بدونه الكائن يتجدد بكل رندر → المؤقت ينعاد → حلقة إعادة حساب لا نهائية
   const inputs = useMemo(
-    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits }),
-    [roofAreaM2, ampDay, ampNight, nightSupplyHours, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits]
+    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, integratedSel, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits }),
+    [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, integratedSel, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits]
   );
   const debouncedInputs = useDebouncedValue(inputs, 300);
 
@@ -412,6 +423,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
         installment: debouncedInputs.installment,
         installmentPlan: debouncedInputs.installmentPlan,
         extraUnits: debouncedInputs.extraUnits,
+        systemType: debouncedInputs.systemType,
+        integrated: debouncedInputs.integratedSel,
       })
       .then(setPreview)
       .finally(() => setCalculating(false));
@@ -442,6 +455,9 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       installment,
       installmentPlan,
       extraUnits,
+      // نوع المنظومة والكابينة المتكاملة — بدونهما يرجع العرض المحفوظ بنوع «كاملة»
+      systemType,
+      integrated: integratedSel,
       // الإسناد لحساب أحمد فقط — null = الحساب الحالي عند الحفظ، وإبقاء المنشئ الأصلي عند التعديل
       createdBy: (canAttribute && createdBy) || null,
       notes: notes || [],
@@ -837,7 +853,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
             </div>
           ))}
           {Object.entries(draft.singleOptionCategories)
-            .filter(([, v]) => v)
+            // بالسستم المتكامل ماكو بطارية ولا انفيرتر منفصلين — تنبيهاتهما ضجيج
+            .filter(([cat, v]) => v && !(isIntegrated && (cat === 'battery' || cat === 'inverter')))
             .map(([cat]) => (
               <div className="alert alert-info" key={cat}>
                 خيار وحيد متوفر حالياً لفئة {CATEGORY_LABELS[cat]}
@@ -963,11 +980,45 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
                 )}
                 {draft.capability.nightHours != null && draft.capability.dayAmps != null && ' — '}
                 {draft.capability.dayAmps != null && <span>⚡ الانفيرترات تتحمل ≈{draft.capability.dayAmps} أمبير نهاراً</span>}
+                {draft.capability.threePhaseNote && (
+                  <div style={{ fontWeight: 400, fontSize: '0.82rem', marginTop: 4, color: '#7a5b00' }}>
+                    ⚠ رقم الأمبير تقديري: الكابينة ثلاثية الطور، والمعادلة مبنية على 220 فولت أحادي الطور.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* السستم المتكامل: مبدّل الكابينة وعددها بدل مبدّلي البطارية والانفيرتر */}
+            {isIntegrated && (
+              <div className="grid-2" style={{ marginBottom: 10 }}>
+                <div className="field">
+                  <label>الكابينة المتكاملة</label>
+                  <select
+                    value={integratedSel.materialId || preview?.options?.integratedMaterials?.[0]?.id || ''}
+                    onChange={(e) => setIntegratedSel((v) => ({ ...v, materialId: Number(e.target.value) }))}
+                  >
+                    {(preview?.options?.integratedMaterials || []).map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.brand} {m.model} — {fmt(m.price)} د.ع
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field">
+                  <label>عدد الكابينات</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button type="button" className="btn btn-secondary btn-sm"
+                      onClick={() => setIntegratedSel((v) => ({ ...v, units: Math.max(1, (Number(v.units) || 1) - 1) }))}>−</button>
+                    <b style={{ minWidth: 32, textAlign: 'center', fontSize: '1.1rem' }}>{integratedSel.units || 1}</b>
+                    <button type="button" className="btn btn-secondary btn-sm"
+                      onClick={() => setIntegratedSel((v) => ({ ...v, units: (Number(v.units) || 1) + 1 }))}>+</button>
+                  </div>
+                </div>
               </div>
             )}
 
             <div className="grid-3">
-              {['panel', 'battery', 'inverter'].map((cat) => {
+              {(isIntegrated ? ['panel'] : ['panel', 'battery', 'inverter']).map((cat) => {
                 const tiersResult = tiersResultFor(cat);
                 if (!tiersResult || tiersResult.insufficient || tiersResult.none) return null;
                 const chosenId = overrides[cat] ?? tiersResult[tier]?.material.id;

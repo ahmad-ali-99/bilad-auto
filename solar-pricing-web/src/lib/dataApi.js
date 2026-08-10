@@ -61,6 +61,30 @@ function materialPayload(data) {
   };
 }
 
+// قدرة انفيرتر الكابينة المتكاملة (kW): ماكو عمود إلها بالجدول، فتنخزن بـapp_config
+// بمفتاح integrated_specs_<id> — نفس حيلة quote_adj_<id> المعتمدة (بلا أي DDL).
+async function saveIntegratedKw(materialId, data) {
+  if (data.category !== 'integrated' || data.integrated_kw == null) return;
+  try {
+    await api.config.set(`integrated_specs_${materialId}`, { kw: Number(data.integrated_kw) || 0 });
+  } catch {
+    /* app_config اختياري — المادة انحفظت على أي حال */
+  }
+}
+
+async function withIntegratedKw(rows) {
+  const ids = rows.filter((m) => m.category === 'integrated').map((m) => m.id);
+  if (!ids.length) return rows;
+  try {
+    const { data } = await supabase.from('app_config').select('key,value')
+      .in('key', ids.map((id) => `integrated_specs_${id}`));
+    const byId = new Map((data || []).map((r) => [Number(r.key.replace('integrated_specs_', '')), JSON.parse(r.value || '{}')]));
+    return rows.map((m) => (m.category === 'integrated' ? { ...m, integrated_kw: byId.get(m.id)?.kw ?? null } : m));
+  } catch {
+    return rows;
+  }
+}
+
 async function allMaterials() {
   const { data, error } = await supabase.from('materials').select('*').order('category').order('id');
   throwIf(error);
@@ -126,12 +150,13 @@ export const api = {
       if (category) q = q.eq('category', category);
       const { data, error } = await q;
       throwIf(error);
-      return data || [];
+      return withIntegratedKw(data || []);
     },
     async create(data) {
       await assertCanEdit('المخزون');
       const { data: row, error } = await supabase.from('materials').insert(materialPayload(data)).select().single();
       throwIf(error);
+      await saveIntegratedKw(row.id, data);
       logActivity('إضافة مادة', 'المخزون', { 'المادة': row.full_description, 'السعر': row.price });
       return row;
     },
@@ -141,6 +166,7 @@ export const api = {
       const { data: old } = await supabase.from('materials').select('full_description, price').eq('id', id).maybeSingle();
       const { data: row, error } = await supabase.from('materials').update(materialPayload(data)).eq('id', id).select().single();
       throwIf(error);
+      await saveIntegratedKw(id, data);
       logActivity('تعديل مادة', 'المخزون', {
         'المادة': row.full_description,
         ...(old && old.price !== row.price ? { 'السعر القديم': old.price, 'السعر الجديد': row.price } : { 'السعر': row.price }),
@@ -278,6 +304,15 @@ export const api = {
         months: Number(cfg?.months) > 0 ? Number(cfg.months) : fallback.months,
       };
     },
+    // مواصفات الكابينة المتكاملة: قدرة الانفيرتر بالكيلوواط ما إلها عمود بالجدول،
+    // فتنخزن بـapp_config بمفتاح integrated_specs_<materialId> — نفس حيلة quote_adj_<id>.
+    async _integrated(input) {
+      if (input.systemType !== 'integrated') return null;
+      const materialId = Number(input.integrated?.materialId) || 0;
+      const units = Math.max(1, Math.round(Number(input.integrated?.units) || 1));
+      const specs = materialId ? await api.config.get(`integrated_specs_${materialId}`) : null;
+      return { materialId, units, kw: Number(specs?.kw) || 0 };
+    },
     async _adjustments(input) {
       return { ...(input.adjustments || {}), installment: await this._installment(input) };
     },
@@ -309,6 +344,8 @@ export const api = {
         secondarySelections: input.secondarySelections || null,
         adjustments: await this._adjustments(input),
         extraUnits: input.extraUnits || null,
+        systemType: input.systemType || null,
+        integrated: await this._integrated(input),
       });
       return {
         options: {
@@ -318,6 +355,7 @@ export const api = {
           secondary: options.secondary,
           batteryTiers: options.batteryTiers,
           inverterTiers: options.inverterTiers,
+          integratedMaterials: options.integratedMaterials,
         },
         draft,
       };
@@ -397,14 +435,21 @@ export const api = {
     },
     // نسبة الزيادة/الخصم تنحفظ لكل عرض بجدول app_config (مفتاح quote_adj_<id>)
     // حتى ترجع بوضع التعديل حتى لو كانت الزيادة موزعة (مخفية) بدون سطر ظاهر
-    async _saveAdjustments(quoteId, adjustments, extraUnits, secondarySelections) {
+    async _saveAdjustments(quoteId, adjustments, extraUnits, secondarySelections, input = {}) {
       const a = adjustments || {};
       const x = extraUnits || {};
       const hasExtra = ['panel', 'battery', 'inverter'].some((k) => (Number(x[k]) || 0) !== 0);
       // الاختيارات الثانوية الخام (بكمياتها اليدوية) تنحفظ هم — ذاكرة العرض الكاملة
       const sel = secondarySelections && Object.keys(secondarySelections).length > 0 ? secondarySelections : null;
+      // نوع المنظومة واختيار الكابينة المتكاملة جزء من ذاكرة العرض — بدونهما العرض
+      // المحفوظ يرجع بنوع «كاملة» عند التعديل وتضيع الكابينة
+      const systemType = input.systemType || null;
+      const integratedSel = systemType === 'integrated' && input.integrated?.materialId
+        ? { materialId: Number(input.integrated.materialId), units: Math.max(1, Number(input.integrated.units) || 1) }
+        : null;
       const active =
-        (Number(a.markupPercent) || 0) > 0 || (Number(a.discountPercent) || 0) > 0 || a.installment?.enabled || hasExtra || !!sel;
+        (Number(a.markupPercent) || 0) > 0 || (Number(a.discountPercent) || 0) > 0 || a.installment?.enabled ||
+        hasExtra || !!sel || !!systemType || !!integratedSel;
       try {
         await api.config.set(`quote_adj_${quoteId}`, active ? {
           // ذاكرة المواد الثانوية كما أدخلها البياع — فتح التعديل يرجعها حرفياً
@@ -420,6 +465,8 @@ export const api = {
           extraUnits: hasExtra
             ? { panel: Number(x.panel) || 0, battery: Number(x.battery) || 0, inverter: Number(x.inverter) || 0 }
             : null,
+          systemType,
+          integratedSel,
         } : null);
       } catch {
         /* جدول app_config اختياري — فشله لا يمنع حفظ العرض نفسه */
@@ -483,6 +530,8 @@ export const api = {
         secondarySelections: input.secondarySelections || null,
         adjustments: await this._adjustments(input),
         extraUnits: input.extraUnits || null,
+        systemType: input.systemType || null,
+        integrated: await this._integrated(input),
       });
       const { data: profile } = await supabase.from('company_profile').select('notes_default').eq('id', 1).single();
       const defaultNotes = Array.isArray(profile?.notes_default) ? profile.notes_default : JSON.parse(profile?.notes_default || '[]');
@@ -521,7 +570,7 @@ export const api = {
       const notesPayload = notes.map((note_text, idx) => ({ quote_id: quote.id, note_text, sort_order: idx }));
       if (notesPayload.length) throwIf((await supabase.from('quote_notes').insert(notesPayload)).error);
 
-      await this._saveAdjustments(quote.id, await this._adjustments(input), input.extraUnits, input.secondarySelections);
+      await this._saveAdjustments(quote.id, await this._adjustments(input), input.extraUnits, input.secondarySelections, { systemType: input.systemType, integrated: await this._integrated(input) });
       logActivity('حفظ عرض جديد', 'العروض', {
         'رقم العرض': quote.quote_number, 'العميل': quote.client_name || '-', 'المجموع': quote.total_price,
         ...(input.createdBy ? { 'من طرف': input.createdBy } : {}),
@@ -580,7 +629,7 @@ export const api = {
       const notesPayload = notes.map((note_text, idx) => ({ quote_id: id, note_text, sort_order: idx }));
       if (notesPayload.length) throwIf((await supabase.from('quote_notes').insert(notesPayload)).error);
 
-      await this._saveAdjustments(id, await this._adjustments(input), input.extraUnits, input.secondarySelections);
+      await this._saveAdjustments(id, await this._adjustments(input), input.extraUnits, input.secondarySelections, { systemType: input.systemType, integrated: await this._integrated(input) });
       const transferred = input.createdBy && before?.created_by && input.createdBy !== before.created_by;
       logActivity(transferred ? 'تعديل عرض + تحويل الحساب' : 'تعديل عرض', 'العروض', {
         'رقم العرض': quote.quote_number, 'العميل': quote.client_name || '-',
@@ -683,6 +732,8 @@ export const api = {
         api.config.get(`quote_adj_${id}`).catch(() => null),
       ]);
       // التقسيط انحفظ مع العرض بنسبته وأشهره وقت الحفظ — نعيد حسابه من مجموع العرض
+      // نوع المنظومة المحفوظ يغذي تسمية العرض بالفاتورة («منظومة سستم متكامل»)
+      if (savedAdj?.systemType) quote.system_type = savedAdj.systemType;
       let installment = null;
       const inst = savedAdj?.installment;
       if (inst?.enabled && Number(inst.rate) > 0) {

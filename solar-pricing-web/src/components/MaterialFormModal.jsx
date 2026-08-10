@@ -12,6 +12,7 @@ function emptyForm(category) {
     warranty_months: '',
     warranty_note: '',
     qty_per_panel: category === 'secondary' ? 1 : '',
+    integrated_kw: '',
   };
 }
 
@@ -25,6 +26,7 @@ export default function MaterialFormModal({ category, initial, onClose, onSave }
           warranty_months: initial.warranty_months ?? '',
           warranty_note: initial.warranty_note ?? '',
           qty_per_panel: initial.qty_per_panel ?? '',
+          integrated_kw: initial.integrated_kw ?? '',
         }
       : emptyForm(category)
   );
@@ -46,11 +48,14 @@ export default function MaterialFormModal({ category, initial, onClose, onSave }
       warranty_months: form.warranty_months === '' ? null : Number(form.warranty_months),
       warranty_note: form.warranty_note || null,
       qty_per_panel: form.qty_per_panel === '' ? null : Number(form.qty_per_panel),
+      // قدرة انفيرتر الكابينة (kW) — تنخزن بـapp_config لأن الجدول ما بيه عمود إلها
+      ...(isIntegrated ? { integrated_kw: form.integrated_kw === '' ? null : Number(form.integrated_kw) } : {}),
     });
   }
 
-  const showCapacity = category === 'panel' || category === 'battery' || category === 'inverter';
-  const capacityLabel = category === 'battery' ? 'السعة (kWh)' : 'القدرة (واط)';
+  const isIntegrated = category === 'integrated';
+  const showCapacity = category === 'panel' || category === 'battery' || category === 'inverter' || isIntegrated;
+  const capacityLabel = category === 'battery' || isIntegrated ? 'السعة (kWh)' : 'القدرة (واط)';
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -91,6 +96,12 @@ export default function MaterialFormModal({ category, initial, onClose, onSave }
               <div className="field">
                 <label>{capacityLabel}</label>
                 <input type="number" step="any" value={form.watt_or_capacity} onChange={(e) => set('watt_or_capacity', e.target.value)} required />
+              </div>
+            )}
+            {isIntegrated && (
+              <div className="field">
+                <label>قدرة الانفيرتر بالكابينة (kW)</label>
+                <input type="number" step="any" value={form.integrated_kw} onChange={(e) => set('integrated_kw', e.target.value)} placeholder="مثال: 125" />
               </div>
             )}
             <div className="field">

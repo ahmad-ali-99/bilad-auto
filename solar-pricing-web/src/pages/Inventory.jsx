@@ -9,12 +9,13 @@ const TABS = [
   { key: 'panel', label: 'الألواح' },
   { key: 'battery', label: 'البطاريات' },
   { key: 'inverter', label: 'الانفيرترات' },
+  { key: 'integrated', label: 'سستم متكامل' },
   { key: 'secondary', label: 'مواد ثانوية' },
   { key: 'labor', label: 'أجور العمل' },
 ];
 
 function capacityLabel(category) {
-  if (category === 'battery') return 'السعة (kWh)';
+  if (category === 'battery' || category === 'integrated') return 'السعة (kWh)';
   if (category === 'panel' || category === 'inverter') return 'القدرة (واط)';
   return 'القدرة/السعة';
 }
@@ -34,6 +35,7 @@ export default function Inventory({ initialSearch }) {
     if (!initialSearch || !initialSearch.term) return;
     const term = initialSearch.term;
     if (/بطاري|نضائد|ليثيوم/.test(term)) setTab('battery');
+    else if (/سستم متكامل|متكامل|كابينة|كابينه/.test(term)) setTab('integrated');
     else if (/انفيرتر|انفرتر|عاكس/.test(term)) setTab('inverter');
     else if (/لوح|الواح|ألواح|طاقة/.test(term)) setTab('panel');
     else if (/اجور|أجور|عمل/.test(term)) setTab('labor');

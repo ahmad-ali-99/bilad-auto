@@ -23,14 +23,18 @@ export async function buildEditPrefill(quoteId) {
   }
   // نوع المنظومة يُستنتج من أرقام العرض نفسه (بلا حقل إضافي بالقاعدة) — يشتغل حتى
   // للعروض القديمة: نهار صفر = أوف جرد بلا ألواح، ليل صفر = نهارية بلا بطاريات
+  // النوع المحفوظ يتقدم على الاستنتاج (السستم المتكامل ما ينستنتج من الأمبير)
   const systemType =
-    Number(full.quote.required_amp_day) === 0 ? 'offgrid'
-      : Number(full.quote.required_amp_night) === 0 ? 'day'
-        : 'full';
+    adjustments?.systemType
+      || (Number(full.quote.required_amp_day) === 0 ? 'offgrid'
+        : Number(full.quote.required_amp_night) === 0 ? 'day'
+          : 'full');
 
   return {
     editing: { id: full.quote.id, quote_number: full.quote.quote_number },
     systemType,
+    // الكابينة المتكاملة المختارة وعددها — ترجع كما انحفظت
+    integratedSel: adjustments?.integratedSel || null,
     createdBy: full.quote.created_by || '',
     clientName: full.quote.client_name || '',
     clientPhone: full.quote.client_phone || '',

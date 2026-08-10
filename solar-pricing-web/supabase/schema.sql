@@ -5,7 +5,7 @@
 -- ========== الجداول ==========
 create table if not exists materials (
   id bigint generated always as identity primary key,
-  category text not null check (category in ('panel','battery','inverter','secondary')),
+  category text not null check (category in ('panel','battery','inverter','secondary','integrated')),
   brand text,
   model text,
   full_description text not null,
