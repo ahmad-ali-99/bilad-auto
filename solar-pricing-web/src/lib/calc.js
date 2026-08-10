@@ -328,36 +328,38 @@ function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, pane
 // القدرة الفعلية للتوليفة: ساعات تجهيز الليل من بنك البطاريات، وأمبير النهار اللي
 // يتحمله الانفيرتر. دالة وحدة يستعملها التطبيق (المعاينة الحية) وملف العرض (صفحة
 // التصميم) — حتى الأرقام تبقى متطابقة بالضبط بلا تكرار معادلة.
-// ── السستم المتكامل: معادلة مستقلة تماماً ──────────────────────────────────
-// هاي الكابينات تجارية **ثلاثية الطور 400 فولت**، ومعادلة باقي الأنواع مبنية على
-// 220 فولت أحادي الطور (عرف الأمبيرات بالعراق) — خلطهن يطلّع أرقاماً بلا معنى.
-// فهنا معادلة خاصة ما تمس ولا دالة من مسار البطاريات والانفيرتر.
-const THREE_PHASE_VOLTAGE = 400;
-const SQRT3 = Math.sqrt(3);
+// ── السستم المتكامل: معادلة مستقلة ─────────────────────────────────────────
+// الأمبيرية اللي يكتبها البياع = حمل النشاط التجاري، والكابينة لازم تغذيه.
+// الحساب أحادي الطور على فولتية النظام (قرار المستخدم) — الكابينة نفسها ثلاثية
+// الطور لكن الداتا شيت تكول إنها تشتغل بعدم اتزان 100% أوف جرد، يعني تغذي
+// أحمالاً أحادية الطور بلا مشكلة.
+// من الداتا شيت الرسمية: Rated Charge/Discharge Rate ≤ 0.5P — يعني الكابينة
+// ما تقبل شحن أسرع من ساعتين مهما كبّرنا الألواح.
+const INTEGRATED_MAX_C_RATE = 0.5;
+// نافذة شحن الكابينة من الألواح: 3–4 ساعات (قرار المستخدم) — نعتمد 4 حتى
+// ما ينفخ عدد الألواح، وهي داخل مدى الجهاز أصلاً (0.5P = ساعتين كحد أسرع).
+const INTEGRATED_CHARGE_HOURS = 4;
 
-// أمبير → كيلوواط. ثلاثي الطور: جذر3 × 400 × الأمبير. أحادي: الأمبير × فولتية النظام.
-function integratedLoadKw(amps, phase, systemVoltage) {
+function integratedLoadKw(amps, systemVoltage) {
   const a = Number(amps) || 0;
-  if (a <= 0) return 0;
-  return phase === 'single'
-    ? (a * systemVoltage) / 1000
-    : (SQRT3 * THREE_PHASE_VOLTAGE * a) / 1000;
+  return a > 0 ? (a * systemVoltage) / 1000 : 0;
 }
 
 // حاجة المشروع: قدرة (kW) للحمل الأكبر، وسعة (kWh) لتغطية الليل بعمق التفريغ
-function integratedRequired(ampDay, ampNight, nightSupplyHours, settings, phase = 'three') {
+function integratedRequired(ampDay, ampNight, nightSupplyHours, settings) {
   const { systemVoltage, inverterSafetyFactor, dod } = settings;
-  const dayLoadKw = integratedLoadKw(ampDay, phase, systemVoltage);
-  const nightLoadKw = integratedLoadKw(ampNight, phase, systemVoltage);
+  const dayLoadKw = integratedLoadKw(ampDay, systemVoltage);
+  const nightLoadKw = integratedLoadKw(ampNight, systemVoltage);
   const requiredKw = Math.max(dayLoadKw, nightLoadKw) * (inverterSafetyFactor || 1);
   const hours = Number(nightSupplyHours) || 0;
-  const requiredKwh = nightLoadKw > 0 && hours > 0 ? (nightLoadKw * hours) / dod : 0;
-  return { requiredKw, requiredKwh, dayLoadKw, nightLoadKw, phase };
+  // الطاقة المسحوبة ليلاً فعلياً + السعة اللازمة بعد عمق التفريغ
+  const nightEnergyKwh = nightLoadKw > 0 && hours > 0 ? nightLoadKw * hours : 0;
+  const requiredKwh = nightEnergyKwh > 0 ? nightEnergyKwh / dod : 0;
+  return { requiredKw, requiredKwh, nightEnergyKwh, dayLoadKw, nightLoadKw };
 }
 
-// توليفات الكابينات مرتّبة بالسعر — الأرخص إجمالاً هو الاختيار التلقائي
-function selectIntegratedCombos(integratedMaterials, ampDay, ampNight, nightSupplyHours, settings, phase = 'three') {
-  const req = integratedRequired(ampDay, ampNight, nightSupplyHours, settings, phase);
+function selectIntegratedCombos(integratedMaterials, ampDay, ampNight, nightSupplyHours, settings) {
+  const req = integratedRequired(ampDay, ampNight, nightSupplyHours, settings);
   const combos = [];
   for (const material of integratedMaterials) {
     const kw = Number(material.integrated_kw) || 0;
@@ -368,8 +370,7 @@ function selectIntegratedCombos(integratedMaterials, ampDay, ampNight, nightSupp
     combos.push({
       material, units, kw, kwh,
       totalPrice: material.price * units,
-      totalKw: kw * units,
-      totalKwh: kwh * units,
+      totalKw: kw * units, totalKwh: kwh * units,
       driver: byKwh > byKw ? 'kwh' : 'kw',
     });
   }
@@ -377,44 +378,45 @@ function selectIntegratedCombos(integratedMaterials, ampDay, ampNight, nightSupp
   return { combos, ...req };
 }
 
-// ألواح السستم المتكامل: تنحسب بالطاقة مو بالأمبير — طاقة النهار المباشرة + الطاقة
-// اللي تنسحب ليلاً ولازم ترجع تنشحن، الكل مقسوم على ساعات شمس العراق وكفاءة المنظومة.
-function integratedPanelsRequired({ dayLoadKw, nightLoadKw, nightSupplyHours, settings, panelWatt }) {
-  const sun = IRAQ_SUN_HOURS;
+// ألواح السستم المتكامل: تغذية الحمل النهاري + شحن الطاقة المسحوبة ليلاً خلال
+// نافذة 4 ساعات (مو دفعة وحدة بساعة) — وقدرة الشحن محدودة بـ0.5P من الداتا شيت.
+function integratedChargeKw(nightEnergyKwh, bankKwh) {
+  if (!(nightEnergyKwh > 0)) return 0;
+  const wanted = nightEnergyKwh / INTEGRATED_CHARGE_HOURS;
+  const deviceMax = bankKwh > 0 ? bankKwh * INTEGRATED_MAX_C_RATE : Infinity;
+  return Math.min(wanted, deviceMax);
+}
+
+function integratedPanelsRequired({ dayLoadKw, nightEnergyKwh, bankKwh, settings, panelWatt }) {
   const eff = settings.systemEfficiency || 0.8;
-  const hours = Number(nightSupplyHours) || 0;
-  const dayEnergyKwh = dayLoadKw * sun;              // الحمل النهاري ينتغذى مباشرة
-  const nightEnergyKwh = nightLoadKw * hours;        // الطاقة المسحوبة ليلاً لازم تنشحن نهاراً
-  const neededKwh = (dayEnergyKwh + nightEnergyKwh) / eff;
-  if (neededKwh <= 0 || !(panelWatt > 0)) return 0;
-  const arrayKw = neededKwh / sun;                   // قدرة المصفوفة اللازمة
+  const arrayKw = (dayLoadKw + integratedChargeKw(nightEnergyKwh, bankKwh)) / eff;
+  if (!(arrayKw > 0) || !(panelWatt > 0)) return 0;
   return Math.ceil((arrayKw * 1000) / panelWatt);
 }
 
-// قدرة الكابينة الفعلية — بنفس معادلة الطور المستعملة بالتحجيم، مو معادلة الـ220.
-// ساعات الليل = السعة المتاحة ÷ حمل الليل بالكيلوواط، وأمبير النهار = القدرة ÷ كيلوواط الأمبير.
-function integratedCapability({ units, kwh, kw, nightLoadKw, dod, phase, systemVoltage }) {
-  const kwPerAmp = phase === 'single' ? systemVoltage / 1000 : (SQRT3 * THREE_PHASE_VOLTAGE) / 1000;
-  const nightHours =
-    units > 0 && kwh > 0 && nightLoadKw > 0
-      ? Math.round(((units * kwh * dod) / nightLoadKw) * 10) / 10
-      : null;
-  const dayAmps = units > 0 && kw > 0 ? Math.floor((units * kw) / kwPerAmp) : null;
-  return { nightHours, dayAmps };
-}
-
-function selectIntegratedPanelTiers(panelMaterials, req, nightSupplyHours, settings) {
+function selectIntegratedPanelTiers(panelMaterials, req, bankKwh, settings) {
   const combos = [];
   for (const material of panelMaterials) {
     const units = integratedPanelsRequired({
-      dayLoadKw: req.dayLoadKw, nightLoadKw: req.nightLoadKw,
-      nightSupplyHours, settings, panelWatt: material.watt_or_capacity,
+      dayLoadKw: req.dayLoadKw || 0, nightEnergyKwh: req.nightEnergyKwh || 0,
+      bankKwh, settings, panelWatt: material.watt_or_capacity,
     });
     if (units <= 0) continue;
     combos.push({ material, units, feedPanels: units, chargePanels: 0, totalPrice: units * material.price });
   }
   if (!combos.length) return noneResult();
   return classifyTiers(combos);
+}
+
+// قدرة الكابينة الفعلية — بنفس معادلة التحجيم (أحادي الطور على فولتية النظام)
+function integratedCapability({ units, kwh, kw, nightLoadKw, dod, systemVoltage }) {
+  const nightHours =
+    units > 0 && kwh > 0 && nightLoadKw > 0
+      ? Math.round(((units * kwh * dod) / nightLoadKw) * 10) / 10
+      : null;
+  const dayAmps = units > 0 && kw > 0 ? Math.floor((units * kw * 1000) / systemVoltage) : null;
+  // ساعات الشحن الفعلية بالمصفوفة المختارة — تظهر للبياع حتى يتأكد إنها 3-4 ساعات
+  return { nightHours, dayAmps };
 }
 
 function capabilityOf({
@@ -450,8 +452,11 @@ export {
   integratedLoadKw,
   selectIntegratedCombos,
   integratedPanelsRequired,
+  integratedChargeKw,
   selectIntegratedPanelTiers,
   integratedCapability,
+  INTEGRATED_CHARGE_HOURS,
+  INTEGRATED_MAX_C_RATE,
   systemAmpSize,
   pickLaborTier,
   capabilityOf,

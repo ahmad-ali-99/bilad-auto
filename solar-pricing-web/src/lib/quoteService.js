@@ -26,7 +26,7 @@ function mapSettings(row) {
 }
 
 // يبني كائن الخيارات من المصفوفات المجلوبة — بدل computeOptions القديمة المرتبطة بقاعدة بيانات
-function buildOptions({ materials, laborTiers, settingsRow, roofAreaM2, ampDay, ampNight, nightSupplyHours, batteryFactors = null, integratedPhase = 'three' }) {
+function buildOptions({ materials, laborTiers, settingsRow, roofAreaM2, ampDay, ampNight, nightSupplyHours, batteryFactors = null }) {
   const settings = mapSettings(settingsRow);
   const supplyHours = nightSupplyHours != null && nightSupplyHours !== '' ? Number(nightSupplyHours) : settings.nightCoverageHours;
 
@@ -41,7 +41,7 @@ function buildOptions({ materials, laborTiers, settingsRow, roofAreaM2, ampDay, 
   const systemAmps = calc.systemAmpSize(ampDay, ampNight);
   const batteryTiers = calc.selectBatteryTiers(batteries, ampNight, supplyHours, settings, { factors: batteryFactors, systemAmps });
   // الكابينات المتكاملة: التحجيم تلقائي بالقدرة والسعة سوية، والأرخص إجمالاً هو الافتراضي
-  const integratedResult = calc.selectIntegratedCombos(integratedMaterials, ampDay, ampNight, supplyHours, settings, integratedPhase);
+  const integratedResult = calc.selectIntegratedCombos(integratedMaterials, ampDay, ampNight, supplyHours, settings);
   const labor = calc.pickLaborTier(laborTiers, systemAmps);
 
   return {
@@ -57,7 +57,7 @@ function buildOptions({ materials, laborTiers, settingsRow, roofAreaM2, ampDay, 
     integratedRequired: {
       kw: integratedResult.requiredKw, kwh: integratedResult.requiredKwh,
       dayLoadKw: integratedResult.dayLoadKw, nightLoadKw: integratedResult.nightLoadKw,
-      phase: integratedResult.phase,
+      nightEnergyKwh: integratedResult.nightEnergyKwh,
     },
     secondary,
     labor,
@@ -242,7 +242,11 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
   // بالسستم المتكامل الألواح تنحجّم بالطاقة (شحن الكابينة + الحمل النهاري) —
   // معادلة مستقلة ما تمر بمسار «لوح لكل بطارية» اللي ما إله معنى مع كابينة وحدة
   const panelTiers = isIntegrated
-    ? calc.selectIntegratedPanelTiers(panelMaterials, integratedRequired || {}, nightSupplyHours, settings)
+    ? calc.selectIntegratedPanelTiers(
+        panelMaterials, integratedRequired || {},
+        integratedPick ? integratedPick.kwh * integratedPick.units : 0,
+        settings,
+      )
     : calc.selectPanelTiers(panelMaterials, ampDay, batteryCount, settings);
   const panelComboBase = pickCombo(panelTiers, tier, overrides, 'panel', errors);
   const panelCombo = adjustCombo(panelComboBase, extra.panel, 1);
@@ -400,10 +404,9 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
             kw: integratedPick.kw,
             nightLoadKw: integratedRequired?.nightLoadKw || 0,
             dod: settings.dod,
-            phase: integratedRequired?.phase || 'three',
             systemVoltage: settings.systemVoltage,
           }),
-          phase: integratedRequired?.phase || 'three',
+          chargeHours: calc.INTEGRATED_CHARGE_HOURS,
         }
       : calc.capabilityOf({
           batteryUnits: batteryCombo ? batteryCombo.units : 0,
