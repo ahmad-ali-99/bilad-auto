@@ -328,43 +328,93 @@ function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, pane
 // القدرة الفعلية للتوليفة: ساعات تجهيز الليل من بنك البطاريات، وأمبير النهار اللي
 // يتحمله الانفيرتر. دالة وحدة يستعملها التطبيق (المعاينة الحية) وملف العرض (صفحة
 // التصميم) — حتى الأرقام تبقى متطابقة بالضبط بلا تكرار معادلة.
-// ── السستم المتكامل ────────────────────────────────────────────────────────
-// الكابينة تجمع البطاريات والانفيرتر بجهاز واحد، فتحجيمها لازم يغطي الاثنين سوية:
-//   • القدرة (kW): نفس معادلة الانفيرتر — الحمل × الفولتية × معامل الأمان
-//   • السعة (kWh): نفس معادلة البطاريات — طاقة الليل ÷ عمق التفريغ
-// والعدد النهائي هو الأكبر بين الاثنين حتى ما تنقص لا قدرة ولا سعة.
-// الفولتية المستعملة هي نفس فولتية النظام بالإعدادات (220) — الحمل بالعراق يتقاس
-// بالأمبير على هذا الأساس، وكون الكابينة نفسها ثلاثية الطور شي يخص توصيلها مو الحمل.
-function integratedRequired(ampDay, ampNight, nightSupplyHours, settings) {
-  const { systemVoltage, inverterSafetyFactor, dod } = settings;
-  const requiredKw = (Math.max(ampDay, ampNight) * systemVoltage * inverterSafetyFactor) / 1000;
-  const requiredKwh = ampNight > 0 ? (ampNight * systemVoltage * nightSupplyHours) / 1000 / dod : 0;
-  return { requiredKw, requiredKwh };
+// ── السستم المتكامل: معادلة مستقلة تماماً ──────────────────────────────────
+// هاي الكابينات تجارية **ثلاثية الطور 400 فولت**، ومعادلة باقي الأنواع مبنية على
+// 220 فولت أحادي الطور (عرف الأمبيرات بالعراق) — خلطهن يطلّع أرقاماً بلا معنى.
+// فهنا معادلة خاصة ما تمس ولا دالة من مسار البطاريات والانفيرتر.
+const THREE_PHASE_VOLTAGE = 400;
+const SQRT3 = Math.sqrt(3);
+
+// أمبير → كيلوواط. ثلاثي الطور: جذر3 × 400 × الأمبير. أحادي: الأمبير × فولتية النظام.
+function integratedLoadKw(amps, phase, systemVoltage) {
+  const a = Number(amps) || 0;
+  if (a <= 0) return 0;
+  return phase === 'single'
+    ? (a * systemVoltage) / 1000
+    : (SQRT3 * THREE_PHASE_VOLTAGE * a) / 1000;
 }
 
-// توليفات الكابينات المتاحة مرتّبة بالسعر — الأرخص إجمالاً هي الاختيار التلقائي،
-// والباقي يبقى معروضاً بالمبدّل اليدوي مع قدرته وسعته.
-function selectIntegratedCombos(integratedMaterials, ampDay, ampNight, nightSupplyHours, settings) {
-  const { requiredKw, requiredKwh } = integratedRequired(ampDay, ampNight, nightSupplyHours, settings);
+// حاجة المشروع: قدرة (kW) للحمل الأكبر، وسعة (kWh) لتغطية الليل بعمق التفريغ
+function integratedRequired(ampDay, ampNight, nightSupplyHours, settings, phase = 'three') {
+  const { systemVoltage, inverterSafetyFactor, dod } = settings;
+  const dayLoadKw = integratedLoadKw(ampDay, phase, systemVoltage);
+  const nightLoadKw = integratedLoadKw(ampNight, phase, systemVoltage);
+  const requiredKw = Math.max(dayLoadKw, nightLoadKw) * (inverterSafetyFactor || 1);
+  const hours = Number(nightSupplyHours) || 0;
+  const requiredKwh = nightLoadKw > 0 && hours > 0 ? (nightLoadKw * hours) / dod : 0;
+  return { requiredKw, requiredKwh, dayLoadKw, nightLoadKw, phase };
+}
+
+// توليفات الكابينات مرتّبة بالسعر — الأرخص إجمالاً هو الاختيار التلقائي
+function selectIntegratedCombos(integratedMaterials, ampDay, ampNight, nightSupplyHours, settings, phase = 'three') {
+  const req = integratedRequired(ampDay, ampNight, nightSupplyHours, settings, phase);
   const combos = [];
   for (const material of integratedMaterials) {
     const kw = Number(material.integrated_kw) || 0;
     const kwh = Number(material.watt_or_capacity) || 0;
-    // كابينة بلا قدرة معرّفة ما نكدر نحجّمها — تنعرض بالمبدّل بوحدة وحدة
-    const byKw = kw > 0 && requiredKw > 0 ? Math.ceil(requiredKw / kw) : 1;
-    const byKwh = kwh > 0 && requiredKwh > 0 ? Math.ceil(requiredKwh / kwh) : 1;
+    const byKw = kw > 0 && req.requiredKw > 0 ? Math.ceil(req.requiredKw / kw) : 1;
+    const byKwh = kwh > 0 && req.requiredKwh > 0 ? Math.ceil(req.requiredKwh / kwh) : 1;
     const units = Math.max(1, byKw, byKwh);
     combos.push({
       material, units, kw, kwh,
       totalPrice: material.price * units,
       totalKw: kw * units,
       totalKwh: kwh * units,
-      // شنو اللي فرض العدد — يظهر بالمبدّل حتى يفهم البياع ليش طلع هذا العدد
       driver: byKwh > byKw ? 'kwh' : 'kw',
     });
   }
   combos.sort((a, b) => a.totalPrice - b.totalPrice || a.units - b.units);
-  return { combos, requiredKw, requiredKwh };
+  return { combos, ...req };
+}
+
+// ألواح السستم المتكامل: تنحسب بالطاقة مو بالأمبير — طاقة النهار المباشرة + الطاقة
+// اللي تنسحب ليلاً ولازم ترجع تنشحن، الكل مقسوم على ساعات شمس العراق وكفاءة المنظومة.
+function integratedPanelsRequired({ dayLoadKw, nightLoadKw, nightSupplyHours, settings, panelWatt }) {
+  const sun = IRAQ_SUN_HOURS;
+  const eff = settings.systemEfficiency || 0.8;
+  const hours = Number(nightSupplyHours) || 0;
+  const dayEnergyKwh = dayLoadKw * sun;              // الحمل النهاري ينتغذى مباشرة
+  const nightEnergyKwh = nightLoadKw * hours;        // الطاقة المسحوبة ليلاً لازم تنشحن نهاراً
+  const neededKwh = (dayEnergyKwh + nightEnergyKwh) / eff;
+  if (neededKwh <= 0 || !(panelWatt > 0)) return 0;
+  const arrayKw = neededKwh / sun;                   // قدرة المصفوفة اللازمة
+  return Math.ceil((arrayKw * 1000) / panelWatt);
+}
+
+// قدرة الكابينة الفعلية — بنفس معادلة الطور المستعملة بالتحجيم، مو معادلة الـ220.
+// ساعات الليل = السعة المتاحة ÷ حمل الليل بالكيلوواط، وأمبير النهار = القدرة ÷ كيلوواط الأمبير.
+function integratedCapability({ units, kwh, kw, nightLoadKw, dod, phase, systemVoltage }) {
+  const kwPerAmp = phase === 'single' ? systemVoltage / 1000 : (SQRT3 * THREE_PHASE_VOLTAGE) / 1000;
+  const nightHours =
+    units > 0 && kwh > 0 && nightLoadKw > 0
+      ? Math.round(((units * kwh * dod) / nightLoadKw) * 10) / 10
+      : null;
+  const dayAmps = units > 0 && kw > 0 ? Math.floor((units * kw) / kwPerAmp) : null;
+  return { nightHours, dayAmps };
+}
+
+function selectIntegratedPanelTiers(panelMaterials, req, nightSupplyHours, settings) {
+  const combos = [];
+  for (const material of panelMaterials) {
+    const units = integratedPanelsRequired({
+      dayLoadKw: req.dayLoadKw, nightLoadKw: req.nightLoadKw,
+      nightSupplyHours, settings, panelWatt: material.watt_or_capacity,
+    });
+    if (units <= 0) continue;
+    combos.push({ material, units, feedPanels: units, chargePanels: 0, totalPrice: units * material.price });
+  }
+  if (!combos.length) return noneResult();
+  return classifyTiers(combos);
 }
 
 function capabilityOf({
@@ -397,7 +447,11 @@ export {
   requiredRoofArea,
   inverterCapacityRequired,
   integratedRequired,
+  integratedLoadKw,
   selectIntegratedCombos,
+  integratedPanelsRequired,
+  selectIntegratedPanelTiers,
+  integratedCapability,
   systemAmpSize,
   pickLaborTier,
   capabilityOf,

@@ -22,6 +22,8 @@ const opts = (input, cabinets = [BIG]) =>
 const small = { roofAreaM2: 500, ampDay: 20, ampNight: 15, nightSupplyHours: 8 };
 const draftOf = (o, extra = {}) => buildQuoteDraft(o, { tier: 'economy', systemType: 'integrated', secondarySelections: {}, ...extra });
 const cabinetLine = (d) => d.items.find((i) => [BIG.id, SMALL.id].includes(i.material_id));
+// معادلة السستم المتكامل مستقلة: ثلاثي الطور 400 فولت (جذر3 × 400 × الأمبير)
+const KW_PER_AMP_3PH = (Math.sqrt(3) * 400) / 1000;
 
 describe('السستم المتكامل: التحجيم التلقائي', () => {
   it('يضيف بند الكابينة ولا يضيف بطارية ولا انفيرتر منفصلين', () => {
@@ -31,18 +33,42 @@ describe('السستم المتكامل: التحجيم التلقائي', () =>
     expect(ids).not.toContain(2);
   });
 
+  it('الأمبير يتحول بمعادلة ثلاثية الطور مو معادلة الـ220', () => {
+    const d = draftOf(opts({ ...small, ampDay: 300, ampNight: 0, nightSupplyHours: 0 }));
+    // 300 أمبير ثلاثي الطور = 207.8 kW (مو 66 kW مثل معادلة 220 أحادي الطور)
+    expect(d.integrated.required.dayLoadKw).toBeCloseTo(300 * KW_PER_AMP_3PH, 3);
+    expect(d.integrated.required.dayLoadKw).toBeGreaterThan(200);
+  });
+
+  it('الطور الأحادي يعطي معادلة الفولتية العادية', () => {
+    const o = buildOptions({
+      materials: [...BASE_MATERIALS, BIG], laborTiers: LABOR, settingsRow: SETTINGS_ROW,
+      ...small, ampDay: 300, ampNight: 0, nightSupplyHours: 0, integratedPhase: 'single',
+    });
+    expect(draftOf(o).integrated.required.dayLoadKw).toBeCloseTo((300 * 220) / 1000, 3);
+  });
+
   it('العدد ينحسب من القدرة المطلوبة (kW)', () => {
-    // حمل 600 أمبير نهاراً = 600×220×1.25 ÷ 1000 = 165 kW ← كابينة 125 kW ما تكفي، فلازم 2
     const d = draftOf(opts({ ...small, ampDay: 600, ampNight: 0, nightSupplyHours: 0 }));
-    expect(cabinetLine(d).quantity).toBe(2);
-    expect(d.integrated.required.kw).toBeCloseTo(165, 5);
+    const reqKw = 600 * KW_PER_AMP_3PH * 1.25;
+    expect(d.integrated.required.kw).toBeCloseTo(reqKw, 3);
+    expect(cabinetLine(d).quantity).toBe(Math.ceil(reqKw / 125));
   });
 
   it('العدد ينحسب من السعة المطلوبة (kWh) إذا هي الأكبر', () => {
-    // 600 أمبير ليلاً لـ8 ساعات = 1056 kWh ÷ 0.9 = 1173.3 ← كابينة 261 kWh ← 5 كابينات
     const d = draftOf(opts({ ...small, ampDay: 0, ampNight: 600, nightSupplyHours: 8 }));
-    expect(cabinetLine(d).quantity).toBe(5);
+    const reqKwh = (600 * KW_PER_AMP_3PH * 8) / 0.9;
+    expect(d.integrated.required.kwh).toBeCloseTo(reqKwh, 3);
+    expect(cabinetLine(d).quantity).toBe(Math.ceil(reqKwh / 261));
     expect(d.integrated.options.find((o) => o.id === BIG.id).driver).toBe('kwh');
+  });
+
+  it('الألواح تنحجّم بالطاقة (شحن الكابينة + حمل النهار) مو بمعادلة اللوح لكل بطارية', () => {
+    const d = draftOf(opts({ ...small, ampDay: 100, ampNight: 100, nightSupplyHours: 8 }));
+    const dayKw = 100 * KW_PER_AMP_3PH;
+    const neededKwh = (dayKw * 7 + dayKw * 8) / 0.8;
+    expect(d.items.find((i) => i.material_id === 1).quantity)
+      .toBe(Math.ceil(((neededKwh / 7) * 1000) / 650));
   });
 
   it('يختار الأرخص إجمالاً لما تكفي أكثر من كابينة', () => {
@@ -77,12 +103,12 @@ describe('السستم المتكامل: التحجيم التلقائي', () =>
     expect(d.integrated.options).toHaveLength(2);
   });
 
-  it('القدرة تُحسب من الكابينة المختارة مع تنبيه الطور الثلاثي', () => {
+  it('القدرة تُحسب بمعادلة الطور نفسها اللي حجّمت الكابينة', () => {
     const d = draftOf(opts(small), { extraUnits: { integrated: 1 } }); // كابينتين
-    const expectedHours = Math.round(((2 * 261 * 0.9 * 1000) / (15 * 220)) * 10) / 10;
-    expect(d.capability.nightHours).toBe(expectedHours);
-    expect(d.capability.dayAmps).toBe(Math.floor((2 * 125000) / (220 * 1.25)));
-    expect(d.capability.threePhaseNote).toBe(true);
+    const nightLoadKw = 15 * KW_PER_AMP_3PH;
+    expect(d.capability.nightHours).toBe(Math.round(((2 * 261 * 0.9) / nightLoadKw) * 10) / 10);
+    expect(d.capability.dayAmps).toBe(Math.floor((2 * 125) / KW_PER_AMP_3PH));
+    expect(d.capability.phase).toBe('three');
   });
 
   it('يوقف العرض إذا طلع عدد كابينات غير منطقي (مدخلات غلط)', () => {

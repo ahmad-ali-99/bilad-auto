@@ -126,6 +126,9 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   // السستم المتكامل: كابينة وحدة محل البطاريات والانفيرتر — التحجيم تلقائي
   // والتبديل والعدد يمشون بنفس مسار باقي الفئات (overrides + extraUnits)
   const isIntegrated = systemType === 'integrated';
+  // طور الحمل بالسستم المتكامل: هالكابينات تجارية ثلاثية الطور 400 فولت (الافتراضي)،
+  // والأحادي 220 يبقى متاح للمشاريع الصغيرة — والكيلوواط المحسوب يظهر حياً حتى ما ينخبى شي
+  const [integratedPhase, setIntegratedPhase] = useState(savedDraft?.integratedPhase ?? 'three');
 
   useEffect(() => {
     // الملاحظات الافتراضية فقط إذا ماكو ملاحظات قائمة (مسودة محفوظة أو عرض مفتوح للتعديل) —
@@ -194,7 +197,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
           JSON.stringify({
             clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours,
             systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent,
-            installment, installmentPlan, extraUnits, notes, editingQuote, pricingOpen, createdBy,
+            installment, installmentPlan, extraUnits, integratedPhase, notes, editingQuote, pricingOpen, createdBy,
           })
         );
       } catch {
@@ -202,7 +205,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       }
     }, 500);
     return () => clearTimeout(t);
-  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits, notes, editingQuote, pricingOpen, createdBy]);
+  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, integratedPhase, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits, notes, editingQuote, pricingOpen, createdBy]);
 
   // 🆕 عرض جديد: تصفير كامل + مسح المسودة المحفوظة + رجوع الثانوية لافتراضياتها
   function startNewQuote() {
@@ -380,8 +383,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
 
   // useMemo ضروري: بدونه الكائن يتجدد بكل رندر → المؤقت ينعاد → حلقة إعادة حساب لا نهائية
   const inputs = useMemo(
-    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits }),
-    [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits]
+    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, integratedPhase, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits }),
+    [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, integratedPhase, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits]
   );
   const debouncedInputs = useDebouncedValue(inputs, 300);
 
@@ -417,6 +420,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
         installmentPlan: debouncedInputs.installmentPlan,
         extraUnits: debouncedInputs.extraUnits,
         systemType: debouncedInputs.systemType,
+        integratedPhase: debouncedInputs.integratedPhase,
       })
       .then(setPreview)
       .finally(() => setCalculating(false));
@@ -449,6 +453,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       extraUnits,
       // نوع المنظومة والكابينة المتكاملة — بدونهما يرجع العرض المحفوظ بنوع «كاملة»
       systemType,
+      integratedPhase,
       // الإسناد لحساب أحمد فقط — null = الحساب الحالي عند الحفظ، وإبقاء المنشئ الأصلي عند التعديل
       createdBy: (canAttribute && createdBy) || null,
       notes: notes || [],
@@ -614,6 +619,39 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
             </button>
           ))}
         </div>
+
+        {/* السستم المتكامل: طور الحمل + الكيلوواط المحسوب — ظاهر حتى ما ينخبى أي تحويل */}
+        {isIntegrated && (
+          <div style={{ background: '#f2f6fb', border: '1px dashed #b9c9da', borderRadius: 12, padding: '10px 12px', marginBottom: 12 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <b style={{ color: 'var(--navy)', fontSize: '0.9rem' }}>طور الحمل:</b>
+              {[
+                { key: 'three', label: 'ثلاثي الطور 400 فولت' },
+                { key: 'single', label: 'أحادي الطور 220 فولت' },
+              ].map((ph) => (
+                <button
+                  key={ph.key}
+                  type="button"
+                  className={integratedPhase === ph.key ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
+                  onClick={() => setIntegratedPhase(ph.key)}
+                >
+                  {ph.label}
+                </button>
+              ))}
+            </div>
+            {preview?.draft?.integrated?.required && (
+              <div style={{ marginTop: 8, fontSize: '0.86rem', color: '#12456f' }}>
+                الحمل المحسوب: <b>{Math.round(preview.draft.integrated.required.dayLoadKw || 0)} kW نهاراً</b>
+                {' · '}
+                <b>{Math.round(preview.draft.integrated.required.nightLoadKw || 0)} kW ليلاً</b>
+                {' — '}المطلوب من الكابينة: <b>{Math.ceil(preview.draft.integrated.required.kw || 0)} kW</b>
+                {preview.draft.integrated.required.kwh > 0 && (
+                  <> و <b>{Math.ceil(preview.draft.integrated.required.kwh)} kWh</b></>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className={isOffgrid ? 'big-inputs' : 'big-inputs big-inputs-4'}>
           {/* الأوف جرد ما يحتاج مساحة سطح (بلا ألواح ولا هيكل) */}
@@ -976,9 +1014,9 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
                 {draft.capability.dayAmps != null && (
                   <span>⚡ {isIntegrated ? 'الكابينة تتحمل' : 'الانفيرترات تتحمل'} ≈{draft.capability.dayAmps} أمبير نهاراً</span>
                 )}
-                {draft.capability.threePhaseNote && (
-                  <div style={{ fontWeight: 400, fontSize: '0.82rem', marginTop: 4, color: '#7a5b00' }}>
-                    ⚠ رقم الأمبير تقديري: الكابينة ثلاثية الطور، والمعادلة مبنية على 220 فولت أحادي الطور.
+                {draft.capability.phase && (
+                  <div style={{ fontWeight: 400, fontSize: '0.82rem', marginTop: 4, color: '#5b6b7c' }}>
+                    محسوبة على {draft.capability.phase === 'single' ? 'أحادي الطور 220 فولت' : 'ثلاثي الطور 400 فولت'}
                   </div>
                 )}
               </div>

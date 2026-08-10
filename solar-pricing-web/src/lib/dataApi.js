@@ -329,6 +329,7 @@ export const api = {
         ampNight: input.ampNight,
         nightSupplyHours: input.nightSupplyHours,
         batteryFactors: batteryFactors || null,
+        integratedPhase: input.integratedPhase || 'three',
       });
     },
     async preview(input) {

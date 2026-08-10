@@ -26,7 +26,7 @@ function mapSettings(row) {
 }
 
 // يبني كائن الخيارات من المصفوفات المجلوبة — بدل computeOptions القديمة المرتبطة بقاعدة بيانات
-function buildOptions({ materials, laborTiers, settingsRow, roofAreaM2, ampDay, ampNight, nightSupplyHours, batteryFactors = null }) {
+function buildOptions({ materials, laborTiers, settingsRow, roofAreaM2, ampDay, ampNight, nightSupplyHours, batteryFactors = null, integratedPhase = 'three' }) {
   const settings = mapSettings(settingsRow);
   const supplyHours = nightSupplyHours != null && nightSupplyHours !== '' ? Number(nightSupplyHours) : settings.nightCoverageHours;
 
@@ -41,7 +41,7 @@ function buildOptions({ materials, laborTiers, settingsRow, roofAreaM2, ampDay, 
   const systemAmps = calc.systemAmpSize(ampDay, ampNight);
   const batteryTiers = calc.selectBatteryTiers(batteries, ampNight, supplyHours, settings, { factors: batteryFactors, systemAmps });
   // الكابينات المتكاملة: التحجيم تلقائي بالقدرة والسعة سوية، والأرخص إجمالاً هو الافتراضي
-  const integratedResult = calc.selectIntegratedCombos(integratedMaterials, ampDay, ampNight, supplyHours, settings);
+  const integratedResult = calc.selectIntegratedCombos(integratedMaterials, ampDay, ampNight, supplyHours, settings, integratedPhase);
   const labor = calc.pickLaborTier(laborTiers, systemAmps);
 
   return {
@@ -54,7 +54,11 @@ function buildOptions({ materials, laborTiers, settingsRow, roofAreaM2, ampDay, 
     inverterMaterials: inverters,
     integratedMaterials,
     integratedCombos: integratedResult.combos,
-    integratedRequired: { kw: integratedResult.requiredKw, kwh: integratedResult.requiredKwh },
+    integratedRequired: {
+      kw: integratedResult.requiredKw, kwh: integratedResult.requiredKwh,
+      dayLoadKw: integratedResult.dayLoadKw, nightLoadKw: integratedResult.nightLoadKw,
+      phase: integratedResult.phase,
+    },
     secondary,
     labor,
     systemAmps,
@@ -235,7 +239,11 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
   const batteryCombo = adjustCombo(batteryComboBase, extra.battery, 1);
   const batteryCount = batteryCombo ? batteryCombo.units : 0;
 
-  const panelTiers = calc.selectPanelTiers(panelMaterials, ampDay, batteryCount, settings);
+  // بالسستم المتكامل الألواح تنحجّم بالطاقة (شحن الكابينة + الحمل النهاري) —
+  // معادلة مستقلة ما تمر بمسار «لوح لكل بطارية» اللي ما إله معنى مع كابينة وحدة
+  const panelTiers = isIntegrated
+    ? calc.selectIntegratedPanelTiers(panelMaterials, integratedRequired || {}, nightSupplyHours, settings)
+    : calc.selectPanelTiers(panelMaterials, ampDay, batteryCount, settings);
   const panelComboBase = pickCombo(panelTiers, tier, overrides, 'panel', errors);
   const panelCombo = adjustCombo(panelComboBase, extra.panel, 1);
 
@@ -383,19 +391,19 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
     // ساعات الليل = سعة البنك × عمق التفريغ ÷ (أمبير الليل × الفولتية)، وأمبير النهار = قدرة الانفيرترات ÷ الفولتية
     // بالسستم المتكامل: السعة والقدرة من الكابينة نفسها (kWh من عمود السعة، وقدرة الانفيرتر
     // بالكيلوواط من مواصفات المادة) — مع تنبيه إن أمبير النهار تقديري لأن الجهاز ثلاثي الطور
+    // بالسستم المتكامل: القدرة بنفس معادلة الطور المستعملة بالتحجيم — مو معادلة الـ220
     capability: integratedPick
       ? {
-          ...calc.capabilityOf({
-            batteryUnits: integratedPick.units,
-            batteryKwh: integratedPick.kwh,
-            inverterUnits: integratedPick.units,
-            inverterW: integratedPick.kw * 1000,
-            ampNight,
-            systemVoltage: settings.systemVoltage,
+          ...calc.integratedCapability({
+            units: integratedPick.units,
+            kwh: integratedPick.kwh,
+            kw: integratedPick.kw,
+            nightLoadKw: integratedRequired?.nightLoadKw || 0,
             dod: settings.dod,
-            inverterSafetyFactor: settings.inverterSafetyFactor,
+            phase: integratedRequired?.phase || 'three',
+            systemVoltage: settings.systemVoltage,
           }),
-          threePhaseNote: true,
+          phase: integratedRequired?.phase || 'three',
         }
       : calc.capabilityOf({
           batteryUnits: batteryCombo ? batteryCombo.units : 0,
