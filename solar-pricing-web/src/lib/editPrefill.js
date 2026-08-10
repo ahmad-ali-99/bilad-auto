@@ -33,8 +33,6 @@ export async function buildEditPrefill(quoteId) {
   return {
     editing: { id: full.quote.id, quote_number: full.quote.quote_number },
     systemType,
-    // الكابينة المتكاملة المختارة وعددها — ترجع كما انحفظت
-    integratedSel: adjustments?.integratedSel || null,
     createdBy: full.quote.created_by || '',
     clientName: full.quote.client_name || '',
     clientPhone: full.quote.client_phone || '',

@@ -88,7 +88,8 @@ async function withIntegratedKw(rows) {
 async function allMaterials() {
   const { data, error } = await supabase.from('materials').select('*').order('category').order('id');
   throwIf(error);
-  return data || [];
+  // قدرة الكابينات المتكاملة (kW) لازمة للتحجيم التلقائي — تنلحق من app_config
+  return withIntegratedKw(data || []);
 }
 
 async function nextQuoteNumber() {
@@ -304,15 +305,6 @@ export const api = {
         months: Number(cfg?.months) > 0 ? Number(cfg.months) : fallback.months,
       };
     },
-    // مواصفات الكابينة المتكاملة: قدرة الانفيرتر بالكيلوواط ما إلها عمود بالجدول،
-    // فتنخزن بـapp_config بمفتاح integrated_specs_<materialId> — نفس حيلة quote_adj_<id>.
-    async _integrated(input) {
-      if (input.systemType !== 'integrated') return null;
-      const materialId = Number(input.integrated?.materialId) || 0;
-      const units = Math.max(1, Math.round(Number(input.integrated?.units) || 1));
-      const specs = materialId ? await api.config.get(`integrated_specs_${materialId}`) : null;
-      return { materialId, units, kw: Number(specs?.kw) || 0 };
-    },
     async _adjustments(input) {
       return { ...(input.adjustments || {}), installment: await this._installment(input) };
     },
@@ -345,7 +337,6 @@ export const api = {
         adjustments: await this._adjustments(input),
         extraUnits: input.extraUnits || null,
         systemType: input.systemType || null,
-        integrated: await this._integrated(input),
       });
       return {
         options: {
@@ -438,18 +429,15 @@ export const api = {
     async _saveAdjustments(quoteId, adjustments, extraUnits, secondarySelections, input = {}) {
       const a = adjustments || {};
       const x = extraUnits || {};
-      const hasExtra = ['panel', 'battery', 'inverter'].some((k) => (Number(x[k]) || 0) !== 0);
+      const hasExtra = ['panel', 'battery', 'inverter', 'integrated'].some((k) => (Number(x[k]) || 0) !== 0);
       // الاختيارات الثانوية الخام (بكمياتها اليدوية) تنحفظ هم — ذاكرة العرض الكاملة
       const sel = secondarySelections && Object.keys(secondarySelections).length > 0 ? secondarySelections : null;
       // نوع المنظومة واختيار الكابينة المتكاملة جزء من ذاكرة العرض — بدونهما العرض
       // المحفوظ يرجع بنوع «كاملة» عند التعديل وتضيع الكابينة
       const systemType = input.systemType || null;
-      const integratedSel = systemType === 'integrated' && input.integrated?.materialId
-        ? { materialId: Number(input.integrated.materialId), units: Math.max(1, Number(input.integrated.units) || 1) }
-        : null;
       const active =
         (Number(a.markupPercent) || 0) > 0 || (Number(a.discountPercent) || 0) > 0 || a.installment?.enabled ||
-        hasExtra || !!sel || !!systemType || !!integratedSel;
+        hasExtra || !!sel || !!systemType;
       try {
         await api.config.set(`quote_adj_${quoteId}`, active ? {
           // ذاكرة المواد الثانوية كما أدخلها البياع — فتح التعديل يرجعها حرفياً
@@ -463,10 +451,9 @@ export const api = {
             : null,
           // الزيادة/النقصان اليدوي بالوحدات — يرجع بوضع التعديل
           extraUnits: hasExtra
-            ? { panel: Number(x.panel) || 0, battery: Number(x.battery) || 0, inverter: Number(x.inverter) || 0 }
+            ? { panel: Number(x.panel) || 0, battery: Number(x.battery) || 0, inverter: Number(x.inverter) || 0, integrated: Number(x.integrated) || 0 }
             : null,
           systemType,
-          integratedSel,
         } : null);
       } catch {
         /* جدول app_config اختياري — فشله لا يمنع حفظ العرض نفسه */
@@ -531,7 +518,6 @@ export const api = {
         adjustments: await this._adjustments(input),
         extraUnits: input.extraUnits || null,
         systemType: input.systemType || null,
-        integrated: await this._integrated(input),
       });
       const { data: profile } = await supabase.from('company_profile').select('notes_default').eq('id', 1).single();
       const defaultNotes = Array.isArray(profile?.notes_default) ? profile.notes_default : JSON.parse(profile?.notes_default || '[]');
@@ -570,7 +556,7 @@ export const api = {
       const notesPayload = notes.map((note_text, idx) => ({ quote_id: quote.id, note_text, sort_order: idx }));
       if (notesPayload.length) throwIf((await supabase.from('quote_notes').insert(notesPayload)).error);
 
-      await this._saveAdjustments(quote.id, await this._adjustments(input), input.extraUnits, input.secondarySelections, { systemType: input.systemType, integrated: await this._integrated(input) });
+      await this._saveAdjustments(quote.id, await this._adjustments(input), input.extraUnits, input.secondarySelections, { systemType: input.systemType, overrides: input.overrides });
       logActivity('حفظ عرض جديد', 'العروض', {
         'رقم العرض': quote.quote_number, 'العميل': quote.client_name || '-', 'المجموع': quote.total_price,
         ...(input.createdBy ? { 'من طرف': input.createdBy } : {}),
@@ -629,7 +615,7 @@ export const api = {
       const notesPayload = notes.map((note_text, idx) => ({ quote_id: id, note_text, sort_order: idx }));
       if (notesPayload.length) throwIf((await supabase.from('quote_notes').insert(notesPayload)).error);
 
-      await this._saveAdjustments(id, await this._adjustments(input), input.extraUnits, input.secondarySelections, { systemType: input.systemType, integrated: await this._integrated(input) });
+      await this._saveAdjustments(id, await this._adjustments(input), input.extraUnits, input.secondarySelections, { systemType: input.systemType, overrides: input.overrides });
       const transferred = input.createdBy && before?.created_by && input.createdBy !== before.created_by;
       logActivity(transferred ? 'تعديل عرض + تحويل الحساب' : 'تعديل عرض', 'العروض', {
         'رقم العرض': quote.quote_number, 'العميل': quote.client_name || '-',

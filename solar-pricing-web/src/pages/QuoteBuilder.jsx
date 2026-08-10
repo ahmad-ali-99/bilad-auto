@@ -73,7 +73,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   // خطة التقسيط: 'company' = التقسيط عبر مصرف النهرين، 'cbi' = مبادرة البنك المركزي (26% لسبع سنوات)
   const [installmentPlan, setInstallmentPlan] = useState(savedDraft?.installmentPlan ?? 'company');
   // زيادة/نقصان يدوي بالوحدات (لوح ±2، بطارية وانفيرتر ±1) — للمستخدمين الرئيسيين فقط
-  const [extraUnits, setExtraUnits] = useState(savedDraft?.extraUnits ?? { panel: 0, battery: 0, inverter: 0 });
+  const [extraUnits, setExtraUnits] = useState(savedDraft?.extraUnits ?? { panel: 0, battery: 0, inverter: 0, integrated: 0 });
   // قسم الزيادة/الخصم/التقسيط مطوي افتراضياً حتى الشاشة تبقى مرتبة
   const [pricingOpen, setPricingOpen] = useState(savedDraft?.pricingOpen ?? false);
   // العرض التفاعلي 3D (يفتح ملء الشاشة للزبون)
@@ -123,9 +123,9 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   const savedSecondaryIdsRef = useRef(null);
   const isOffgrid = systemType === 'offgrid';
   const isDayOnly = systemType === 'day';
-  // السستم المتكامل: كابينة وحدة محل البطاريات والانفيرتر، وعددها يدوي
+  // السستم المتكامل: كابينة وحدة محل البطاريات والانفيرتر — التحجيم تلقائي
+  // والتبديل والعدد يمشون بنفس مسار باقي الفئات (overrides + extraUnits)
   const isIntegrated = systemType === 'integrated';
-  const [integratedSel, setIntegratedSel] = useState(savedDraft?.integratedSel ?? { materialId: 0, units: 1 });
 
   useEffect(() => {
     // الملاحظات الافتراضية فقط إذا ماكو ملاحظات قائمة (مسودة محفوظة أو عرض مفتوح للتعديل) —
@@ -194,7 +194,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
           JSON.stringify({
             clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours,
             systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent,
-            installment, installmentPlan, extraUnits, integratedSel, notes, editingQuote, pricingOpen, createdBy,
+            installment, installmentPlan, extraUnits, notes, editingQuote, pricingOpen, createdBy,
           })
         );
       } catch {
@@ -202,7 +202,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       }
     }, 500);
     return () => clearTimeout(t);
-  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits, integratedSel, notes, editingQuote, pricingOpen, createdBy]);
+  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits, notes, editingQuote, pricingOpen, createdBy]);
 
   // 🆕 عرض جديد: تصفير كامل + مسح المسودة المحفوظة + رجوع الثانوية لافتراضياتها
   function startNewQuote() {
@@ -264,13 +264,6 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       setSystemType(p.systemType);
       systemTypeRef.current = p.systemType;
     }
-    // الكابينة المتكاملة المحفوظة مع العرض ترجع كما هي (اختيارها وعددها)
-    if (p.integratedSel) {
-      setIntegratedSel({
-        materialId: Number(p.integratedSel.materialId) || 0,
-        units: Math.max(1, Number(p.integratedSel.units) || 1),
-      });
-    }
     if (p.tier != null) setTier(p.tier);
     if (p.overrides) setOverrides(p.overrides);
     if (p.secondarySelections) setSecondarySel(p.secondarySelections);
@@ -283,7 +276,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       setInstallment(!!a.installment?.enabled);
       setInstallmentPlan(a.installment?.plan === 'cbi' ? 'cbi' : 'company');
       const x = p.extraUnits || a.extraUnits || {};
-      setExtraUnits({ panel: Number(x.panel) || 0, battery: Number(x.battery) || 0, inverter: Number(x.inverter) || 0 });
+      setExtraUnits({ panel: Number(x.panel) || 0, battery: Number(x.battery) || 0, inverter: Number(x.inverter) || 0, integrated: Number(x.integrated) || 0 });
     }
     if (p.notes) setNotes(p.notes);
     // فتح عرض للتعديل يرجّع منشئه الحالي بحقل «العرض من طرف»
@@ -387,8 +380,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
 
   // useMemo ضروري: بدونه الكائن يتجدد بكل رندر → المؤقت ينعاد → حلقة إعادة حساب لا نهائية
   const inputs = useMemo(
-    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, integratedSel, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits }),
-    [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, integratedSel, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits]
+    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits }),
+    [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits]
   );
   const debouncedInputs = useDebouncedValue(inputs, 300);
 
@@ -424,7 +417,6 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
         installmentPlan: debouncedInputs.installmentPlan,
         extraUnits: debouncedInputs.extraUnits,
         systemType: debouncedInputs.systemType,
-        integrated: debouncedInputs.integratedSel,
       })
       .then(setPreview)
       .finally(() => setCalculating(false));
@@ -457,7 +449,6 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       extraUnits,
       // نوع المنظومة والكابينة المتكاملة — بدونهما يرجع العرض المحفوظ بنوع «كاملة»
       systemType,
-      integrated: integratedSel,
       // الإسناد لحساب أحمد فقط — null = الحساب الحالي عند الحفظ، وإبقاء المنشئ الأصلي عند التعديل
       createdBy: (canAttribute && createdBy) || null,
       notes: notes || [],
@@ -930,6 +921,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
                     { cat: 'panel', label: 'لوح', step: 1, floor: 1 },
                     { cat: 'battery', label: 'بطارية', step: 1, floor: 1 },
                     { cat: 'inverter', label: 'انفيرتر', step: 1, floor: 1 },
+                    { cat: 'integrated', label: 'كابينة', step: 1, floor: 1 },
                   ].map(({ cat, label, step, floor }) => {
                     const count = draft.counts[cat] || 0;
                     const base = draft.baseCounts[cat] || 0;
@@ -963,8 +955,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
                       </span>
                     );
                   })}
-                  {(extraUnits.panel !== 0 || extraUnits.battery !== 0 || extraUnits.inverter !== 0) && (
-                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => setExtraUnits({ panel: 0, battery: 0, inverter: 0 })}>
+                  {(extraUnits.panel !== 0 || extraUnits.battery !== 0 || extraUnits.inverter !== 0 || extraUnits.integrated !== 0) && (
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => setExtraUnits({ panel: 0, battery: 0, inverter: 0, integrated: 0 })}>
                       ↺ العودة للحساب التلقائي
                     </button>
                   )}
@@ -988,32 +980,29 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
               </div>
             )}
 
-            {/* السستم المتكامل: مبدّل الكابينة وعددها بدل مبدّلي البطارية والانفيرتر */}
-            {isIntegrated && (
-              <div className="grid-2" style={{ marginBottom: 10 }}>
-                <div className="field">
-                  <label>الكابينة المتكاملة</label>
-                  <select
-                    value={integratedSel.materialId || preview?.options?.integratedMaterials?.[0]?.id || ''}
-                    onChange={(e) => setIntegratedSel((v) => ({ ...v, materialId: Number(e.target.value) }))}
-                  >
-                    {(preview?.options?.integratedMaterials || []).map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.brand} {m.model} — {fmt(m.price)} د.ع
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="field">
-                  <label>عدد الكابينات</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <button type="button" className="btn btn-secondary btn-sm"
-                      onClick={() => setIntegratedSel((v) => ({ ...v, units: Math.max(1, (Number(v.units) || 1) - 1) }))}>−</button>
-                    <b style={{ minWidth: 32, textAlign: 'center', fontSize: '1.1rem' }}>{integratedSel.units || 1}</b>
-                    <button type="button" className="btn btn-secondary btn-sm"
-                      onClick={() => setIntegratedSel((v) => ({ ...v, units: (Number(v.units) || 1) + 1 }))}>+</button>
-                  </div>
-                </div>
+            {/* السستم المتكامل: مبدّل الكابينة — يعرض القدرة والسعة والعدد المحسوب لكل خيار */}
+            {isIntegrated && draft.integrated && draft.integrated.options.length > 0 && (
+              <div className="field" style={{ marginBottom: 10 }}>
+                <label>
+                  الكابينة المتكاملة
+                  {draft.integrated.required && (
+                    <small style={{ fontWeight: 400, color: '#5b6b7c' }}>
+                      {'  '}— المطلوب للحمل: ≈{Math.ceil(draft.integrated.required.kw)} kW
+                      {draft.integrated.required.kwh > 0 && <> و ≈{Math.ceil(draft.integrated.required.kwh)} kWh</>}
+                    </small>
+                  )}
+                </label>
+                <select
+                  value={draft.integrated.chosenId || ''}
+                  onChange={(e) => setOverride('integrated', e.target.value)}
+                >
+                  {draft.integrated.options.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.brand} {o.model} — {o.kw ? `${o.kw} kW` : 'قدرة غير محددة'} / {o.kwh} kWh
+                      {' '}× {o.units} = {fmt(o.totalPrice)} د.ع
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
 

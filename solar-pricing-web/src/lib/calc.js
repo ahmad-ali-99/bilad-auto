@@ -328,6 +328,45 @@ function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, pane
 // القدرة الفعلية للتوليفة: ساعات تجهيز الليل من بنك البطاريات، وأمبير النهار اللي
 // يتحمله الانفيرتر. دالة وحدة يستعملها التطبيق (المعاينة الحية) وملف العرض (صفحة
 // التصميم) — حتى الأرقام تبقى متطابقة بالضبط بلا تكرار معادلة.
+// ── السستم المتكامل ────────────────────────────────────────────────────────
+// الكابينة تجمع البطاريات والانفيرتر بجهاز واحد، فتحجيمها لازم يغطي الاثنين سوية:
+//   • القدرة (kW): نفس معادلة الانفيرتر — الحمل × الفولتية × معامل الأمان
+//   • السعة (kWh): نفس معادلة البطاريات — طاقة الليل ÷ عمق التفريغ
+// والعدد النهائي هو الأكبر بين الاثنين حتى ما تنقص لا قدرة ولا سعة.
+// الفولتية المستعملة هي نفس فولتية النظام بالإعدادات (220) — الحمل بالعراق يتقاس
+// بالأمبير على هذا الأساس، وكون الكابينة نفسها ثلاثية الطور شي يخص توصيلها مو الحمل.
+function integratedRequired(ampDay, ampNight, nightSupplyHours, settings) {
+  const { systemVoltage, inverterSafetyFactor, dod } = settings;
+  const requiredKw = (Math.max(ampDay, ampNight) * systemVoltage * inverterSafetyFactor) / 1000;
+  const requiredKwh = ampNight > 0 ? (ampNight * systemVoltage * nightSupplyHours) / 1000 / dod : 0;
+  return { requiredKw, requiredKwh };
+}
+
+// توليفات الكابينات المتاحة مرتّبة بالسعر — الأرخص إجمالاً هي الاختيار التلقائي،
+// والباقي يبقى معروضاً بالمبدّل اليدوي مع قدرته وسعته.
+function selectIntegratedCombos(integratedMaterials, ampDay, ampNight, nightSupplyHours, settings) {
+  const { requiredKw, requiredKwh } = integratedRequired(ampDay, ampNight, nightSupplyHours, settings);
+  const combos = [];
+  for (const material of integratedMaterials) {
+    const kw = Number(material.integrated_kw) || 0;
+    const kwh = Number(material.watt_or_capacity) || 0;
+    // كابينة بلا قدرة معرّفة ما نكدر نحجّمها — تنعرض بالمبدّل بوحدة وحدة
+    const byKw = kw > 0 && requiredKw > 0 ? Math.ceil(requiredKw / kw) : 1;
+    const byKwh = kwh > 0 && requiredKwh > 0 ? Math.ceil(requiredKwh / kwh) : 1;
+    const units = Math.max(1, byKw, byKwh);
+    combos.push({
+      material, units, kw, kwh,
+      totalPrice: material.price * units,
+      totalKw: kw * units,
+      totalKwh: kwh * units,
+      // شنو اللي فرض العدد — يظهر بالمبدّل حتى يفهم البياع ليش طلع هذا العدد
+      driver: byKwh > byKw ? 'kwh' : 'kw',
+    });
+  }
+  combos.sort((a, b) => a.totalPrice - b.totalPrice || a.units - b.units);
+  return { combos, requiredKw, requiredKwh };
+}
+
 function capabilityOf({
   batteryUnits = 0, batteryKwh = 0, inverterUnits = 0, inverterW = 0,
   ampNight = 0, systemVoltage = 220, dod = 0.9, inverterSafetyFactor = 1,
@@ -357,6 +396,8 @@ export {
   panelsRequired,
   requiredRoofArea,
   inverterCapacityRequired,
+  integratedRequired,
+  selectIntegratedCombos,
   systemAmpSize,
   pickLaborTier,
   capabilityOf,

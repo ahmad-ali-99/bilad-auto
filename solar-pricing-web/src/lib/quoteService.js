@@ -40,6 +40,8 @@ function buildOptions({ materials, laborTiers, settingsRow, roofAreaM2, ampDay, 
 
   const systemAmps = calc.systemAmpSize(ampDay, ampNight);
   const batteryTiers = calc.selectBatteryTiers(batteries, ampNight, supplyHours, settings, { factors: batteryFactors, systemAmps });
+  // الكابينات المتكاملة: التحجيم تلقائي بالقدرة والسعة سوية، والأرخص إجمالاً هو الافتراضي
+  const integratedResult = calc.selectIntegratedCombos(integratedMaterials, ampDay, ampNight, supplyHours, settings);
   const labor = calc.pickLaborTier(laborTiers, systemAmps);
 
   return {
@@ -51,6 +53,8 @@ function buildOptions({ materials, laborTiers, settingsRow, roofAreaM2, ampDay, 
     panelMaterials,
     inverterMaterials: inverters,
     integratedMaterials,
+    integratedCombos: integratedResult.combos,
+    integratedRequired: { kw: integratedResult.requiredKw, kwh: integratedResult.requiredKwh },
     secondary,
     labor,
     systemAmps,
@@ -189,7 +193,7 @@ function adjustCombo(combo, delta, minUnits) {
 // extraUnits (اختياري): { panel, battery, inverter } — زيادة/نقصان يدوي بالوحدات لوح بلوح
 // (العدد الفردي مسموح)، والفحوصات (المساحة/الشحن/التوازي) تحسب بالعدد النهائي.
 function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, secondarySelections = null, adjustments = null, extraUnits = null, systemType = null, integrated = null }) {
-  const { settings, roofAreaM2, ampDay, ampNight, batteryTiers, panelMaterials, inverterMaterials, integratedMaterials = [], secondary, labor, systemAmps } = options;
+  const { settings, roofAreaM2, ampDay, ampNight, batteryTiers, panelMaterials, inverterMaterials, integratedCombos = [], integratedRequired = null, secondary, labor, systemAmps } = options;
 
   const errors = {};
   const warnings = {};
@@ -198,24 +202,24 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
     panel: Math.round(Number(extraUnits?.panel) || 0),
     battery: Math.round(Number(extraUnits?.battery) || 0),
     inverter: Math.round(Number(extraUnits?.inverter) || 0),
+    integrated: Math.round(Number(extraUnits?.integrated) || 0),
   };
 
   // ── السستم المتكامل ────────────────────────────────────────────────────────
-  // كابينة وحدة تجمع البطاريات والانفيرتر، فتحل محل الاثنين ولا يظهر لهما بند.
-  // عددها يدوي (مو محسوب من الأمبير) لأن هالأجهزة ثلاثية الطور 400 فولت بينما
-  // معادلة الأمبير عندنا مبنية على 220 فولت أحادي الطور.
+  // الكابينة تحل محل البطاريات والانفيرتر سوية، والاختيار تلقائي: البرنامج يلكي
+  // أرخص كابينة (أو عدد كابينات) تغطي القدرة والسعة المطلوبتين، والبياع يكدر يبدّل
+  // من المبدّل أو يزيد/ينقص بالأزرار — نفس سلوك باقي الفئات بالضبط.
   const isIntegrated = systemType === 'integrated';
-  let integratedPick = null;
+  let integratedBase = null;
   if (isIntegrated) {
-    const wantedId = Number(integrated?.materialId) || Number(overrides?.integrated) || 0;
-    const material = integratedMaterials.find((m) => m.id === wantedId) || integratedMaterials[0] || null;
-    if (!material) {
+    if (!integratedCombos.length) {
       errors.integrated = 'ماكو أي «سستم متكامل» بالمخزون — أضف الكابينة من صفحة المخزون أولاً';
     } else {
-      const units = Math.max(1, Math.round(Number(integrated?.units) || 1));
-      integratedPick = { material, units, totalPrice: material.price * units };
+      const wantedId = Number(overrides?.integrated) || 0;
+      integratedBase = integratedCombos.find((c) => c.material.id === wantedId) || integratedCombos[0];
     }
   }
+  const integratedPick = adjustCombo(integratedBase, extra.integrated, 1);
 
   const batteryComboBase = isIntegrated ? null : pickCombo(batteryTiers, tier, overrides, 'battery', errors);
   const batteryCombo = adjustCombo(batteryComboBase, extra.battery, 1);
@@ -357,11 +361,13 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
       panel: panelCombo ? panelCombo.units : 0,
       battery: batteryCombo ? batteryCombo.units : 0,
       inverter: inverterCombo ? inverterCombo.units : 0,
+      integrated: integratedPick ? integratedPick.units : 0,
     },
     baseCounts: {
       panel: panelComboBase ? panelComboBase.units : 0,
       battery: batteryComboBase ? batteryComboBase.units : 0,
       inverter: inverterComboBase ? inverterComboBase.units : 0,
+      integrated: integratedBase ? integratedBase.units : 0,
     },
     // القدرة الفعلية للتوليفة الحالية — تتحدث فوراً مع كل زيادة/نقصان يدوي:
     // ساعات الليل = سعة البنك × عمق التفريغ ÷ (أمبير الليل × الفولتية)، وأمبير النهار = قدرة الانفيرترات ÷ الفولتية
@@ -371,9 +377,9 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
       ? {
           ...calc.capabilityOf({
             batteryUnits: integratedPick.units,
-            batteryKwh: integratedPick.material.watt_or_capacity,
+            batteryKwh: integratedPick.kwh,
             inverterUnits: integratedPick.units,
-            inverterW: (Number(integrated?.kw) || 0) * 1000,
+            inverterW: integratedPick.kw * 1000,
             ampNight,
             systemVoltage: settings.systemVoltage,
             dod: settings.dod,
@@ -393,9 +399,18 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
         }),
     panelTiers,
     inverterTiers,
-    // الكابينة المختارة وعددها — تغذي مبدّل «السستم المتكامل» بالشاشة
-    integrated: integratedPick
-      ? { materialId: integratedPick.material.id, units: integratedPick.units, model: integratedPick.material.model }
+    // الكابينات المتاحة (بقدرتها وسعتها وعددها المحسوب) — تغذي مبدّل «السستم المتكامل»،
+    // مع القدرة والسعة المطلوبتين حتى يبين للبياع على أي أساس انختارت
+    integrated: isIntegrated
+      ? {
+          chosenId: integratedPick ? integratedPick.material.id : null,
+          units: integratedPick ? integratedPick.units : 0,
+          required: integratedRequired,
+          options: integratedCombos.map((c) => ({
+            id: c.material.id, brand: c.material.brand, model: c.material.model,
+            kw: c.kw, kwh: c.kwh, units: c.units, totalPrice: c.totalPrice, driver: c.driver,
+          })),
+        }
       : null,
     internalNotes,
     adjustments: adjusted.summary,
