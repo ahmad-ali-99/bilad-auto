@@ -124,6 +124,9 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   const [installmentPlan, setInstallmentPlan] = useState(savedDraft?.installmentPlan ?? 'company');
   // زيادة/نقصان يدوي بالوحدات (لوح ±2، بطارية وانفيرتر ±1) — للمستخدمين الرئيسيين فقط
   const [extraUnits, setExtraUnits] = useState(savedDraft?.extraUnits ?? { panel: 0, battery: 0, inverter: 0, integrated: 0 });
+  // العدد اللي يثبّته البياع بيده — **رقم نهائي** مو فرقاً عن الحساب التلقائي.
+  // الفرق كان يتزحزح مع كل تغيير بالأمبيرية أو الساعات فيطلع رقم غير اللي كتبه.
+  const [unitCounts, setUnitCounts] = useState(savedDraft?.unitCounts ?? {});
   // قسم الزيادة/الخصم/التقسيط مطوي افتراضياً حتى الشاشة تبقى مرتبة
   const [pricingOpen, setPricingOpen] = useState(savedDraft?.pricingOpen ?? false);
   // العرض التفاعلي 3D (يفتح ملء الشاشة للزبون)
@@ -244,7 +247,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
           JSON.stringify({
             clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours,
             systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent,
-            installment, installmentPlan, extraUnits, notes, editingQuote, pricingOpen, createdBy,
+            installment, installmentPlan, extraUnits, unitCounts, notes, editingQuote, pricingOpen, createdBy,
           })
         );
       } catch {
@@ -252,7 +255,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       }
     }, 500);
     return () => clearTimeout(t);
-  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits, notes, editingQuote, pricingOpen, createdBy]);
+  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits, unitCounts, notes, editingQuote, pricingOpen, createdBy]);
 
   // 🆕 عرض جديد: تصفير كامل + مسح المسودة المحفوظة + رجوع الثانوية لافتراضياتها
   function startNewQuote() {
@@ -327,6 +330,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       setInstallmentPlan(a.installment?.plan === 'cbi' ? 'cbi' : 'company');
       const x = p.extraUnits || a.extraUnits || {};
       setExtraUnits({ panel: Number(x.panel) || 0, battery: Number(x.battery) || 0, inverter: Number(x.inverter) || 0, integrated: Number(x.integrated) || 0 });
+      setUnitCounts(p.unitCounts || a.unitCounts || {});
     }
     if (p.notes) setNotes(p.notes);
     // فتح عرض للتعديل يرجّع منشئه الحالي بحقل «العرض من طرف»
@@ -430,8 +434,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
 
   // useMemo ضروري: بدونه الكائن يتجدد بكل رندر → المؤقت ينعاد → حلقة إعادة حساب لا نهائية
   const inputs = useMemo(
-    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits }),
-    [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits]
+    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits, unitCounts }),
+    [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits, unitCounts]
   );
   const debouncedInputs = useDebouncedValue(inputs, 300);
 
@@ -466,6 +470,7 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
         installment: debouncedInputs.installment,
         installmentPlan: debouncedInputs.installmentPlan,
         extraUnits: debouncedInputs.extraUnits,
+        unitCounts: debouncedInputs.unitCounts,
         systemType: debouncedInputs.systemType,
       })
       .then(setPreview)
@@ -994,12 +999,12 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
                         label={label}
                         count={draft.counts[cat] || 0}
                         base={base}
-                        onChange={(target) => setExtraUnits((x) => ({ ...x, [cat]: target - base }))}
+                        onChange={(target) => setUnitCounts((u) => ({ ...u, [cat]: target }))}
                       />
                     );
                   })}
-                  {(extraUnits.panel !== 0 || extraUnits.battery !== 0 || extraUnits.inverter !== 0 || extraUnits.integrated !== 0) && (
-                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => setExtraUnits({ panel: 0, battery: 0, inverter: 0, integrated: 0 })}>
+                  {(extraUnits.panel !== 0 || extraUnits.battery !== 0 || extraUnits.inverter !== 0 || extraUnits.integrated !== 0 || Object.keys(unitCounts).length > 0) && (
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => { setExtraUnits({ panel: 0, battery: 0, inverter: 0, integrated: 0 }); setUnitCounts({}); }}>
                       ↺ العودة للحساب التلقائي
                     </button>
                   )}

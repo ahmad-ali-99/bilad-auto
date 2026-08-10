@@ -196,3 +196,33 @@ describe('بطاقات القدرة بصفحة الغلاف', () => {
     expect(html).toContain('الانفيرترات تتحمل');
   });
 });
+
+// الاختبار اللي كان ناقص: الرقم المكتوب لازم يثبت حتى لو تغيّر الحساب التلقائي.
+// الواجهة كانت تخزّن **الفرق** عن الأساس، فأي تغيير بالأمبيرية يزحزح الرقم.
+describe('العدد المثبت يدوياً رقم مطلق مو فرق', () => {
+  it('70 لوح تبقى 70 حتى لو تغيّرت الأمبيرية والساعات', () => {
+    const a = draftOf(opts({ ...small, ampDay: 100, ampNight: 100, nightSupplyHours: 8 }), { unitCounts: { panel: 70 } });
+    const b = draftOf(opts({ ...small, ampDay: 300, ampNight: 300, nightSupplyHours: 5 }), { unitCounts: { panel: 70 } });
+    expect(a.counts.panel).toBe(70);
+    expect(b.counts.panel).toBe(70);
+    // والأساس التلقائي فعلاً اختلف بين الحالتين — يعني الفحص مو فاضي
+    expect(a.baseCounts.panel).not.toBe(b.baseCounts.panel);
+  });
+
+  it('صفر يشيل الفئة، ورقم للكابينة يثبت هم', () => {
+    const d = draftOf(opts(small), { unitCounts: { panel: 0, integrated: 3 } });
+    expect(d.items.some((i) => i.material_id === 1)).toBe(false);
+    expect(d.counts.integrated).toBe(3);
+  });
+
+  it('الفرق القديم (extraUnits) لسه يشتغل للعروض المحفوظة', () => {
+    const auto = draftOf(opts(small));
+    const d = draftOf(opts(small), { extraUnits: { integrated: 2 } });
+    expect(d.counts.integrated).toBe(auto.counts.integrated + 2);
+  });
+
+  it('الرقم المطلق يتقدم على الفرق القديم إذا اجتمعا', () => {
+    const d = draftOf(opts(small), { unitCounts: { integrated: 5 }, extraUnits: { integrated: 2 } });
+    expect(d.counts.integrated).toBe(5);
+  });
+});

@@ -191,7 +191,7 @@ export async function deliverPdf(blob, fileName) {
   return { canceled: false, shared: false };
 }
 
-export async function exportInvoicePdf({ quote, items, notes, company, fileName, attachment = null, installment = null, structure = true, capability = null }) {
+export async function exportInvoicePdf({ quote, items, notes, company, fileName, attachment = null, installment = null, structure = true, capability = null, integrated = null }) {
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-2000px;top:0;width:794px;background:#fff;z-index:-1;';
   host.innerHTML = buildInvoiceInnerHtml({ quote, items, notes, company, installment });
@@ -230,7 +230,9 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
     if (structure) {
       try {
         const panelCount = panelCountFromItems(items);
-        const cabinet = quote?.system_type === 'integrated' ? integratedFromItems(items) : null;
+        // الكابينة تجي جاهزة من طبقة البيانات (تعرُّف بفئة المادة)، وقراءة الوصف
+        // احتياط أخير فقط — حتى ما تختفي الصفحة لو الوسيط ما وصل لأي سبب
+        const cabinet = integrated || (quote?.system_type === 'integrated' ? integratedFromItems(items) : null);
         if (cabinet) {
           const html = buildStructurePageHtml(panelCount, company, CABINET_IMAGE, capability, cabinet);
           if (html) await addHtmlPage(pdf, html, ensurePage, pageWmm, pageHmm);

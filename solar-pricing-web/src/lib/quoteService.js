@@ -191,6 +191,18 @@ function adjustCombo(combo, delta, minUnits = 0) {
   return { ...combo, units, totalPrice: units * combo.material.price };
 }
 
+// العدد اللي كتبه البياع بيده — **رقم نهائي مطلق** مو فرقاً عن الحساب التلقائي.
+// هذا الفرق جوهري: الفرق يتزحزح كل ما يتغير الأساس (أمبيرية، ساعات، عدد كابينات)
+// فيطلع رقم غير اللي كتبه؛ الرقم المطلق يبقى ثابت لحد ما يغيّره هو.
+// صفر = شيل الفئة من العرض. undefined/null = اترك الحساب التلقائي.
+function applyUnitCount(combo, wanted, delta) {
+  if (wanted == null || wanted === '') return adjustCombo(combo, delta, 0);
+  const units = Math.max(0, Math.round(Number(wanted)));
+  if (!combo || !Number.isFinite(units)) return combo;
+  if (units <= 0) return null;
+  return { ...combo, units, totalPrice: units * combo.material.price };
+}
+
 // يبني مسودة العرض الكاملة لمستوى معين — بدون أي فحص لكمية المخزون (المواد مجرد خيارات)
 // secondarySelections (اختياري): { [materialId]: { qty } } — إذا مرّر، تنضاف فقط المواد الثانوية
 // المذكورة فيه؛ qty رقم = كمية يدوية، وqty فارغ/null = كمية تلقائية (حسب الألواح أو وحدة واحدة).
@@ -198,7 +210,7 @@ function adjustCombo(combo, delta, minUnits = 0) {
 // adjustments (اختياري): نسبة الزيادة (علنية/موزعة) ونسبة الخصم — تنطبق بعد اكتمال البنود.
 // extraUnits (اختياري): { panel, battery, inverter } — زيادة/نقصان يدوي بالوحدات لوح بلوح
 // (العدد الفردي مسموح)، والفحوصات (المساحة/الشحن/التوازي) تحسب بالعدد النهائي.
-function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, secondarySelections = null, adjustments = null, extraUnits = null, systemType = null, integrated = null }) {
+function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, secondarySelections = null, adjustments = null, extraUnits = null, unitCounts = null, systemType = null, integrated = null }) {
   const { settings, roofAreaM2, ampDay, ampNight, nightSupplyHours, batteryTiers, panelMaterials, inverterMaterials, integratedCombos = [], integratedRequired = null, secondary, labor, systemAmps } = options;
 
   const errors = {};
@@ -225,7 +237,7 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
       integratedBase = integratedCombos.find((c) => c.material.id === wantedId) || integratedCombos[0];
     }
   }
-  const integratedPick = adjustCombo(integratedBase, extra.integrated, 0);
+  const integratedPick = applyUnitCount(integratedBase, unitCounts?.integrated, extra.integrated);
   // حارس: عدد كابينات غير معقول معناه مدخلات غلط (ساعات أو أمبيرية) — نوقف البياع
   // بدل ما نطلعله عرضاً بمليارات وهو ما ينتبه. الحد 20 كابينة ≈ 5200 kWh — أكبر من
   // أي مشروع واقعي عندنا، فتجاوزه يعني المدخلات تحتاج مراجعة.
@@ -238,7 +250,7 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
   }
 
   const batteryComboBase = isIntegrated ? null : pickCombo(batteryTiers, tier, overrides, 'battery', errors);
-  const batteryCombo = adjustCombo(batteryComboBase, extra.battery, 0);
+  const batteryCombo = applyUnitCount(batteryComboBase, unitCounts?.battery, extra.battery);
   const batteryCount = batteryCombo ? batteryCombo.units : 0;
 
   // بالسستم المتكامل الألواح تنحجّم بالطاقة (شحن الكابينة + الحمل النهاري) —
@@ -251,13 +263,13 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
       )
     : calc.selectPanelTiers(panelMaterials, ampDay, batteryCount, settings);
   const panelComboBase = pickCombo(panelTiers, tier, overrides, 'panel', errors);
-  const panelCombo = adjustCombo(panelComboBase, extra.panel, 0);
+  const panelCombo = applyUnitCount(panelComboBase, unitCounts?.panel, extra.panel);
 
   // الانفيرتر يُختار بعد الألواح: قدرته لازم تستوعب الحمل ومصفوفة الألواح كاملة (÷1.3)
   const panelArrayW = panelCombo ? panelCombo.units * panelCombo.material.watt_or_capacity : 0;
   const inverterTiers = calc.selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, panelArrayW, systemAmps);
   const inverterComboBase = isIntegrated ? null : pickCombo(inverterTiers, tier, overrides, 'inverter', errors);
-  const inverterCombo = adjustCombo(inverterComboBase, extra.inverter, 0);
+  const inverterCombo = applyUnitCount(inverterComboBase, unitCounts?.inverter, extra.inverter);
 
   if (!labor) {
     errors.labor = 'لا يوجد سعر عمل معرّف لهذا الحجم — أضف حجماً جديداً من المخزون';

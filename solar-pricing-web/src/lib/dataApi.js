@@ -340,6 +340,7 @@ export const api = {
         secondarySelections: input.secondarySelections || null,
         adjustments: await this._adjustments(input),
         extraUnits: input.extraUnits || null,
+        unitCounts: input.unitCounts || null,
         systemType: input.systemType || null,
       });
       return {
@@ -431,6 +432,7 @@ export const api = {
     // نسبة الزيادة/الخصم تنحفظ لكل عرض بجدول app_config (مفتاح quote_adj_<id>)
     // حتى ترجع بوضع التعديل حتى لو كانت الزيادة موزعة (مخفية) بدون سطر ظاهر
     async _saveAdjustments(quoteId, adjustments, extraUnits, secondarySelections, input = {}) {
+      const counts = input.unitCounts && Object.keys(input.unitCounts).length ? input.unitCounts : null;
       const a = adjustments || {};
       const x = extraUnits || {};
       const hasExtra = ['panel', 'battery', 'inverter', 'integrated'].some((k) => (Number(x[k]) || 0) !== 0);
@@ -441,7 +443,7 @@ export const api = {
       const systemType = input.systemType || null;
       const active =
         (Number(a.markupPercent) || 0) > 0 || (Number(a.discountPercent) || 0) > 0 || a.installment?.enabled ||
-        hasExtra || !!sel || !!systemType;
+        hasExtra || !!sel || !!systemType || !!counts;
       try {
         await api.config.set(`quote_adj_${quoteId}`, active ? {
           // ذاكرة المواد الثانوية كما أدخلها البياع — فتح التعديل يرجعها حرفياً
@@ -458,6 +460,8 @@ export const api = {
             ? { panel: Number(x.panel) || 0, battery: Number(x.battery) || 0, inverter: Number(x.inverter) || 0, integrated: Number(x.integrated) || 0 }
             : null,
           systemType,
+          // الأعداد اللي ثبّتها البياع بيده — ترجع كما هي عند فتح العرض للتعديل
+          unitCounts: counts,
         } : null);
       } catch {
         /* جدول app_config اختياري — فشله لا يمنع حفظ العرض نفسه */
@@ -521,6 +525,7 @@ export const api = {
         secondarySelections: input.secondarySelections || null,
         adjustments: await this._adjustments(input),
         extraUnits: input.extraUnits || null,
+        unitCounts: input.unitCounts || null,
         systemType: input.systemType || null,
       });
       const { data: profile } = await supabase.from('company_profile').select('notes_default').eq('id', 1).single();
@@ -560,7 +565,7 @@ export const api = {
       const notesPayload = notes.map((note_text, idx) => ({ quote_id: quote.id, note_text, sort_order: idx }));
       if (notesPayload.length) throwIf((await supabase.from('quote_notes').insert(notesPayload)).error);
 
-      await this._saveAdjustments(quote.id, await this._adjustments(input), input.extraUnits, input.secondarySelections, { systemType: input.systemType, overrides: input.overrides });
+      await this._saveAdjustments(quote.id, await this._adjustments(input), input.extraUnits, input.secondarySelections, { systemType: input.systemType, overrides: input.overrides, unitCounts: input.unitCounts });
       logActivity('حفظ عرض جديد', 'العروض', {
         'رقم العرض': quote.quote_number, 'العميل': quote.client_name || '-', 'المجموع': quote.total_price,
         ...(input.createdBy ? { 'من طرف': input.createdBy } : {}),
@@ -619,7 +624,7 @@ export const api = {
       const notesPayload = notes.map((note_text, idx) => ({ quote_id: id, note_text, sort_order: idx }));
       if (notesPayload.length) throwIf((await supabase.from('quote_notes').insert(notesPayload)).error);
 
-      await this._saveAdjustments(id, await this._adjustments(input), input.extraUnits, input.secondarySelections, { systemType: input.systemType, overrides: input.overrides });
+      await this._saveAdjustments(id, await this._adjustments(input), input.extraUnits, input.secondarySelections, { systemType: input.systemType, overrides: input.overrides, unitCounts: input.unitCounts });
       const transferred = input.createdBy && before?.created_by && input.createdBy !== before.created_by;
       logActivity(transferred ? 'تعديل عرض + تحويل الحساب' : 'تعديل عرض', 'العروض', {
         'رقم العرض': quote.quote_number, 'العميل': quote.client_name || '-',
@@ -739,6 +744,7 @@ export const api = {
       // قدرة المنظومة لعرض محفوظ: تُعاد من بنوده (عدد وسعة البطاريات والانفيرترات)
       // وأمبيريته وإعدادات النظام — بنفس معادلة المعاينة الحية (calc.capabilityOf)
       let capability = null;
+      let integrated = null;   // بيانات الكابينة لصفحة الغلاف — تنمرر صراحةً بلا تخمين من النص
       try {
         const [materials, { data: settingsRow }] = await Promise.all([
           allMaterials(),
@@ -753,19 +759,45 @@ export const api = {
         const bat = sumOf('battery');
         const inv = sumOf('inverter');
         const V = settingsRow?.system_voltage || 220;
-        capability = {
-          ...calc.capabilityOf({
-            batteryUnits: bat.units, batteryKwh: bat.cap,
-            inverterUnits: inv.units, inverterW: inv.cap,
-            ampNight: quote.required_amp_night || 0,
-            systemVoltage: V, dod: settingsRow?.dod ?? 0.9,
-            inverterSafetyFactor: settingsRow?.inverter_safety_factor ?? 1,
-          }),
-          ampNight: quote.required_amp_night || 0,
-          ampDay: quote.required_amp_day || 0,
-          batteries: bat.units,
-          inverters: inv.units,
-        };
+        // الكابينة المتكاملة: نتعرّف عليها من **فئة المادة** مو من نص الوصف —
+        // الاعتماد على الوصف كان يفشل إذا البياع كتب وصفاً بكلمات مختلفة
+        const cabLine = (items || []).find((it) => {
+          const mat = it.material_id != null ? byId.get(it.material_id) : null;
+          return mat && mat.category === 'integrated';
+        });
+        const cabMat = cabLine ? byId.get(cabLine.material_id) : null;
+        if (cabMat) {
+          integrated = {
+            units: Math.max(1, Math.round(Number(cabLine.quantity) || 1)),
+            kwh: Number(cabMat.watt_or_capacity) || 0,
+            kw: Number(cabMat.integrated_kw) || 0,
+          };
+        }
+        const dod = settingsRow?.dod ?? 0.9;
+        capability = integrated
+          ? {
+              // بالسستم المتكامل: القدرة من الكابينة نفسها بنفس معادلة المعاينة الحية
+              ...calc.integratedCapability({
+                units: integrated.units, kwh: integrated.kwh, kw: integrated.kw,
+                nightLoadKw: ((quote.required_amp_night || 0) * V) / 1000,
+                dod, systemVoltage: V,
+              }),
+              ampNight: quote.required_amp_night || 0,
+              ampDay: quote.required_amp_day || 0,
+            }
+          : {
+              ...calc.capabilityOf({
+                batteryUnits: bat.units, batteryKwh: bat.cap,
+                inverterUnits: inv.units, inverterW: inv.cap,
+                ampNight: quote.required_amp_night || 0,
+                systemVoltage: V, dod,
+                inverterSafetyFactor: settingsRow?.inverter_safety_factor ?? 1,
+              }),
+              ampNight: quote.required_amp_night || 0,
+              ampDay: quote.required_amp_day || 0,
+              batteries: bat.units,
+              inverters: inv.units,
+            };
       } catch {
         /* تعذر حساب القدرة — صفحة التصميم تنطبع بلا بطاقات القدرة */
       }
@@ -773,6 +805,7 @@ export const api = {
       return exportInvoicePdf({
         installment,
         capability,
+        integrated,
         quote,
         items: (items || []).map((i) => ({ ...i, description: i.description_snapshot })),
         notes: (notes || []).map((n) => n.note_text),
