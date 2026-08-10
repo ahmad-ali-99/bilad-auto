@@ -85,6 +85,20 @@ describe('السستم المتكامل: التحجيم التلقائي', () =>
     expect(d.capability.threePhaseNote).toBe(true);
   });
 
+  it('يوقف العرض إذا طلع عدد كابينات غير منطقي (مدخلات غلط)', () => {
+    // 300 أمبير ليلاً × 3024 ساعة = طاقة خيالية ← ~1000 كابينة، لازم ينوقف بخطأ واضح
+    const d = draftOf(opts({ ...small, ampNight: 300, nightSupplyHours: 3024 }));
+    expect(d.errors.integratedCount).toBeTruthy();
+    expect(d.errors.integratedCount).toMatch(/غير منطقي/);
+    expect(d.errors.integratedCount).toMatch(/3024 ساعة/);
+  });
+
+  it('ما يوقف العرض بالأعداد المعقولة', () => {
+    const d = draftOf(opts({ ...small, ampNight: 300, nightSupplyHours: 8 }));
+    expect(d.errors.integratedCount).toBeUndefined();
+    expect(cabinetLine(d).quantity).toBeLessThanOrEqual(20);
+  });
+
   it('الألواح تبقى محسوبة مثل المنظومة الكاملة', () => {
     const panel = draftOf(opts(small)).items.find((i) => i.material_id === 1);
     expect(panel.quantity).toBeGreaterThan(0);

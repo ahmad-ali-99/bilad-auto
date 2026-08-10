@@ -193,7 +193,7 @@ function adjustCombo(combo, delta, minUnits) {
 // extraUnits (اختياري): { panel, battery, inverter } — زيادة/نقصان يدوي بالوحدات لوح بلوح
 // (العدد الفردي مسموح)، والفحوصات (المساحة/الشحن/التوازي) تحسب بالعدد النهائي.
 function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, secondarySelections = null, adjustments = null, extraUnits = null, systemType = null, integrated = null }) {
-  const { settings, roofAreaM2, ampDay, ampNight, batteryTiers, panelMaterials, inverterMaterials, integratedCombos = [], integratedRequired = null, secondary, labor, systemAmps } = options;
+  const { settings, roofAreaM2, ampDay, ampNight, nightSupplyHours, batteryTiers, panelMaterials, inverterMaterials, integratedCombos = [], integratedRequired = null, secondary, labor, systemAmps } = options;
 
   const errors = {};
   const warnings = {};
@@ -220,6 +220,16 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
     }
   }
   const integratedPick = adjustCombo(integratedBase, extra.integrated, 1);
+  // حارس: عدد كابينات غير معقول معناه مدخلات غلط (ساعات أو أمبيرية) — نوقف البياع
+  // بدل ما نطلعله عرضاً بمليارات وهو ما ينتبه. الحد 20 كابينة ≈ 5200 kWh — أكبر من
+  // أي مشروع واقعي عندنا، فتجاوزه يعني المدخلات تحتاج مراجعة.
+  if (integratedPick && integratedPick.units > 20) {
+    errors.integratedCount =
+      `العدد المحسوب ${integratedPick.units} كابينة — هذا رقم غير منطقي. ` +
+      `الطاقة المطلوبة طلعت ≈${Math.round(integratedRequired?.kwh || 0).toLocaleString('en-US')} كيلوواط·ساعة ` +
+      `(${ampNight} أمبير ليلاً × ${nightSupplyHours} ساعة). ` +
+      'راجع «ساعات التجهيز الليلي» و«الأمبير المطلوب ليلاً» — غالباً وحدة منهن مكتوبة غلط.';
+  }
 
   const batteryComboBase = isIntegrated ? null : pickCombo(batteryTiers, tier, overrides, 'battery', errors);
   const batteryCombo = adjustCombo(batteryComboBase, extra.battery, 1);

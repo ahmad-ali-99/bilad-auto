@@ -968,10 +968,14 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
             {draft.capability && (draft.capability.nightHours != null || draft.capability.dayAmps != null) && (
               <div style={{ background: '#eaf3fb', border: '1px solid #bcd6ec', borderRadius: 12, padding: '9px 12px', marginBottom: 12, fontSize: '0.9rem', color: '#12456f', fontWeight: 700 }}>
                 {draft.capability.nightHours != null && (
-                  <span>🔋 البطاريات تُجهّز {ampNight} أمبير ليلياً لمدة ≈{draft.capability.nightHours} ساعة</span>
+                  <span>
+                    🔋 {isIntegrated ? 'الكابينة تُجهّز' : 'البطاريات تُجهّز'} {ampNight} أمبير ليلياً لمدة ≈{draft.capability.nightHours} ساعة
+                  </span>
                 )}
                 {draft.capability.nightHours != null && draft.capability.dayAmps != null && ' — '}
-                {draft.capability.dayAmps != null && <span>⚡ الانفيرترات تتحمل ≈{draft.capability.dayAmps} أمبير نهاراً</span>}
+                {draft.capability.dayAmps != null && (
+                  <span>⚡ {isIntegrated ? 'الكابينة تتحمل' : 'الانفيرترات تتحمل'} ≈{draft.capability.dayAmps} أمبير نهاراً</span>
+                )}
                 {draft.capability.threePhaseNote && (
                   <div style={{ fontWeight: 400, fontSize: '0.82rem', marginTop: 4, color: '#7a5b00' }}>
                     ⚠ رقم الأمبير تقديري: الكابينة ثلاثية الطور، والمعادلة مبنية على 220 فولت أحادي الطور.
