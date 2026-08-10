@@ -309,6 +309,21 @@ export const api = {
         months: Number(cfg?.months) > 0 ? Number(cfg.months) : fallback.months,
       };
     },
+    // وسائط بناء العرض — نقطة واحدة يستعملها الجميع (المعاينة، الحفظ، تصدير PDF).
+    // كانت كل نقطة تبنيها بيدها، فنسي التصدير نوع المنظومة والأعداد المثبتة وطلع
+    // ملف PDF مختلف كلياً عن اللي يشوفه البياع بالشاشة.
+    async _draftArgs(input) {
+      return {
+        tier: input.tier,
+        overrides: input.overrides || {},
+        cableMeters: input.cableMeters || {},
+        secondarySelections: input.secondarySelections || null,
+        adjustments: await this._adjustments(input),
+        extraUnits: input.extraUnits || null,
+        unitCounts: input.unitCounts || null,
+        systemType: input.systemType || null,
+      };
+    },
     async _adjustments(input) {
       return { ...(input.adjustments || {}), installment: await this._installment(input) };
     },
@@ -333,16 +348,7 @@ export const api = {
     },
     async preview(input) {
       const options = await this._options(input);
-      const draft = quoteService.buildQuoteDraft(options, {
-        tier: input.tier,
-        overrides: input.overrides || {},
-        cableMeters: input.cableMeters || {},
-        secondarySelections: input.secondarySelections || null,
-        adjustments: await this._adjustments(input),
-        extraUnits: input.extraUnits || null,
-        unitCounts: input.unitCounts || null,
-        systemType: input.systemType || null,
-      });
+      const draft = quoteService.buildQuoteDraft(options, await this._draftArgs(input));
       return {
         options: {
           systemAmps: options.systemAmps,
@@ -518,16 +524,7 @@ export const api = {
     },
     async save(input) {
       const options = await this._options(input);
-      const draft = quoteService.buildQuoteDraft(options, {
-        tier: input.tier,
-        overrides: input.overrides || {},
-        cableMeters: input.cableMeters || {},
-        secondarySelections: input.secondarySelections || null,
-        adjustments: await this._adjustments(input),
-        extraUnits: input.extraUnits || null,
-        unitCounts: input.unitCounts || null,
-        systemType: input.systemType || null,
-      });
+      const draft = quoteService.buildQuoteDraft(options, await this._draftArgs(input));
       const { data: profile } = await supabase.from('company_profile').select('notes_default').eq('id', 1).single();
       const defaultNotes = Array.isArray(profile?.notes_default) ? profile.notes_default : JSON.parse(profile?.notes_default || '[]');
       const notes = [...(input.notes || defaultNotes), ...draft.warrantyNotes];
@@ -577,14 +574,7 @@ export const api = {
       // لقطة قبل التعديل — للسجل: تغيّر المجموع وتحويل المنشئ يبينون صريحاً
       const { data: before } = await supabase.from('quotes').select('quote_number, total_price, created_by').eq('id', id).maybeSingle();
       const options = await this._options(input);
-      const draft = quoteService.buildQuoteDraft(options, {
-        tier: input.tier,
-        overrides: input.overrides || {},
-        cableMeters: input.cableMeters || {},
-        secondarySelections: input.secondarySelections || null,
-        adjustments: await this._adjustments(input),
-        extraUnits: input.extraUnits || null,
-      });
+      const draft = quoteService.buildQuoteDraft(options, await this._draftArgs(input));
       const notes = [...(input.notes || []), ...draft.warrantyNotes];
 
       const { data: quote, error } = await supabase
@@ -816,14 +806,7 @@ export const api = {
     },
     async exportDraftPdf(input) {
       const options = await this._options(input);
-      const draft = quoteService.buildQuoteDraft(options, {
-        tier: input.tier,
-        overrides: input.overrides || {},
-        cableMeters: input.cableMeters || {},
-        secondarySelections: input.secondarySelections || null,
-        adjustments: await this._adjustments(input),
-        extraUnits: input.extraUnits || null,
-      });
+      const draft = quoteService.buildQuoteDraft(options, await this._draftArgs(input));
       const { data: company } = await supabase.from('company_profile').select('*').eq('id', 1).single();
       const defaultNotes = Array.isArray(company?.notes_default) ? company.notes_default : JSON.parse(company?.notes_default || '[]');
       const notes = [...(input.notes || defaultNotes), ...draft.warrantyNotes];
@@ -839,10 +822,20 @@ export const api = {
         total_price: draft.total,
         required_amp_day: input.ampDay,
         required_amp_night: input.ampNight,
+        // نوع المنظومة يمشي مع الملف — بدونه صفحة الغلاف ترسم ستركجر بدل الكابينة
+        system_type: input.systemType || null,
       };
+      // الكابينة المختارة (إن وُجدت) — تنمرر صراحةً لصفحة الغلاف
+      const cabMat = draft.integrated?.chosenId
+        ? (options.integratedMaterials || []).find((m) => m.id === draft.integrated.chosenId)
+        : null;
+      const integratedInfo = cabMat
+        ? { units: draft.integrated.units, kwh: Number(cabMat.watt_or_capacity) || 0, kw: Number(cabMat.integrated_kw) || 0 }
+        : null;
       logActivity('تصدير PDF معاينة (بلا حفظ)', 'العروض', { 'العميل': input.clientName || '-', 'المجموع': draft.total });
       return exportInvoicePdf({
         quote: pseudoQuote, items: draft.items, notes, company, fileName: 'عرض_سعر_معاينة.pdf', installment: draft.installment,
+        integrated: integratedInfo,
         // تفاصيل قدرة المنظومة تنطبع بصفحة التصميم — نفس اللي يشوفه البياع بالمعاينة
         capability: {
           ...(draft.capability || {}),

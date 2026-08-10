@@ -226,3 +226,16 @@ describe('العدد المثبت يدوياً رقم مطلق مو فرق', () 
     expect(d.counts.integrated).toBe(5);
   });
 });
+
+// حارس بنيوي: كل مسارات بناء العرض (معاينة، حفظ، تعديل، تصدير PDF) لازم تمر
+// بنفس نقطة الوسائط. الاختلاف بينهن هو اللي خلّى ملف الـPDF يطلع عرضاً مختلفاً
+// عن اللي بالشاشة (بلا نوع منظومة ← بطارية وانفيرتر بدل الكابينة وألواح أكثر).
+describe('كل مسارات بناء العرض تستعمل نفس الوسائط', () => {
+  it('ماكو نداء buildQuoteDraft يبني وسائطه بيده', async () => {
+    const fs = await import('node:fs');
+    const src = fs.readFileSync(new URL('../src/lib/dataApi.js', import.meta.url), 'utf8');
+    const calls = src.match(/buildQuoteDraft\([\s\S]*?\);/g) || [];
+    expect(calls.length).toBeGreaterThan(0);
+    for (const call of calls) expect(call).toContain('_draftArgs(input)');
+  });
+});
