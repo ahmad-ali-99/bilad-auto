@@ -1,5 +1,25 @@
 import React, { useState } from 'react';
 
+// أخطاء قاعدة البيانات تجي بنص إنكليزي خام ما يفهمه البياع — نترجم المعروف منها
+// لكلام واضح يكول شنو المطلوب بالضبط، والباقي يمر كما هو حتى ما نخفي شي.
+function humanizeSaveError(err, category) {
+  const raw = String(err?.message || err || 'خطأ غير معروف');
+  const low = raw.toLowerCase();
+  if (low.includes('check constraint') || low.includes('violates check')) {
+    if (category === 'integrated') {
+      return 'قاعدة البيانات ما تقبل فئة «سستم متكامل» بعد — لازم يتشغّل كويري التفعيل مرة وحدة (ملف integrated-v2.sql) وبعدها تنحفظ عادي.';
+    }
+    return `القاعدة رفضت قيمة بأحد الحقول: ${raw}`;
+  }
+  if (low.includes('row-level security') || low.includes('permission') || low.includes('محصور') || low.includes('صلاحية')) {
+    return `ما عندك صلاحية للحفظ: ${raw}`;
+  }
+  if (low.includes('failed to fetch') || low.includes('networkerror')) {
+    return 'ما وصلنا للقاعدة — تأكد من الإنترنت وحاول مرة ثانية.';
+  }
+  return raw;
+}
+
 function emptyForm(category) {
   return {
     category,
@@ -31,13 +51,21 @@ export default function MaterialFormModal({ category, initial, onClose, onSave }
       : emptyForm(category)
   );
 
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
   function set(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
+    if (saveError) setSaveError('');
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    onSave({
+    if (saving) return;
+    setSaving(true);
+    setSaveError('');
+    try {
+      await onSave({
       category,
       brand: form.brand || null,
       model: form.model || null,
@@ -49,8 +77,14 @@ export default function MaterialFormModal({ category, initial, onClose, onSave }
       warranty_note: form.warranty_note || null,
       qty_per_panel: form.qty_per_panel === '' ? null : Number(form.qty_per_panel),
       // قدرة انفيرتر الكابينة (kW) — تنخزن بـapp_config لأن الجدول ما بيه عمود إلها
-      ...(isIntegrated ? { integrated_kw: form.integrated_kw === '' ? null : Number(form.integrated_kw) } : {}),
-    });
+        ...(isIntegrated ? { integrated_kw: form.integrated_kw === '' ? null : Number(form.integrated_kw) } : {}),
+      });
+    } catch (err) {
+      // البيانات تبقى بالنموذج كما هي — الخطأ يظهر والبياع يعيد المحاولة بلا ما يكتب من جديد
+      setSaveError(humanizeSaveError(err, category));
+    } finally {
+      setSaving(false);
+    }
   }
 
   const isIntegrated = category === 'integrated';
@@ -130,12 +164,18 @@ export default function MaterialFormModal({ category, initial, onClose, onSave }
             </div>
           )}
 
+          {saveError && (
+            <div className="alert alert-danger" style={{ marginTop: 14, whiteSpace: 'pre-line' }}>
+              ⚠ ما انحفظت المادة — {saveError}
+            </div>
+          )}
+
           <div className="toolbar" style={{ marginTop: 16 }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>
               إلغاء
             </button>
-            <button type="submit" className="btn btn-primary">
-              حفظ
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? '⏳ جاري الحفظ…' : 'حفظ'}
             </button>
           </div>
         </form>

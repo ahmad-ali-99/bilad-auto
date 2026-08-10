@@ -78,7 +78,11 @@ async function withIntegratedKw(rows) {
   try {
     const { data } = await supabase.from('app_config').select('key,value')
       .in('key', ids.map((id) => `integrated_specs_${id}`));
-    const byId = new Map((data || []).map((r) => [Number(r.key.replace('integrated_specs_', '')), JSON.parse(r.value || '{}')]));
+    const parse = (v) => {
+      if (v == null) return {};
+      return typeof v === 'string' ? JSON.parse(v) : v; // عمود text أو jsonb — الحالتين تشتغل
+    };
+    const byId = new Map((data || []).map((r) => [Number(r.key.replace('integrated_specs_', '')), parse(r.value)]));
     return rows.map((m) => (m.category === 'integrated' ? { ...m, integrated_kw: byId.get(m.id)?.kw ?? null } : m));
   } catch {
     return rows;
