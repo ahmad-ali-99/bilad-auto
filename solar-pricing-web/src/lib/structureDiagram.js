@@ -39,24 +39,54 @@ const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 // imgDataUrl = صورة PNG للرندر 3D (renderStructurePng). إذا فارغة تُرجع '' فتُتخطى الصفحة.
 // capability (اختياري): { nightHours, dayAmps, ampNight, ampDay, batteries, inverters }
 // نفس أرقام «قدرة المنظومة» اللي يشوفها البياع أثناء اختيار البطاريات والانفيرترات
-export function buildStructurePageHtml(panelCount, company = {}, imgDataUrl = '', capability = null) {
+// بند الكابينة من بنود العرض المحفوظ: العدد من الكمية، والسعة والقدرة من الوصف.
+// نعتمد الوصف لأن البنود المحفوظة ما تحمل مواصفات المادة، وصفحة الغلاف تنبني بلا شبكة.
+// ملاحظة: «كيلوواط·ساعة» و«kWh» لازم ما تنقرأ كقدرة — ولهذا النفي بعد كل صيغة.
+export function integratedFromItems(items) {
+  const line = (items || []).find((i) => /كابينة|hess|hoyultra/i.test(String(i.description || '')));
+  if (!line) return null;
+  const text = String(line.description || '');
+  const kwh = Number((text.match(/([\d.]+)\s*(?:kwh|كيلوواط[·.]?\s*ساعة)/i) || [])[1]) || 0;
+  const kw = Number((text.match(/([\d.]+)\s*(?:kw(?!h)|كيلوواط(?![·.]?\s*ساعة))/i) || [])[1]) || 0;
+  return { units: Math.max(1, Math.round(Number(line.quantity) || 1)), kwh, kw };
+}
+
+// integrated (اختياري): { units, kwh, kw } — بالسستم المتكامل نعرض صورة الكابينة
+// بدل رندر الستركجر، لأن مصفوفة بمئات الألواح تطلع مشوّهة وما تخدم العرض.
+export function buildStructurePageHtml(panelCount, company = {}, imgDataUrl = '', capability = null, integrated = null) {
   const structs = splitStructures(panelCount);
-  if (!structs.length || !imgDataUrl) return '';
+  if (!imgDataUrl) return '';
+  if (!integrated && !structs.length) return '';
   const logo = company.logo_path && String(company.logo_path).startsWith('data:') ? company.logo_path : null;
   const co = company.company_name || 'شركة بلاد اوتو للطاقة الشمسية';
-  const feats = [
-    ['🔧', 'تركيب احترافي', 'فريق فني متخصص وتنفيذ دقيق حسب المواصفات'],
-    ['🛡️', 'هيكل مغلون متين', 'مقاوم للرياح والصدأ — يدوم لعشرات السنين'],
-    ['🕐', 'صيانة ودعم 24/7', 'خدمة صيانة ومتابعة متوفرة على مدار الساعة'],
-  ];
+  const feats = integrated
+    ? [
+        ['🔧', 'تركيب احترافي', 'فريق فني متخصص وتنفيذ دقيق حسب المواصفات'],
+        ['❄️', 'تبريد سائل كامل', 'أداء بلا تخفيض حتى 50°م — بطاريات وانفيرتر بجهاز واحد'],
+        ['🕐', 'صيانة ودعم 24/7', 'خدمة صيانة ومتابعة متوفرة على مدار الساعة'],
+      ]
+    : [
+        ['🔧', 'تركيب احترافي', 'فريق فني متخصص وتنفيذ دقيق حسب المواصفات'],
+        ['🛡️', 'هيكل مغلون متين', 'مقاوم للرياح والصدأ — يدوم لعشرات السنين'],
+        ['🕐', 'صيانة ودعم 24/7', 'خدمة صيانة ومتابعة متوفرة على مدار الساعة'],
+      ];
   // بطاقات القدرة الفعلية للمنظومة — تُبنى من أرقام هذا العرض تحديداً
   const cap = capability || {};
   const capCards = [];
+  // بالسستم المتكامل ماكو بطاريات ولا انفيرترات منفصلة — الكابينة هي الاثنين
   if (cap.nightHours != null && Number(cap.ampNight) > 0) {
-    capCards.push(['🔋', `البطاريات تُجهّز ${esc(cap.ampNight)} أمبير ليلياً`, `لمدة ≈${esc(cap.nightHours)} ساعة${cap.batteries ? ` — ${esc(cap.batteries)} بطارية` : ''}`]);
+    capCards.push([
+      '🔋',
+      `${integrated ? 'الكابينة تُجهّز' : 'البطاريات تُجهّز'} ${esc(cap.ampNight)} أمبير ليلياً`,
+      `لمدة ≈${esc(cap.nightHours)} ساعة${!integrated && cap.batteries ? ` — ${esc(cap.batteries)} بطارية` : ''}`,
+    ]);
   }
   if (cap.dayAmps != null) {
-    capCards.push(['⚡', `الانفيرترات تتحمل ≈${esc(cap.dayAmps)} أمبير نهاراً`, cap.inverters ? `${esc(cap.inverters)} انفيرتر بالمنظومة` : 'قدرة التشغيل النهاري']);
+    capCards.push([
+      '⚡',
+      `${integrated ? 'الكابينة تتحمل' : 'الانفيرترات تتحمل'} ≈${esc(cap.dayAmps)} أمبير نهاراً`,
+      integrated || !cap.inverters ? 'قدرة التشغيل النهاري' : `${esc(cap.inverters)} انفيرتر بالمنظومة`,
+    ]);
   }
   const capHtml = capCards.length
     ? `<div class="caps">${capCards.map((c) => `<div class="cap"><span class="ci">${c[0]}</span><span class="ct"><b>${c[1]}</b><small>${c[2]}</small></span></div>`).join('')}</div>`
@@ -103,11 +133,18 @@ export function buildStructurePageHtml(panelCount, company = {}, imgDataUrl = ''
   <div class="sun"></div>
   <div class="head"><div class="co">${esc(co)}</div>${logo ? `<img src="${logo}" alt=""/>` : ''}</div>
   <div class="hero">
-    <h1>منظومتك الشمسية بتصميم احترافي</h1>
-    <p>هيكل تركيب متين بأعلى المعايير — أداء يدوم لعشرات السنين</p>
+    <h1>${integrated ? 'منظومة تخزين متكاملة' : 'منظومتك الشمسية بتصميم احترافي'}</h1>
+    <p>${integrated
+      ? 'كابينة تجمع البطاريات والانفيرتر بجهاز واحد — تركيب أسرع ومساحة أقل'
+      : 'هيكل تركيب متين بأعلى المعايير — أداء يدوم لعشرات السنين'}</p>
   </div>
-  <div class="stage"><img src="${imgDataUrl}" alt="مخطط الهيكل"/></div>
-  <div class="count">إجمالي الألواح <b>${panelCount}</b> لوح — <b>${structs.length}</b> ${structs.length === 1 ? 'ستركجر' : 'ستركجرات'}</div>
+  <div class="stage"><img src="${imgDataUrl}" alt="${integrated ? 'الكابينة المتكاملة' : 'مخطط الهيكل'}"/></div>
+  <div class="count">${integrated
+    ? `<b>${integrated.units}</b> ${integrated.units === 1 ? 'كابينة' : 'كابينات'}` +
+      (integrated.kwh ? ` — السعة <b>${integrated.kwh * integrated.units}</b> كيلوواط·ساعة` : '') +
+      (integrated.kw ? ` — القدرة <b>${integrated.kw * integrated.units}</b> كيلوواط` : '') +
+      (panelCount > 0 ? ` — <b>${panelCount}</b> لوح شمسي` : '')
+    : `إجمالي الألواح <b>${panelCount}</b> لوح — <b>${structs.length}</b> ${structs.length === 1 ? 'ستركجر' : 'ستركجرات'}`}</div>
   ${capHtml}
   <div class="feats">${featHtml}</div>
   <div class="foot">${esc(co)} — نموذج توضيحي، تُثبّت التفاصيل النهائية بعد الكشف الميداني</div>

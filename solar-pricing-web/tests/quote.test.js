@@ -198,10 +198,24 @@ describe('الزيادة/النقصان اليدوي بالوحدات (لوح/ب
     expect(draft.capability.nightHours).toBe(expectedHours);
   });
 
-  it('النقصان لا ينزل تحت الحد الأدنى (بطارية 1، لوح 1)', () => {
+  // السلوك المطلوب من المستخدم: النقصان يوصل صفر والفئة تنشال من العرض كلياً
+  it('النقصان لصفر يشيل الفئة من بنود العرض', () => {
+    const plain = buildQuoteDraft(base(), { tier: 'economy', cableMeters: {} });
+    const invPrice = plain.items.find((i) => i.description.includes('انفيرتر')).subtotal;
+    const draft = buildQuoteDraft(base(), { tier: 'economy', cableMeters: {}, extraUnits: { inverter: -99 } });
+    expect(draft.counts.inverter).toBe(0);
+    expect(draft.items.some((i) => i.description.includes('انفيرتر'))).toBe(false);
+    expect(draft.total).toBe(plain.total - invPrice);
+  });
+
+  it('تصفير البطارية والألواح ما يكسر العرض', () => {
     const draft = buildQuoteDraft(base(), { tier: 'economy', cableMeters: {}, extraUnits: { battery: -99, panel: -99 } });
-    expect(draft.counts.battery).toBe(1);
-    expect(draft.counts.panel).toBe(1);
+    expect(draft.counts.battery).toBe(0);
+    expect(draft.counts.panel).toBe(0);
+    expect(draft.items.some((i) => i.description.includes('بطاريات'))).toBe(false);
+    expect(draft.items.some((i) => i.description.includes('ألواح'))).toBe(false);
+    expect(draft.errors.roofArea).toBeUndefined(); // بلا ألواح ماكو فحص مساحة
+    expect(draft.total).toBeGreaterThan(0);        // أجور العمل وباقي البنود تبقى
   });
 
   it('لوح +1 و−1: العدد يتغير لوحاً واحداً بالضبط (الفردي مسموح)', () => {

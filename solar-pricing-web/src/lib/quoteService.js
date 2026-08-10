@@ -182,10 +182,12 @@ function applyAdjustments(items, total, adjustments) {
   return { total, summary };
 }
 
-// تعديل يدوي لعدد وحدات التوليفة (زيادة/نقصان من أزرار الواجهة) مع حد أدنى وإعادة حساب السعر
-function adjustCombo(combo, delta, minUnits) {
+// تعديل يدوي لعدد وحدات التوليفة (زيادة/نقصان من أزرار الواجهة) وإعادة حساب السعر.
+// النزول لصفر يرجع null — يعني الفئة تنشال من العرض كلياً (البنود محروسة بوجود التوليفة).
+function adjustCombo(combo, delta, minUnits = 0) {
   if (!combo || !delta) return combo;
   const units = Math.max(minUnits, combo.units + delta);
+  if (units <= 0) return null;
   return { ...combo, units, totalPrice: units * combo.material.price };
 }
 
@@ -223,7 +225,7 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
       integratedBase = integratedCombos.find((c) => c.material.id === wantedId) || integratedCombos[0];
     }
   }
-  const integratedPick = adjustCombo(integratedBase, extra.integrated, 1);
+  const integratedPick = adjustCombo(integratedBase, extra.integrated, 0);
   // حارس: عدد كابينات غير معقول معناه مدخلات غلط (ساعات أو أمبيرية) — نوقف البياع
   // بدل ما نطلعله عرضاً بمليارات وهو ما ينتبه. الحد 20 كابينة ≈ 5200 kWh — أكبر من
   // أي مشروع واقعي عندنا، فتجاوزه يعني المدخلات تحتاج مراجعة.
@@ -236,7 +238,7 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
   }
 
   const batteryComboBase = isIntegrated ? null : pickCombo(batteryTiers, tier, overrides, 'battery', errors);
-  const batteryCombo = adjustCombo(batteryComboBase, extra.battery, 1);
+  const batteryCombo = adjustCombo(batteryComboBase, extra.battery, 0);
   const batteryCount = batteryCombo ? batteryCombo.units : 0;
 
   // بالسستم المتكامل الألواح تنحجّم بالطاقة (شحن الكابينة + الحمل النهاري) —
@@ -249,13 +251,13 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
       )
     : calc.selectPanelTiers(panelMaterials, ampDay, batteryCount, settings);
   const panelComboBase = pickCombo(panelTiers, tier, overrides, 'panel', errors);
-  const panelCombo = adjustCombo(panelComboBase, extra.panel, 1);
+  const panelCombo = adjustCombo(panelComboBase, extra.panel, 0);
 
   // الانفيرتر يُختار بعد الألواح: قدرته لازم تستوعب الحمل ومصفوفة الألواح كاملة (÷1.3)
   const panelArrayW = panelCombo ? panelCombo.units * panelCombo.material.watt_or_capacity : 0;
   const inverterTiers = calc.selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, panelArrayW, systemAmps);
   const inverterComboBase = isIntegrated ? null : pickCombo(inverterTiers, tier, overrides, 'inverter', errors);
-  const inverterCombo = adjustCombo(inverterComboBase, extra.inverter, 1);
+  const inverterCombo = adjustCombo(inverterComboBase, extra.inverter, 0);
 
   if (!labor) {
     errors.labor = 'لا يوجد سعر عمل معرّف لهذا الحجم — أضف حجماً جديداً من المخزون';

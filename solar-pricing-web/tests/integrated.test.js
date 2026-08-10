@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildOptions, buildQuoteDraft } from '../src/lib/quoteService.js';
 import { integratedChargeKw as calcChargeKw } from '../src/lib/calc.js';
+import { integratedFromItems, buildStructurePageHtml } from '../src/lib/structureDiagram.js';
 
 // السستم المتكامل: كابينة تجمع البطاريات والانفيرتر بجهاز واحد.
 // التحجيم تلقائي مثل باقي الفئات: القدرة (kW) والسعة (kWh) سوية، والأكبر منهما يفرض العدد.
@@ -93,9 +94,13 @@ describe('السستم المتكامل: التحجيم التلقائي', () =>
     expect(cabinetLine(plus).subtotal).toBe(BIG.price * (auto.counts.integrated + 2));
   });
 
-  it('ما ينزل تحت كابينة وحدة مهما نقّص', () => {
+  it('تصفير الكابينة يشيل بندها من العرض', () => {
+    const plain = draftOf(opts(small));
+    const price = cabinetLine(plain).subtotal;
     const d = draftOf(opts(small), { extraUnits: { integrated: -99 } });
-    expect(cabinetLine(d).quantity).toBe(1);
+    expect(cabinetLine(d)).toBeUndefined();
+    expect(d.counts.integrated).toBe(0);
+    expect(d.total).toBe(plain.total - price);
   });
 
   it('كل خيار بالمبدّل يجي بقدرته وسعته وعدده وسعره', () => {
@@ -141,5 +146,53 @@ describe('السستم المتكامل: التحجيم التلقائي', () =>
     expect(ids).toContain(2);
     expect(ids).toContain(3);
     expect(ids).not.toContain(BIG.id);
+  });
+});
+
+describe('صفحة الغلاف: صورة الكابينة بدل الستركجر', () => {
+  const DESC = 'منظومة تخزين طاقة متكاملة Hoymiles HoyUltra 2 موديل HESS-261-2h، بطاريات LFP بسعة 261 كيلوواط·ساعة (ترتيب 1P52S بسعة 52.25 kWh للحزمة)، مع انفيرتر PCS مدمج ثلاثي الطور بقدرة 125 كيلوواط (أقصى 137.5 كيلوواط).';
+
+  it('يقرأ عدد الكابينات وسعتها وقدرتها من بند العرض', () => {
+    const got = integratedFromItems([{ description: DESC, quantity: 3 }]);
+    expect(got).toEqual({ units: 3, kwh: 261, kw: 125 });
+  });
+
+  it('ما يخلط السعة بالقدرة (52.25 kWh مو قدرة)', () => {
+    expect(integratedFromItems([{ description: DESC, quantity: 1 }]).kw).toBe(125);
+  });
+
+  it('يرجع null إذا ماكو بند كابينة', () => {
+    expect(integratedFromItems([{ description: 'ألواح شمسية 650 واط', quantity: 10 }])).toBeNull();
+  });
+
+  it('صفحة الغلاف بوضع الكابينة تعرض السعة والقدرة الكلية بلا ذكر ستركجر', () => {
+    const html = buildStructurePageHtml(77, {}, 'data:image/jpeg;base64,AAA', null, { units: 2, kwh: 261, kw: 125 });
+    expect(html).toContain('منظومة تخزين متكاملة');
+    expect(html).toContain('522'); // 2 × 261 kWh
+    expect(html).toContain('250'); // 2 × 125 kW
+    expect(html).toContain('77');  // الألواح تبقى مذكورة
+    expect(html).not.toContain('ستركجر');
+  });
+
+  it('الوضع العادي يبقى ستركجر مثل ما هو', () => {
+    const html = buildStructurePageHtml(20, {}, 'data:image/jpeg;base64,AAA');
+    expect(html).toContain('ستركجر');
+    expect(html).not.toContain('منظومة تخزين متكاملة');
+  });
+});
+
+describe('بطاقات القدرة بصفحة الغلاف', () => {
+  const cap = { nightHours: 9.1, ampNight: 300, dayAmps: 1363, batteries: 8, inverters: 8 };
+  it('بوضع الكابينة تكول «الكابينة» مو «البطاريات/الانفيرترات»', () => {
+    const html = buildStructurePageHtml(77, {}, 'data:image/jpeg;base64,AAA', cap, { units: 2, kwh: 261, kw: 125 });
+    expect(html).toContain('الكابينة تُجهّز');
+    expect(html).toContain('الكابينة تتحمل');
+    expect(html).not.toContain('البطاريات تُجهّز');
+    expect(html).not.toContain('الانفيرترات تتحمل');
+  });
+  it('بالوضع العادي تبقى مثل ما هي', () => {
+    const html = buildStructurePageHtml(20, {}, 'data:image/jpeg;base64,AAA', cap);
+    expect(html).toContain('البطاريات تُجهّز');
+    expect(html).toContain('الانفيرترات تتحمل');
   });
 });

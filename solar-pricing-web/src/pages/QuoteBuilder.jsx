@@ -40,6 +40,56 @@ function fmt(n) {
   return Math.round(n || 0).toLocaleString('en-US');
 }
 
+// عدّاد وحدة: أزرار + / − ورقم قابل للكتابة مباشرة (ضغطة على الرقم وتكتبه).
+// الحالة النصية محلية أثناء الكتابة حتى الحقل الفارغ ما ينقلب صفراً بكل ضغطة زر.
+function UnitCounter({ label, count, base, onChange }) {
+  const [text, setText] = useState(null); // null = يعرض الرقم المحسوب
+  const shown = text != null ? text : String(count);
+  const commit = (raw) => {
+    setText(null);
+    const n = Math.max(0, Math.round(Number(raw)));
+    if (Number.isFinite(n)) onChange(n);
+  };
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', border: '1px solid #d5dde6', borderRadius: 20, padding: '4px 8px' }}>
+      <button
+        type="button" className="btn btn-secondary btn-sm"
+        style={{ borderRadius: '50%', width: 30, height: 30, padding: 0, fontWeight: 800 }}
+        disabled={count <= 0}
+        onClick={() => onChange(Math.max(0, count - 1))}
+        title={`نقصان ${label}`}
+      >
+        −
+      </button>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--navy)', fontWeight: 700 }}>
+        <span>{label}</span>
+        <span>×</span>
+        <input
+          type="number" min="0" inputMode="numeric" value={shown}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={(e) => commit(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+          onFocus={(e) => e.currentTarget.select()}
+          title="اضغط واكتب العدد اللي تريده"
+          style={{
+            width: 58, textAlign: 'center', fontWeight: 800, color: 'var(--navy)',
+            border: '1px solid #cfdae6', borderRadius: 8, padding: '2px 4px', background: '#f7fafd',
+          }}
+        />
+        {count !== base && <small style={{ color: '#b8860b' }}>({count > base ? '+' : ''}{count - base})</small>}
+      </span>
+      <button
+        type="button" className="btn btn-secondary btn-sm"
+        style={{ borderRadius: '50%', width: 30, height: 30, padding: 0, fontWeight: 800 }}
+        onClick={() => onChange(count + 1)}
+        title={`زيادة ${label}`}
+      >
+        +
+      </button>
+    </span>
+  );
+}
+
 function useDebouncedValue(value, delay) {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -931,41 +981,21 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
                 <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
                   <b style={{ color: 'var(--navy)' }}>🛠 زيادة / نقصان يدوي:</b>
                   {[
-                    { cat: 'panel', label: 'لوح', step: 1, floor: 1 },
-                    { cat: 'battery', label: 'بطارية', step: 1, floor: 1 },
-                    { cat: 'inverter', label: 'انفيرتر', step: 1, floor: 1 },
-                    { cat: 'integrated', label: 'كابينة', step: 1, floor: 1 },
-                  ].map(({ cat, label, step, floor }) => {
-                    const count = draft.counts[cat] || 0;
+                    { cat: 'panel', label: 'لوح' },
+                    { cat: 'battery', label: 'بطارية' },
+                    { cat: 'inverter', label: 'انفيرتر' },
+                    { cat: 'integrated', label: 'كابينة' },
+                  ].map(({ cat, label }) => {
                     const base = draft.baseCounts[cat] || 0;
                     if (!base) return null;
-                    const setTo = (target) => setExtraUnits((x) => ({ ...x, [cat]: target - base }));
                     return (
-                      <span key={cat} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', border: '1px solid #d5dde6', borderRadius: 20, padding: '4px 8px' }}>
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-sm"
-                          style={{ borderRadius: '50%', width: 30, height: 30, padding: 0, fontWeight: 800 }}
-                          disabled={count <= floor}
-                          onClick={() => setTo(Math.max(floor, count - step))}
-                          title={`نقصان ${step} ${label}`}
-                        >
-                          −
-                        </button>
-                        <b style={{ minWidth: 58, textAlign: 'center', color: 'var(--navy)' }}>
-                          {label} ×{count}
-                          {count !== base && <small style={{ color: '#b8860b' }}> ({count > base ? '+' : ''}{count - base})</small>}
-                        </b>
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-sm"
-                          style={{ borderRadius: '50%', width: 30, height: 30, padding: 0, fontWeight: 800 }}
-                          onClick={() => setTo(count + step)}
-                          title={`زيادة ${step} ${label}`}
-                        >
-                          +
-                        </button>
-                      </span>
+                      <UnitCounter
+                        key={cat}
+                        label={label}
+                        count={draft.counts[cat] || 0}
+                        base={base}
+                        onChange={(target) => setExtraUnits((x) => ({ ...x, [cat]: target - base }))}
+                      />
                     );
                   })}
                   {(extraUnits.panel !== 0 || extraUnits.battery !== 0 || extraUnits.inverter !== 0 || extraUnits.integrated !== 0) && (

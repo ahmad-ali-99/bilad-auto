@@ -4,7 +4,8 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { PDFDocument } from 'pdf-lib';
 import { buildInvoiceInnerHtml } from './invoiceHtml.js';
-import { buildStructurePageHtml, panelCountFromItems } from './structureDiagram.js';
+import { buildStructurePageHtml, panelCountFromItems, integratedFromItems } from './structureDiagram.js';
+import { CABINET_IMAGE } from '../assets/cabinetImage.js';
 
 // يرسم HTML لعنصر مخفي → canvas ويضيفه صفحة كاملة بالـPDF (لصفحة التصميم/الغلاف).
 // ensurePage: يبدأ صفحة جديدة (أو يستخدم الأولى إن كانت فارغة) — حتى نتحكم بالترتيب.
@@ -223,11 +224,17 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
     let pageStarted = false;
     const ensurePage = () => { if (pageStarted) pdf.addPage(); pageStarted = true; };
 
-    // 1) صفحة التصميم 3D أولاً (غلاف يبهر الزبون) — تُضاف لكل عرض بيه ألواح.
+    // 1) صفحة التصميم أولاً (غلاف يبهر الزبون).
+    // بالسستم المتكامل: صورة الكابينة بدل رندر الستركجر — مصفوفة بمئات الألواح
+    // تطلع مشوّهة وما تخدم العرض، وهذا يتخطى three.js كلياً (تصدير أسرع وبلا WebGL).
     if (structure) {
       try {
         const panelCount = panelCountFromItems(items);
-        if (panelCount > 0) {
+        const cabinet = quote?.system_type === 'integrated' ? integratedFromItems(items) : null;
+        if (cabinet) {
+          const html = buildStructurePageHtml(panelCount, company, CABINET_IMAGE, capability, cabinet);
+          if (html) await addHtmlPage(pdf, html, ensurePage, pageWmm, pageHmm);
+        } else if (panelCount > 0) {
           // three.js يُحمّل ديناميكياً هنا فقط (وقت التصدير) حتى ما يثقل فتح التطبيق
           const { renderStructurePng } = await import('./structure3d.js');
           const img = await renderStructurePng(panelCount, { width: 1000, height: 620 });
