@@ -502,6 +502,9 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       installment,
       installmentPlan,
       extraUnits,
+      // الأعداد اللي ثبّتها البياع بيده — بدونها الحفظ وملف الـPDF يرجعون للحساب
+      // التلقائي ويطلع رقم غير اللي كتبه بالشاشة
+      unitCounts,
       // نوع المنظومة والكابينة المتكاملة — بدونهما يرجع العرض المحفوظ بنوع «كاملة»
       systemType,
       // الإسناد لحساب أحمد فقط — null = الحساب الحالي عند الحفظ، وإبقاء المنشئ الأصلي عند التعديل

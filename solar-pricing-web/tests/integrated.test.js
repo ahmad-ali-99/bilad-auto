@@ -239,3 +239,16 @@ describe('كل مسارات بناء العرض تستعمل نفس الوسائ
     for (const call of calls) expect(call).toContain('_draftArgs(input)');
   });
 });
+
+// حارس: حمولة الحفظ/التصدير بشاشة العرض لازم تحمل كل ما يؤثر بالحساب.
+// نقص unitCounts خلّى الشاشة تعرض 70 لوح والملف المطبوع يطلع 216 (الحساب التلقائي).
+describe('حمولة الحفظ والتصدير كاملة', () => {
+  it('buildBaseInput يمرر نوع المنظومة والأعداد المثبتة والفروق', async () => {
+    const fs = await import('node:fs');
+    const src = fs.readFileSync(new URL('../src/pages/QuoteBuilder.jsx', import.meta.url), 'utf8');
+    const body = src.slice(src.indexOf('function buildBaseInput'), src.indexOf('async function handleSave'));
+    for (const key of ['systemType', 'unitCounts', 'extraUnits', 'overrides', 'secondarySelections']) {
+      expect(body).toContain(key);
+    }
+  });
+});
