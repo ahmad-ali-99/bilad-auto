@@ -735,6 +735,7 @@ export const api = {
       // وأمبيريته وإعدادات النظام — بنفس معادلة المعاينة الحية (calc.capabilityOf)
       let capability = null;
       let integrated = null;   // بيانات الكابينة لصفحة الغلاف — تنمرر صراحةً بلا تخمين من النص
+      let panelCount = null;   // عدد الألواح من فئة المادة — مو من مطابقة كلمات الوصف
       try {
         const [materials, { data: settingsRow }] = await Promise.all([
           allMaterials(),
@@ -763,6 +764,10 @@ export const api = {
             kw: Number(cabMat.integrated_kw) || 0,
           };
         }
+        panelCount = (items || []).reduce((acc, it) => {
+          const mat = it.material_id != null ? byId.get(it.material_id) : null;
+          return mat && mat.category === 'panel' ? acc + (Number(it.quantity) || 0) : acc;
+        }, 0);
         const dod = settingsRow?.dod ?? 0.9;
         capability = integrated
           ? {
@@ -796,6 +801,7 @@ export const api = {
         installment,
         capability,
         integrated,
+        panelCount,
         quote,
         items: (items || []).map((i) => ({ ...i, description: i.description_snapshot })),
         notes: (notes || []).map((n) => n.note_text),
@@ -836,6 +842,7 @@ export const api = {
       return exportInvoicePdf({
         quote: pseudoQuote, items: draft.items, notes, company, fileName: 'عرض_سعر_معاينة.pdf', installment: draft.installment,
         integrated: integratedInfo,
+        panelCount: draft.counts?.panel ?? null,
         // تفاصيل قدرة المنظومة تنطبع بصفحة التصميم — نفس اللي يشوفه البياع بالمعاينة
         capability: {
           ...(draft.capability || {}),

@@ -252,3 +252,34 @@ describe('حمولة الحفظ والتصدير كاملة', () => {
     }
   });
 });
+
+// صفحة الغلاف كانت تختفي بعروض معينة لأن ظهورها معلّق على مطابقة كلمات بوصف
+// مادة الألواح: بلا كلمة «شمسية»، أو مع كلمة مثل «الهيكل»/«لشحن البطاريات»،
+// العدد يطلع صفر فما تنبني الصفحة. الحل: العدد يجي من فئة المادة.
+describe('عدد الألواح لصفحة الغلاف ما يعتمد على نص الوصف', () => {
+  const fragile = [
+    'ألواح 650 واط',                       // بلا كلمة «شمسية»
+    'لوح JINKO 650W',
+    'ألواح شمسية 650 واط مع الهيكل',
+    'ألواح شمسية 650 واط لشحن البطاريات',
+  ];
+
+  it('الأوصاف الهشة كانت تطلّع صفراً بالمحلل النصي', async () => {
+    const { panelCountFromItems } = await import('../src/lib/structureDiagram.js');
+    for (const d of fragile) {
+      expect(panelCountFromItems([{ description: d, quantity: 10 }])).toBe(0);
+    }
+  });
+
+  it('التصدير يمرر العدد صراحةً بدل الاعتماد على المحلل', async () => {
+    const fs = await import('node:fs');
+    const api = fs.readFileSync(new URL('../src/lib/dataApi.js', import.meta.url), 'utf8');
+    const pdf = fs.readFileSync(new URL('../src/lib/pdfExport.js', import.meta.url), 'utf8');
+    // العرض المحفوظ: يُحسب من فئة المادة
+    expect(api).toMatch(/mat\.category === 'panel'/);
+    // تصدير المسودة: من الحساب نفسه
+    expect(api).toContain('panelCount: draft.counts?.panel');
+    // والتصدير يفضّل الممرَّر على المحلل النصي
+    expect(pdf).toContain('panelCountIn != null ? panelCountIn : panelCountFromItems(items)');
+  });
+});

@@ -191,7 +191,7 @@ export async function deliverPdf(blob, fileName) {
   return { canceled: false, shared: false };
 }
 
-export async function exportInvoicePdf({ quote, items, notes, company, fileName, attachment = null, installment = null, structure = true, capability = null, integrated = null }) {
+export async function exportInvoicePdf({ quote, items, notes, company, fileName, attachment = null, installment = null, structure = true, capability = null, integrated = null, panelCount: panelCountIn = null }) {
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-2000px;top:0;width:794px;background:#fff;z-index:-1;';
   host.innerHTML = buildInvoiceInnerHtml({ quote, items, notes, company, installment });
@@ -229,7 +229,10 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
     // تطلع مشوّهة وما تخدم العرض، وهذا يتخطى three.js كلياً (تصدير أسرع وبلا WebGL).
     if (structure) {
       try {
-        const panelCount = panelCountFromItems(items);
+        // عدد الألواح يجي جاهزاً من طبقة البيانات (تعرُّف بفئة المادة). قراءة الوصف
+        // احتياط أخير فقط: كانت تفشل إذا الوصف ما بيه كلمة «شمسية» أو بيه كلمة مثل
+        // «الهيكل» أو «لشحن البطاريات» — فتختفي صفحة الغلاف بلا سبب ظاهر.
+        const panelCount = panelCountIn != null ? panelCountIn : panelCountFromItems(items);
         // الكابينة تجي جاهزة من طبقة البيانات (تعرُّف بفئة المادة)، وقراءة الوصف
         // احتياط أخير فقط — حتى ما تختفي الصفحة لو الوسيط ما وصل لأي سبب
         const cabinet = integrated || (quote?.system_type === 'integrated' ? integratedFromItems(items) : null);
