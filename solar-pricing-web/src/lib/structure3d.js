@@ -1,7 +1,7 @@
 // محرك 3D حقيقي لهيكل الألواح (three.js) — يرسم مشهداً واقعياً بكاميرا آيزومترية
 // وإضاءة وظلال، ويتقسّم تلقائياً: كل ستركجر 2×8 حد أقصى، والإضافي يرفع أقدامه.
 import * as THREE from 'three';
-import { splitStructures } from './structureDiagram.js';
+import { structuresForRender } from './structureDiagram.js';
 
 // أبعاد فيزيائية (متر)
 const PANEL_W = 1.05; // عرض اللوح (على الصف)
@@ -86,7 +86,8 @@ function buildStructure(cols, baseH, panelMat, metalMat, concreteMat) {
 
 // يرسم المشهد كاملاً ويرجع dataURL PNG (أو null عند فشل WebGL)
 export async function renderStructurePng(panelCount, { width = 1000, height = 620 } = {}) {
-  const structs = splitStructures(panelCount);
+  // عيّنة توضيحية محدودة — المشاريع الكبيرة ما ترسم عشرات الستركجرات
+  const structs = structuresForRender(panelCount);
   if (!structs.length) return null;
 
   let renderer;

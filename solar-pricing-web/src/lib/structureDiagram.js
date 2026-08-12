@@ -14,6 +14,18 @@ export function splitStructures(panelCount) {
   return Array.from({ length: nStruct }, (_, i) => ({ rows: 2, cols: base + (i < extra ? 1 : 0), tier: i }));
 }
 
+// أقصى عدد ستركجرات تُرسم بالمشهد التوضيحي. المشاريع الكبيرة تطلّع عشرات
+// الستركجرات فيصير الرسم مزدحماً وصغيراً وما يخدم العرض — والصفحة أصلاً مكتوب
+// عليها «نموذج توضيحي». فنرسم عيّنة مقروءة، والعدد الحقيقي مذكور بالنص وبالجدول.
+export const MAX_DRAWN_STRUCTURES = 3;
+
+// ستركجرات الرسم فقط (مو الحساب): محدودة العدد وبأعمدة معقولة حتى يبقى المشهد واضحاً
+export function structuresForRender(panelCount) {
+  const all = splitStructures(panelCount);
+  if (all.length <= MAX_DRAWN_STRUCTURES) return all;
+  return all.slice(0, MAX_DRAWN_STRUCTURES).map((s, i) => ({ ...s, tier: i }));
+}
+
 // اسم قديم للتوافق
 export function splitTables(panelCount) {
   return splitStructures(panelCount);
@@ -144,7 +156,7 @@ export function buildStructurePageHtml(panelCount, company = {}, imgDataUrl = ''
       (integrated.kwh ? ` — السعة <b>${integrated.kwh * integrated.units}</b> كيلوواط·ساعة` : '') +
       (integrated.kw ? ` — القدرة <b>${integrated.kw * integrated.units}</b> كيلوواط` : '') +
       (panelCount > 0 ? ` — <b>${panelCount}</b> لوح شمسي` : '')
-    : `إجمالي الألواح <b>${panelCount}</b> لوح — <b>${structs.length}</b> ${structs.length === 1 ? 'ستركجر' : 'ستركجرات'}`}</div>
+    : `إجمالي الألواح <b>${panelCount}</b> لوح`}</div>
   ${capHtml}
   <div class="feats">${featHtml}</div>
   <div class="foot">${esc(co)} — نموذج توضيحي، تُثبّت التفاصيل النهائية بعد الكشف الميداني</div>

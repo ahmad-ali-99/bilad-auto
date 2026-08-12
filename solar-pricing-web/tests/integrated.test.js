@@ -174,9 +174,10 @@ describe('صفحة الغلاف: صورة الكابينة بدل الستركج
     expect(html).not.toContain('ستركجر');
   });
 
-  it('الوضع العادي يبقى ستركجر مثل ما هو', () => {
+  it('الوضع العادي يبقى بهوية المنظومة الشمسية مو الكابينة', () => {
     const html = buildStructurePageHtml(20, {}, 'data:image/jpeg;base64,AAA');
-    expect(html).toContain('ستركجر');
+    expect(html).toContain('منظومتك الشمسية بتصميم احترافي');
+    expect(html).toContain('إجمالي الألواح');
     expect(html).not.toContain('منظومة تخزين متكاملة');
   });
 });
@@ -281,5 +282,32 @@ describe('عدد الألواح لصفحة الغلاف ما يعتمد على �
     expect(api).toContain('panelCount: draft.counts?.panel');
     // والتصدير يفضّل الممرَّر على المحلل النصي
     expect(pdf).toContain('panelCountIn != null ? panelCountIn : panelCountFromItems(items)');
+  });
+});
+
+// المشاريع الكبيرة كانت ترسم عشرات الستركجرات بصفحة الغلاف فيصير المشهد مزدحماً
+// وغير مقروء. الرسم توضيحي، فيُحدَّد بعيّنة، والعدد الحقيقي يبقى بالنص والجدول.
+describe('صفحة الغلاف: الستركجرات المرسومة محدودة والنص بلا عددها', () => {
+  it('الرسم ما يتجاوز الحد مهما كثرت الألواح', async () => {
+    const { structuresForRender, splitStructures, MAX_DRAWN_STRUCTURES } =
+      await import('../src/lib/structureDiagram.js');
+    expect(splitStructures(400).length).toBeGreaterThan(MAX_DRAWN_STRUCTURES); // الحساب الحقيقي كبير
+    for (const n of [50, 200, 400, 900]) {
+      expect(structuresForRender(n).length).toBeLessThanOrEqual(MAX_DRAWN_STRUCTURES);
+    }
+  });
+
+  it('الأعداد الصغيرة تبقى مثل ما هي بلا قص', async () => {
+    const { structuresForRender, splitStructures } = await import('../src/lib/structureDiagram.js');
+    for (const n of [1, 12, 20, 32]) {
+      expect(structuresForRender(n)).toEqual(splitStructures(n));
+    }
+  });
+
+  it('سطر الغلاف يذكر عدد الألواح ولا يذكر عدد الستركجرات', () => {
+    const html = buildStructurePageHtml(400, {}, 'data:image/jpeg;base64,AAA');
+    expect(html).toContain('إجمالي الألواح');
+    expect(html).toContain('400');
+    expect(html).not.toContain('ستركجر');
   });
 });
