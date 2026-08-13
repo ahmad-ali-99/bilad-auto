@@ -6,6 +6,7 @@ import * as calc from './calc.js';
 import * as excelImport from './excelImport.js';
 import { exportInvoicePdf } from './pdfExport.js';
 import { logActivity } from './activityLog.js';
+import { UNDO, DRAFT } from './activityUndo.js';
 import { isRestrictedUser, canViewQuotes, canEditSettings } from './permissions.js';
 import { installmentPlanLabel } from './installment.js';
 
@@ -162,28 +163,40 @@ export const api = {
       const { data: row, error } = await supabase.from('materials').insert(materialPayload(data)).select().single();
       throwIf(error);
       await saveIntegratedKw(row.id, data);
-      logActivity('إضافة مادة', 'المخزون', { 'المادة': row.full_description, 'السعر': row.price });
+      logActivity('إضافة مادة', 'المخزون', {
+        'المادة': row.full_description, 'السعر': row.price,
+        [UNDO]: { kind: 'rowInsert', table: 'materials', id: row.id, config: { key: `integrated_specs_${row.id}` }, label: 'حذف المادة المضافة', confirm: `حذف المادة «${row.full_description}» اللي انضافت بهذه الحركة` },
+      });
       return row;
     },
     async update(id, data) {
       await assertCanEdit('المخزون');
-      // نلتقط القيم القديمة قبل التعديل — حتى يبين بالسجل شنو تغيّر بالضبط
-      const { data: old } = await supabase.from('materials').select('full_description, price').eq('id', id).maybeSingle();
+      // لقطة الصف كامل قبل التعديل — السجل يبيّن شنو تغيّر، والاسترجاع يرجّع كل
+      // الأعمدة مثل ما كانت (مو السعر بس)
+      const { data: old } = await supabase.from('materials').select('*').eq('id', id).maybeSingle();
+      const oldKw = old?.category === 'integrated' ? await api.config.get(`integrated_specs_${id}`) : null;
       const { data: row, error } = await supabase.from('materials').update(materialPayload(data)).eq('id', id).select().single();
       throwIf(error);
       await saveIntegratedKw(id, data);
       logActivity('تعديل مادة', 'المخزون', {
         'المادة': row.full_description,
         ...(old && old.price !== row.price ? { 'السعر القديم': old.price, 'السعر الجديد': row.price } : { 'السعر': row.price }),
+        [UNDO]: old
+          ? { kind: 'rowUpdate', table: 'materials', id, before: old, config: { key: `integrated_specs_${id}`, before: oldKw }, label: 'إرجاع المادة لحالتها السابقة', confirm: `إرجاع «${row.full_description}» لكل قيمها قبل هذا التعديل` }
+          : { kind: 'none', why: 'ما انلقطت الحالة السابقة' },
       });
       return row;
     },
     async remove(id) {
       await assertCanEdit('المخزون');
-      const { data: old } = await supabase.from('materials').select('full_description, price').eq('id', id).maybeSingle();
+      const { data: old } = await supabase.from('materials').select('*').eq('id', id).maybeSingle();
+      const oldKw = old?.category === 'integrated' ? await api.config.get(`integrated_specs_${id}`) : null;
       const { error } = await supabase.from('materials').delete().eq('id', id);
       throwIf(error);
-      logActivity('حذف مادة', 'المخزون', old ? { 'المادة': old.full_description, 'السعر': old.price } : { 'المعرف': id });
+      logActivity('حذف مادة', 'المخزون', old ? {
+        'المادة': old.full_description, 'السعر': old.price,
+        [UNDO]: { kind: 'rowDelete', table: 'materials', row: old, config: { key: `integrated_specs_${id}`, before: oldKw }, label: 'إرجاع المادة المحذوفة', confirm: `إرجاع المادة «${old.full_description}» للمخزون بنفس تفاصيلها` },
+      } : { 'المعرف': id, [UNDO]: { kind: 'none', why: 'المادة ما انلقطت قبل الحذف' } });
       return { ok: true };
     },
     async parseExcel() {
@@ -237,6 +250,7 @@ export const api = {
       }
       logActivity('استيراد إكسل للمخزون', 'المخزون', {
         'مواد مضافة': added, 'مواد محدثة': updated, 'أجور مضافة': laborAdded, 'أجور محدثة': laborUpdated,
+        [UNDO]: { kind: 'none', why: 'الاستيراد يمس صفوفاً كثيرة دفعة واحدة — ما ينرجع بضغطة' },
       });
       return { added, updated, laborAdded, laborUpdated };
     },
@@ -264,26 +278,35 @@ export const api = {
       await assertCanEdit('أجور العمل');
       const { data: row, error } = await supabase.from('labor_tiers').insert({ system_amps: data.system_amps, price: data.price, note: data.note || null }).select().single();
       throwIf(error);
-      logActivity('إضافة أجور عمل', 'المخزون', { 'الحجم (أمبير)': row.system_amps, 'السعر': row.price });
+      logActivity('إضافة أجور عمل', 'المخزون', {
+        'الحجم (أمبير)': row.system_amps, 'السعر': row.price,
+        [UNDO]: { kind: 'rowInsert', table: 'labor_tiers', id: row.id, label: 'حذف الأجور المضافة', confirm: `حذف أجور العمل لحجم ${row.system_amps} أمبير اللي انضافت بهذه الحركة` },
+      });
       return row;
     },
     async update(id, data) {
       await assertCanEdit('أجور العمل');
-      const { data: old } = await supabase.from('labor_tiers').select('system_amps, price').eq('id', id).maybeSingle();
+      const { data: old } = await supabase.from('labor_tiers').select('*').eq('id', id).maybeSingle();
       const { data: row, error } = await supabase.from('labor_tiers').update({ system_amps: data.system_amps, price: data.price, note: data.note || null }).eq('id', id).select().single();
       throwIf(error);
       logActivity('تعديل أجور عمل', 'المخزون', {
         'الحجم (أمبير)': row.system_amps,
         ...(old && old.price !== row.price ? { 'السعر القديم': old.price, 'السعر الجديد': row.price } : { 'السعر': row.price }),
+        [UNDO]: old
+          ? { kind: 'rowUpdate', table: 'labor_tiers', id, before: old, label: 'إرجاع الأجور لحالتها السابقة', confirm: `إرجاع أجور حجم ${row.system_amps} أمبير لقيمها قبل هذا التعديل` }
+          : { kind: 'none', why: 'ما انلقطت الحالة السابقة' },
       });
       return row;
     },
     async remove(id) {
       await assertCanEdit('أجور العمل');
-      const { data: old } = await supabase.from('labor_tiers').select('system_amps, price').eq('id', id).maybeSingle();
+      const { data: old } = await supabase.from('labor_tiers').select('*').eq('id', id).maybeSingle();
       const { error } = await supabase.from('labor_tiers').delete().eq('id', id);
       throwIf(error);
-      logActivity('حذف أجور عمل', 'المخزون', old ? { 'الحجم (أمبير)': old.system_amps, 'السعر': old.price } : { 'المعرف': id });
+      logActivity('حذف أجور عمل', 'المخزون', old ? {
+        'الحجم (أمبير)': old.system_amps, 'السعر': old.price,
+        [UNDO]: { kind: 'rowDelete', table: 'labor_tiers', row: old, label: 'إرجاع الأجور المحذوفة', confirm: `إرجاع أجور حجم ${old.system_amps} أمبير` },
+      } : { 'المعرف': id, [UNDO]: { kind: 'none', why: 'الصف ما انلقط قبل الحذف' } });
       return { ok: true };
     },
   },
@@ -381,8 +404,10 @@ export const api = {
     },
     async setStatus(id, status) {
       const { data: q } = await supabase.from('quotes').select('quote_number, client_name').eq('id', id).maybeSingle();
+      const beforeStatus = await api.config.get(`quote_status_${id}`);
       logActivity('تغيير حالة عرض', 'العروض', {
         'رقم العرض': q?.quote_number ?? id, 'العميل': q?.client_name || '-', 'الحالة': status.level, ...(status.note ? { 'ملاحظة': status.note } : {}),
+        [UNDO]: { kind: 'config', key: `quote_status_${id}`, before: beforeStatus, label: 'إرجاع الحالة السابقة', confirm: `إرجاع حالة العرض ${q?.quote_number ?? id} لما كانت عليه` },
       });
       return api.config.set(`quote_status_${id}`, { level: status.level, note: status.note || '' });
     },
@@ -519,6 +544,7 @@ export const api = {
         'العميل': quote.client_name || '-',
         'المجموع': quote.total_price,
         'الملف': file.name,
+        [UNDO]: { kind: 'quoteSoftDelete', id: quote.id, label: 'إلغاء الرفع', confirm: `نقل العرض المرفوع ${quote.quote_number} لسلة المحذوفات` },
       });
       return quote;
     },
@@ -566,13 +592,36 @@ export const api = {
       logActivity('حفظ عرض جديد', 'العروض', {
         'رقم العرض': quote.quote_number, 'العميل': quote.client_name || '-', 'المجموع': quote.total_price,
         ...(input.createdBy ? { 'من طرف': input.createdBy } : {}),
+        [UNDO]: { kind: 'quoteSoftDelete', id: quote.id, label: 'إلغاء الحفظ', confirm: `نقل العرض ${quote.quote_number} لسلة المحذوفات (يبقى قابلاً للاسترجاع من السلة)` },
       });
       return quote;
     },
     // تحديث عرض محفوظ بمدخلات جديدة: نفس الرقم وتاريخ الإنشاء والمرفق، وبنود وملاحظات جديدة
     async update(id, input) {
-      // لقطة قبل التعديل — للسجل: تغيّر المجموع وتحويل المنشئ يبينون صريحاً
-      const { data: before } = await supabase.from('quotes').select('quote_number, total_price, created_by').eq('id', id).maybeSingle();
+      // لقطة كاملة قبل أي كتابة — للسجل (تغيّر المجموع وتحويل المنشئ) وللاسترجاع:
+      // الصف والبنود والملاحظات ونِسَب العرض. أعمدة المرفق مستثناة عمداً (base64 ضخم)
+      // والتعديل أصلاً ما يمسها.
+      const { data: before } = await supabase.from('quotes').select('*').eq('id', id).maybeSingle();
+      const [{ data: beforeItems }, { data: beforeNotes }, beforeAdj] = await Promise.all([
+        supabase.from('quote_items').select('*').eq('quote_id', id).order('sort_order'),
+        supabase.from('quote_notes').select('*').eq('quote_id', id).order('sort_order'),
+        api.config.get(`quote_adj_${id}`).catch(() => null),
+      ]);
+      const snapshot = before ? {
+        kind: 'quoteRestore',
+        id,
+        quote: {
+          client_name: before.client_name, client_phone: before.client_phone, location: before.location,
+          roof_area_m2: before.roof_area_m2, required_amp_day: before.required_amp_day,
+          required_amp_night: before.required_amp_night, night_supply_hours: before.night_supply_hours,
+          selected_tier: before.selected_tier, total_price: before.total_price, created_by: before.created_by,
+        },
+        items: (beforeItems || []).map(({ id: _i, quote_id: _q, ...cols }) => cols),
+        notes: (beforeNotes || []).map(({ id: _i, quote_id: _q, ...cols }) => cols),
+        adj: beforeAdj || null,
+        label: 'إرجاع العرض قبل التعديل',
+        confirm: `إرجاع العرض ${before.quote_number} ببنوده وملاحظاته ونِسَبه مثل ما كانت قبل هذا التعديل`,
+      } : { kind: 'none', why: 'ما انلقطت حالة العرض قبل التعديل' };
       const options = await this._options(input);
       const draft = quoteService.buildQuoteDraft(options, await this._draftArgs(input));
       const notes = [...(input.notes || []), ...draft.warrantyNotes];
@@ -622,6 +671,7 @@ export const api = {
           ? { 'المجموع القديم': before.total_price, 'المجموع الجديد': quote.total_price }
           : { 'المجموع': quote.total_price }),
         ...(transferred ? { 'من حساب': before.created_by, 'إلى حساب': input.createdBy } : {}),
+        [UNDO]: snapshot,
       });
       return quote;
     },
@@ -658,6 +708,7 @@ export const api = {
       logActivity('تفريغ سلة المحذوفات نهائياً', 'العروض', {
         'عدد العروض': ids.length,
         'الأرقام': (data || []).map((q) => q.quote_number).join('، ') || '-',
+        [UNDO]: { kind: 'none', why: 'حذف نهائي من القاعدة — ما ينرجع' },
       });
       return { count: ids.length };
     },
@@ -665,7 +716,10 @@ export const api = {
       const { error } = await supabase.from('quotes').update({ deleted_at: null, deleted_by: null }).eq('id', id);
       throwIf(error);
       const { data: q } = await supabase.from('quotes').select('quote_number, client_name').eq('id', id).maybeSingle();
-      logActivity('استرجاع عرض من سلة المحذوفات', 'العروض', { 'رقم العرض': q?.quote_number ?? id, 'العميل': q?.client_name || '-' });
+      logActivity('استرجاع عرض من سلة المحذوفات', 'العروض', {
+        'رقم العرض': q?.quote_number ?? id, 'العميل': q?.client_name || '-',
+        [UNDO]: { kind: 'quoteSoftDelete', id, label: 'رجّعه للسلة', confirm: `إرجاع العرض ${q?.quote_number ?? id} لسلة المحذوفات` },
+      });
       return { ok: true };
     },
     // إرفاق ملف تصميم (صورة أو PDF) بالعرض — يخزن base64 ويتصدر مع ملف العرض
@@ -673,14 +727,21 @@ export const api = {
       const { error } = await supabase.from('quotes').update({ attachment_name: name, attachment_data: data }).eq('id', id);
       throwIf(error);
       const { data: q } = await supabase.from('quotes').select('quote_number').eq('id', id).maybeSingle();
-      logActivity('إرفاق تصميم بعرض', 'العروض', { 'رقم العرض': q?.quote_number ?? id, 'الملف': name });
+      // المرفق base64 وممكن يكون ميغابايتات — ما ننزله باللقطة، فالحركة غير قابلة للاسترداد
+      logActivity('إرفاق تصميم بعرض', 'العروض', {
+        'رقم العرض': q?.quote_number ?? id, 'الملف': name,
+        [UNDO]: { kind: 'none', why: 'ملف المرفق كبير — يُشال يدوياً من صفحة العروض' },
+      });
       return { ok: true };
     },
     async removeAttachment(id) {
+      const { data: q } = await supabase.from('quotes').select('quote_number, attachment_name').eq('id', id).maybeSingle();
       const { error } = await supabase.from('quotes').update({ attachment_name: null, attachment_data: null }).eq('id', id);
       throwIf(error);
-      const { data: q } = await supabase.from('quotes').select('quote_number').eq('id', id).maybeSingle();
-      logActivity('حذف مرفق عرض', 'العروض', { 'رقم العرض': q?.quote_number ?? id });
+      logActivity('حذف مرفق عرض', 'العروض', {
+        'رقم العرض': q?.quote_number ?? id, ...(q?.attachment_name ? { 'الملف': q.attachment_name } : {}),
+        [UNDO]: { kind: 'none', why: 'ملف المرفق انمسح من القاعدة — يُرفع من جديد' },
+      });
       return { ok: true };
     },
     async get(id) {
@@ -704,6 +765,7 @@ export const api = {
       throwIf(error);
       logActivity('حذف عرض (لسلة المحذوفات)', 'العروض', {
         'رقم العرض': q?.quote_number ?? id, 'العميل': q?.client_name || '-', 'المجموع': q?.total_price ?? '-',
+        [UNDO]: { kind: 'quoteUndelete', id, label: 'إرجاع العرض', confirm: `إرجاع العرض ${q?.quote_number ?? id} من سلة المحذوفات` },
       });
       return { ok: true };
     },
@@ -796,7 +858,10 @@ export const api = {
       } catch {
         /* تعذر حساب القدرة — صفحة التصميم تنطبع بلا بطاقات القدرة */
       }
-      logActivity('تصدير PDF لعرض محفوظ', 'العروض', { 'رقم العرض': quote.quote_number, 'العميل': quote.client_name || '-' });
+      logActivity('تصدير PDF لعرض محفوظ', 'العروض', {
+        'رقم العرض': quote.quote_number, 'العميل': quote.client_name || '-',
+        [UNDO]: { kind: 'none', why: 'تصدير ملف — ماكو شي تغيّر بالبرنامج حتى يُسترجع' },
+      });
       return exportInvoicePdf({
         installment,
         capability,
@@ -838,7 +903,14 @@ export const api = {
       const integratedInfo = cabMat
         ? { units: draft.integrated.units, kwh: Number(cabMat.watt_or_capacity) || 0, kw: Number(cabMat.integrated_kw) || 0 }
         : null;
-      logActivity('تصدير PDF معاينة (بلا حفظ)', 'العروض', { 'العميل': input.clientName || '-', 'المجموع': draft.total });
+      // ملف راح للزبون وما انحفظ بالبرنامج — ننزّل **كل مدخلاته** بالسجل حتى نكدر
+      // نرجّعه للمحرر أو نحفظه لاحقاً. الشكل هو نفسه اللي تنتجه buildEditPrefill.
+      logActivity('تصدير PDF معاينة (بلا حفظ)', 'العروض', {
+        'العميل': input.clientName || '-', 'المجموع': draft.total,
+        ...(input.clientPhone ? { 'الهاتف': input.clientPhone } : {}),
+        [DRAFT]: input,
+        [UNDO]: { kind: 'none', why: 'تصدير ملف — ماكو شي تغيّر بالبرنامج حتى يُسترجع' },
+      });
       return exportInvoicePdf({
         quote: pseudoQuote, items: draft.items, notes, company, fileName: 'عرض_سعر_معاينة.pdf', installment: draft.installment,
         integrated: integratedInfo,
@@ -863,10 +935,13 @@ export const api = {
       return data || [];
     },
     async remove(id) {
-      const { data: old } = await supabase.from('leads').select('full_name, phone').eq('id', id).maybeSingle();
+      const { data: old } = await supabase.from('leads').select('*').eq('id', id).maybeSingle();
       const { error } = await supabase.from('leads').delete().eq('id', id);
       throwIf(error);
-      logActivity('حذف جهة تواصل زائر', 'الطلبات', old ? { 'الاسم': old.full_name || '-', 'الهاتف': old.phone || '-' } : { 'المعرف': id });
+      logActivity('حذف جهة تواصل زائر', 'الطلبات', old ? {
+        'الاسم': old.full_name || '-', 'الهاتف': old.phone || '-',
+        [UNDO]: { kind: 'rowDelete', table: 'leads', row: old, label: 'إرجاع جهة التواصل', confirm: `إرجاع جهة التواصل «${old.full_name || old.phone || id}»` },
+      } : { 'المعرف': id, [UNDO]: { kind: 'none', why: 'الصف ما انلقط قبل الحذف' } });
       return { ok: true };
     },
   },
@@ -887,10 +962,13 @@ export const api = {
       return data || [];
     },
     async remove(id) {
-      const { data: old } = await supabase.from('quote_requests').select('full_name, phone').eq('id', id).maybeSingle();
+      const { data: old } = await supabase.from('quote_requests').select('*').eq('id', id).maybeSingle();
       const { error } = await supabase.from('quote_requests').delete().eq('id', id);
       throwIf(error);
-      logActivity('حذف طلب عرض زبون', 'الطلبات', old ? { 'الاسم': old.full_name || '-', 'الهاتف': old.phone || '-' } : { 'المعرف': id });
+      logActivity('حذف طلب عرض زبون', 'الطلبات', old ? {
+        'الاسم': old.full_name || '-', 'الهاتف': old.phone || '-',
+        [UNDO]: { kind: 'rowDelete', table: 'quote_requests', row: old, label: 'إرجاع الطلب', confirm: `إرجاع طلب «${old.full_name || old.phone || id}»` },
+      } : { 'المعرف': id, [UNDO]: { kind: 'none', why: 'الصف ما انلقط قبل الحذف' } });
       return { ok: true };
     },
   },
@@ -915,6 +993,8 @@ export const api = {
       }
     },
     async set(key, value) {
+      // القيمة القديمة تنقرأ قبل الكتابة — بيها يرجع الإعداد لحاله بضغطة من السجل
+      const before = key.startsWith('quote_') ? null : await this.get(key);
       const { error } = await supabase.from('app_config').upsert({ key, value: JSON.stringify(value) });
       throwIf(error);
       // نسجل الإعدادات المشتركة فقط — مفاتيح quote_* الداخلية لها تسجيلها الخاص بمكان الاستدعاء
@@ -924,7 +1004,11 @@ export const api = {
           battery_factors: 'معاملات أمان البطاريات',
           installment: 'إعدادات التقسيط عبر مصرف النهرين',
         };
-        logActivity('تعديل إعداد مشترك', 'الإعدادات', { 'الإعداد': labels[key] || key });
+        const label = labels[key] || key;
+        logActivity('تعديل إعداد مشترك', 'الإعدادات', {
+          'الإعداد': label,
+          [UNDO]: { kind: 'config', key, before, label: 'إرجاع الإعداد السابق', confirm: `إرجاع «${label}» لقيمته قبل هذا التعديل` },
+        });
       }
       return { ok: true };
     },
@@ -948,7 +1032,14 @@ export const api = {
       for (const k of Object.keys(payload)) {
         if (old && String(old[k]) !== String(row[k])) changed[k] = `${old[k]} ← ${row[k]}`;
       }
-      if (Object.keys(changed).length) logActivity('تعديل إعدادات الحساب', 'الإعدادات', changed);
+      if (Object.keys(changed).length) {
+        logActivity('تعديل إعدادات الحساب', 'الإعدادات', {
+          ...changed,
+          [UNDO]: old
+            ? { kind: 'rowUpdate', table: 'settings', id: 1, before: old, label: 'إرجاع الإعدادات السابقة', confirm: 'إرجاع كل قيم الإعدادات لما كانت عليه قبل هذا التعديل' }
+            : { kind: 'none', why: 'ما انلقطت الإعدادات السابقة' },
+        });
+      }
       return row;
     },
   },
@@ -962,6 +1053,7 @@ export const api = {
     },
     async update(data) {
       await assertAdminSettings('ملف الشركة');
+      const { data: old } = await supabase.from('company_profile').select('*').eq('id', 1).maybeSingle();
       const { data: row, error } = await supabase.from('company_profile').update({
         company_name: data.company_name,
         company_name_en: data.company_name_en,
@@ -973,7 +1065,12 @@ export const api = {
         notes_default: data.notes_default || [],
       }).eq('id', 1).select().single();
       throwIf(error);
-      logActivity('تعديل ملف الشركة', 'الإعدادات', { 'الاسم': row.company_name });
+      logActivity('تعديل ملف الشركة', 'الإعدادات', {
+        'الاسم': row.company_name,
+        [UNDO]: old
+          ? { kind: 'rowUpdate', table: 'company_profile', id: 1, before: old, label: 'إرجاع ملف الشركة', confirm: 'إرجاع بيانات الشركة (الاسم والهواتف والشعار والملاحظات) لما كانت عليه' }
+          : { kind: 'none', why: 'ما انلقط ملف الشركة السابق' },
+      });
       return { ...row, notes_default: Array.isArray(row.notes_default) ? row.notes_default : JSON.parse(row.notes_default || '[]') };
     },
     async pickLogo() {

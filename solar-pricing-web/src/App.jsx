@@ -315,7 +315,14 @@ export default function App() {
         )}
         {page === 'inventory' && <Inventory initialSearch={inventorySearch} />}
         {page === 'requests' && isAdmin && <Requests />}
-        {page === 'history' && isAhmad && <History />}
+        {page === 'history' && isAhmad && (
+          <History
+            onRestoreDraft={(prefill) => {
+              setQuotePrefill({ ...prefill, nonce: Date.now() });
+              setPage('quote');
+            }}
+          />
+        )}
         {page === 'settings' && <Settings />}
       </main>
       <nav className="mobile-bottomnav">
