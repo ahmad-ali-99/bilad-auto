@@ -69,6 +69,19 @@ export default function Inventory({ initialSearch }) {
     );
   });
 
+  // الجيك بوكس: المادة المؤشرة تنعرض وتنستعمل بالعروض، وغير المؤشرة تبقى بالمخزون
+  // بس تختفي من كل مسارات الاستخدام. التغيير يظهر فوراً ثم ينحفظ (وينسجل بالحركات).
+  async function toggleActive(m) {
+    const next = m.active === false;
+    setMaterials((prev) => prev.map((x) => (x.id === m.id ? { ...x, active: next } : x)));
+    try {
+      await window.api.materials.setActive(m.id, next);
+    } catch (e) {
+      setMaterials((prev) => prev.map((x) => (x.id === m.id ? { ...x, active: !next } : x)));
+      alert('تعذر الحفظ: ' + e.message);
+    }
+  }
+
   async function handleDelete(id) {
     if (!confirm('هل أنت متأكد من حذف هذه المادة؟')) return;
     await window.api.materials.remove(id);
@@ -154,6 +167,7 @@ export default function Inventory({ initialSearch }) {
           <table className="data-table">
             <thead>
               <tr>
+                <th title="المؤشّرة فقط تنعرض وتنستعمل بالعروض">بالعروض</th>
                 <th>الرقم</th>
                 <th>الماركة / الموديل</th>
                 <th>الوحدة</th>
@@ -165,10 +179,21 @@ export default function Inventory({ initialSearch }) {
             </thead>
             <tbody>
               {filtered.map((m) => (
-                <tr key={m.id}>
+                <tr key={m.id} style={m.active === false ? { opacity: 0.55, background: '#fbfbfc' } : undefined}>
+                  <td style={{ textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={m.active !== false}
+                      disabled={!canEdit}
+                      onChange={() => toggleActive(m)}
+                      title={m.active === false ? 'مخفية من العروض — أشّر عليها لتستعملها' : 'مفعّلة — شيل التأشير لتخفيها من العروض'}
+                      style={{ width: 18, height: 18, cursor: canEdit ? 'pointer' : 'default' }}
+                    />
+                  </td>
                   <td className="muted">{m.id}</td>
                   <td>
                     <b>{m.brand}</b> {m.model}
+                    {m.active === false && <span className="muted" style={{ fontSize: '0.78em' }}> — مخفية</span>}
                   </td>
                   <td>{m.unit}</td>
                   <td>{m.watt_or_capacity ?? '-'}</td>
@@ -188,7 +213,7 @@ export default function Inventory({ initialSearch }) {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={canEdit ? 7 : 6} className="muted" style={{ textAlign: 'center', padding: 20 }}>
+                  <td colSpan={canEdit ? 8 : 7} className="muted" style={{ textAlign: 'center', padding: 20 }}>
                     لا توجد مواد بهذه الفئة بعد
                   </td>
                 </tr>

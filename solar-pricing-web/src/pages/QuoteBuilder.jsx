@@ -188,7 +188,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
     // الافتراضي: القائمة الدائمة المشتركة من قاعدة البيانات (يحفظها الفريق من نافذة الثانوية)،
     // وإذا ما محفوظة بعد: الأساسيات حسب الألواح (هيكل + صبات) + بوردة الحماية DC
     Promise.all([window.api.materials.list(), window.api.config.get('secondary_defaults')]).then(([all, savedIds]) => {
-      const secondary = (all || []).filter((m) => m.category === 'secondary');
+      // المخفية (بلا جيك بوكس بالمخزون) ما تظهر بنافذة الثانوية ولا بالافتراضيات
+      const secondary = (all || []).filter((m) => m.category === 'secondary' && m.active !== false);
       setSecondaryMaterials(secondary);
       savedSecondaryIdsRef.current = savedIds;
       const defaults = computeSecondaryDefaults(secondary, savedIds, systemTypeRef.current);

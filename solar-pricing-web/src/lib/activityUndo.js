@@ -33,6 +33,8 @@ const CATEGORY_BY_ACTION = {
   'إضافة أجور عمل': 'inventory',
   'تعديل أجور عمل': 'inventory',
   'استيراد إكسل للمخزون': 'inventory',
+  'تفعيل مادة بالعروض': 'inventory',
+  'إخفاء مادة من العروض': 'inventory',
 
   'حفظ عرض جديد': 'quoteNew',
   'رفع عرض جاهز': 'quoteNew',

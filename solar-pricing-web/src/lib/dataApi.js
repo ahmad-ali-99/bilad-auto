@@ -90,11 +90,32 @@ async function withIntegratedKw(rows) {
   }
 }
 
+// المواد المخفية من الاستخدام: المادة تبقى بالمخزون بكل تفاصيلها لكن ما تنعرض
+// ولا تنستعمل بالعروض. المفتاح قائمة معرّفات بـapp_config — بلا عمود جديد بالقاعدة،
+// ولهذا العروض المحفوظة اللي فيها مادة انخفت لاحقاً تبقى مثل ما هي (بنودها لقطات).
+const MATERIALS_DISABLED_KEY = 'materials_disabled';
+
+async function withActive(rows) {
+  try {
+    const ids = await api.config.get(MATERIALS_DISABLED_KEY);
+    const off = new Set((Array.isArray(ids) ? ids : []).map(Number));
+    return rows.map((m) => ({ ...m, active: !off.has(Number(m.id)) }));
+  } catch {
+    // تعذر قراءة القائمة — الافتراض إن الكل مفعّل حتى ما تختفي مواد بالغلط
+    return rows.map((m) => ({ ...m, active: true }));
+  }
+}
+
+// المفاتيح الداخلية ما تنسجل كـ«تعديل إعداد مشترك» — إلها تسجيلها الخاص بمكان الاستدعاء
+const isInternalConfigKey = (key) =>
+  key.startsWith('quote_') || key.startsWith('integrated_specs_') || key === MATERIALS_DISABLED_KEY;
+
 async function allMaterials() {
   const { data, error } = await supabase.from('materials').select('*').order('category').order('id');
   throwIf(error);
   // قدرة الكابينات المتكاملة (kW) لازمة للتحجيم التلقائي — تنلحق من app_config
-  return withIntegratedKw(data || []);
+  // والصفوف ترجع كلها (حتى المخفية) لأن الاستيراد والعروض المحفوظة تحتاجها
+  return withActive(await withIntegratedKw(data || []));
 }
 
 async function nextQuoteNumber() {
@@ -156,7 +177,28 @@ export const api = {
       if (category) q = q.eq('category', category);
       const { data, error } = await q;
       throwIf(error);
-      return withIntegratedKw(data || []);
+      return withActive(await withIntegratedKw(data || []));
+    },
+    // الجيك بوكس بصفحة المخزون: المادة المفعّلة تنعرض وتنستعمل بالعروض، والمخفية
+    // تبقى بالمخزون بس تختفي من كل مسارات الاستخدام. الحركة تنسجل ولها استرجاع.
+    async setActive(id, active) {
+      await assertCanEdit('المخزون');
+      const before = (await api.config.get(MATERIALS_DISABLED_KEY)) || [];
+      const off = new Set(before.map(Number));
+      if (active) off.delete(Number(id));
+      else off.add(Number(id));
+      await api.config.set(MATERIALS_DISABLED_KEY, [...off]);
+      const { data: m } = await supabase.from('materials').select('full_description').eq('id', id).maybeSingle();
+      const name = m?.full_description || `المادة ${id}`;
+      logActivity(active ? 'تفعيل مادة بالعروض' : 'إخفاء مادة من العروض', 'المخزون', {
+        'المادة': name,
+        [UNDO]: {
+          kind: 'config', key: MATERIALS_DISABLED_KEY, before,
+          label: active ? 'رجّعها مخفية' : 'رجّعها مفعّلة',
+          confirm: active ? `إرجاع «${name}» مخفية من العروض` : `إرجاع «${name}» مفعّلة بالعروض`,
+        },
+      });
+      return { ok: true, active };
     },
     async create(data) {
       await assertCanEdit('المخزون');
@@ -359,7 +401,9 @@ export const api = {
         api.config.get('battery_factors'),
       ]);
       return quoteService.buildOptions({
-        materials,
+        // المواد المخفية (بلا جيك بوكس) ما تدخل محرك التسعير إطلاقاً: لا اختيار
+        // تلقائي ولا قوائم تبديل يدوي ولا مواد ثانوية
+        materials: materials.filter((m) => m.active !== false),
         laborTiers: laborTiers || [],
         settingsRow,
         roofAreaM2: input.roofAreaM2,
@@ -994,11 +1038,11 @@ export const api = {
     },
     async set(key, value) {
       // القيمة القديمة تنقرأ قبل الكتابة — بيها يرجع الإعداد لحاله بضغطة من السجل
-      const before = key.startsWith('quote_') ? null : await this.get(key);
+      const before = isInternalConfigKey(key) ? null : await this.get(key);
       const { error } = await supabase.from('app_config').upsert({ key, value: JSON.stringify(value) });
       throwIf(error);
-      // نسجل الإعدادات المشتركة فقط — مفاتيح quote_* الداخلية لها تسجيلها الخاص بمكان الاستدعاء
-      if (!key.startsWith('quote_')) {
+      // نسجل الإعدادات المشتركة فقط — المفاتيح الداخلية لها تسجيلها الخاص بمكان الاستدعاء
+      if (!isInternalConfigKey(key)) {
         const labels = {
           secondary_defaults: 'القائمة الافتراضية للمواد الثانوية',
           battery_factors: 'معاملات أمان البطاريات',

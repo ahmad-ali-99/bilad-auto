@@ -95,6 +95,33 @@ describe('المفاتيح المحجوزة', () => {
   });
 });
 
+// المواد المخفية (بلا جيك بوكس) لازم تنشال بكل مسار استخدام — نفس درس «التصدير
+// نسى نوع المنظومة»: مسار واحد ينسى الفلترة وتظهر مادة مخفية بعرض.
+describe('المواد المخفية ما تدخل أي مسار استخدام', () => {
+  const read = (p) => fs.readFileSync(path.join(HERE, p), 'utf8');
+
+  it('محرك التسعير يستلم المفعّلة فقط', () => {
+    expect(dataApiSrc).toMatch(/materials: materials\.filter\(\(m\) => m\.active !== false\)/);
+  });
+
+  it('نافذة المواد الثانوية بشاشتي الموظف والزبون تفلتر المخفية', () => {
+    for (const p of ['../src/pages/QuoteBuilder.jsx', '../src/pages/CustomerView.jsx']) {
+      expect(read(p), p).toMatch(/category === 'secondary' && m\.active !== false/);
+    }
+  });
+
+  it('قوائم المخزون والاستيراد ترجع كل المواد مع وسم active', () => {
+    // الاستيراد يطابق على الكل وإلا يكرّر المواد المخفية، والعروض المحفوظة تحتاجها
+    expect(dataApiSrc).toContain('return withActive(await withIntegratedKw(data || []))');
+    expect(dataApiSrc).toContain('withActive(await withIntegratedKw(data || []))');
+  });
+
+  it('مفتاح المواد المخفية داخلي — ما ينسجل كتعديل إعداد مشترك', () => {
+    expect(dataApiSrc).toMatch(/isInternalConfigKey = \(key\) =>[\s\S]{0,200}MATERIALS_DISABLED_KEY/);
+    expect(dataApiSrc).toContain('if (!isInternalConfigKey(key))');
+  });
+});
+
 // حارس بنيوي: نفس درس «التصدير نسى نوع المنظومة» — أي نقطة تسجيل تنضاف بلا لقطة
 // تنكشف هنا بدل ما تظهر بالواجهة كحركة «غير قابلة للاسترداد» بلا ما ننتبه.
 describe('كل نقاط التسجيل بـdataApi تحمل لقطة صريحة', () => {

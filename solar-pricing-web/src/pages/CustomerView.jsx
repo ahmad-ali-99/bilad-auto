@@ -88,7 +88,7 @@ export default function CustomerView({ user }) {
   useEffect(() => {
     Promise.all([window.api.materials.list(), window.api.config.get('secondary_defaults')])
       .then(([all, savedIds]) => {
-        const secondary = (all || []).filter((m) => m.category === 'secondary');
+        const secondary = (all || []).filter((m) => m.category === 'secondary' && m.active !== false);
         setSecondarySel(computeSecondaryDefaults(secondary, savedIds));
       })
       .catch(() => setSecondarySel({}));
