@@ -8,6 +8,7 @@ import { buildEditPrefill } from '../lib/editPrefill.js';
 import { detectSceneType } from '../lib/sceneType.js';
 import { getIsAdmin, getCurrentUsername, ADMIN_USERS } from '../lib/agent.js';
 import { computeSecondaryDefaults, isPanelSideMaterial } from '../lib/secondaryDefaults.js';
+import { normName } from '../lib/quotesFilter.js';
 
 // مسودة العرض الجارية تنحفظ محلياً — الرفرش أو التنقل بين الصفحات ما يمسح الشغل،
 // والأسعار تتحدث تلقائياً لأن المعاينة تعيد الجلب والحساب من القاعدة بكل مرة
@@ -19,6 +20,30 @@ function readSavedDraft() {
     return null;
   }
 }
+
+// حالة العرض الفارغ — **مصدر واحد** لكل حقل بالشاشة.
+//
+// كانت قائمة التصفير مكتوبة بالإيد داخل startNewQuote ونُسي منها `unitCounts`، فـ«عرض
+// جديد» يرث الأعداد اليدوية من العرض السابق ويطلع الحساب يدوياً بلا ما ينتبه البياع.
+// أي حقل جديد لازم يمرّ من هنا — واختبار بنيوي يفشّل البناء إذا انضاف حقل للمسودة
+// وما دخل هالقائمة.
+const BLANK = {
+  clientName: '', clientPhone: '', location: '',
+  roofAreaM2: '', ampDay: '', ampNight: '', nightSupplyHours: '',
+  systemType: 'full', tier: 'economy',
+  overrides: {},
+  markupPercent: '', markupMode: 'visible', discountPercent: '',
+  installment: false, installmentPlan: 'company',
+  extraUnits: { panel: 0, battery: 0, inverter: 0, integrated: 0 },
+  unitCounts: {},
+  createdBy: '',
+  pricingOpen: false,
+  // المواد الثانوية والملاحظات إلهما مصدرهما الخاص (الافتراضيات المشتركة وملف الشركة)
+  // فتنضبطان بـapplyQuoteState بقيمة صريحة أو بالافتراضي عند التصفير
+  secondarySel: null,
+  notes: null,
+  editingQuote: null,
+};
 
 const TIERS = [
   { key: 'economy', label: 'اقتصادي' },
@@ -126,7 +151,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   const [extraUnits, setExtraUnits] = useState(savedDraft?.extraUnits ?? { panel: 0, battery: 0, inverter: 0, integrated: 0 });
   // العدد اللي يثبّته البياع بيده — **رقم نهائي** مو فرقاً عن الحساب التلقائي.
   // الفرق كان يتزحزح مع كل تغيير بالأمبيرية أو الساعات فيطلع رقم غير اللي كتبه.
-  const [unitCounts, setUnitCounts] = useState(savedDraft?.unitCounts ?? {});
+  // الأعداد اليدوية هم ما تنقرأ من المسودة — ترجع للحساب التلقائي عند فتح البرنامج
+  const [unitCounts, setUnitCounts] = useState({});
   // قسم الزيادة/الخصم/التقسيط مطوي افتراضياً حتى الشاشة تبقى مرتبة
   const [pricingOpen, setPricingOpen] = useState(savedDraft?.pricingOpen ?? false);
   // العرض التفاعلي 3D (يفتح ملء الشاشة للزبون)
@@ -237,7 +263,8 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   }
 
   // وضع تعديل عرض محفوظ: {id, quote_number} — الحفظ يحدث نفس العرض
-  const [editingQuote, setEditingQuote] = useState(savedDraft?.editingQuote ?? null);
+  // وضع التعديل ما ينقرأ من المسودة — ينقطع عند إغلاق البرنامج (قرار المستخدم)
+  const [editingQuote, setEditingQuote] = useState(null);
 
   // حفظ المسودة محلياً بكل تغيير (مؤجل نص ثانية) — الرفرش والتنقل ما يمسحون الشغل
   useEffect(() => {
@@ -248,7 +275,11 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
           JSON.stringify({
             clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours,
             systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent,
-            installment, installmentPlan, extraUnits, unitCounts, notes, editingQuote, pricingOpen, createdBy,
+            installment, installmentPlan, extraUnits, notes, pricingOpen, createdBy,
+            // `editingQuote` و`unitCounts` **ما ينحفظان عمداً**: كان وضع التعديل يبقى بعد
+            // إغلاق البرنامج، فتفتح الصفحة وإنت مو داري إنك لسه تعدّل عرضاً قديماً،
+            // وتكتب زبوناً جديداً وتدوس حفظ → يدعس على العرض القديم.
+            // بعد الإغلاق: المدخلات تبقى، والارتباط بالعرض والأعداد اليدوية ينقطعان.
           })
         );
       } catch {
@@ -256,32 +287,43 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
       }
     }, 500);
     return () => clearTimeout(t);
-  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits, unitCounts, notes, editingQuote, pricingOpen, createdBy]);
+  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits, notes, pricingOpen, createdBy]);
 
-  // 🆕 عرض جديد: تصفير كامل + مسح المسودة المحفوظة + رجوع الثانوية لافتراضياتها
-  function startNewQuote() {
-    setEditingQuote(null);
-    setSystemType('full');
-    systemTypeRef.current = 'full';
-    setClientName('');
-    setClientPhone('');
-    setLocation('');
-    setRoofAreaM2('');
-    setAmpDay('');
-    setAmpNight('');
-    setNightSupplyHours('');
-    setTier('economy');
-    setOverrides({});
-    setMarkupPercent('');
-    setMarkupMode('visible');
-    setDiscountPercent('');
-    setInstallment(false);
-    setInstallmentPlan('company');
-    setExtraUnits({ panel: 0, battery: 0, inverter: 0 });
-    setCreatedBy('');
-    setSecondarySel(secondaryDefaultsRef.current);
-    window.api.company.get().then((c) => setNotes(c.notes_default || [])).catch(() => {});
+  // كتابة حالة العرض كاملة من كائن واحد — الطريق الوحيد لتصفير الشاشة أو تعبئتها،
+  // حتى ما ينُسى حقل مرة ثانية ويتسرّب من عرض لعرض.
+  function applyQuoteState(s) {
+    setClientName(s.clientName);
+    setClientPhone(s.clientPhone);
+    setLocation(s.location);
+    setRoofAreaM2(s.roofAreaM2);
+    setAmpDay(s.ampDay);
+    setAmpNight(s.ampNight);
+    setNightSupplyHours(s.nightSupplyHours);
+    setSystemType(s.systemType);
+    systemTypeRef.current = s.systemType;
+    setTier(s.tier);
+    setOverrides(s.overrides);
+    setMarkupPercent(s.markupPercent);
+    setMarkupMode(s.markupMode);
+    setDiscountPercent(s.discountPercent);
+    setInstallment(s.installment);
+    setInstallmentPlan(s.installmentPlan);
+    setExtraUnits(s.extraUnits);
+    setUnitCounts(s.unitCounts);
+    setCreatedBy(s.createdBy);
+    setPricingOpen(s.pricingOpen);
+    setEditingQuote(s.editingQuote);
+    // الثانوية: قيمة صريحة، وإلا الافتراضيات المشتركة
+    setSecondarySel(s.secondarySel ?? secondaryDefaultsRef.current);
+    // الملاحظات: قيمة صريحة، وإلا ملاحظات الشركة الافتراضية
+    if (s.notes) setNotes(s.notes);
+    else window.api.company.get().then((c) => setNotes(c.notes_default || [])).catch(() => setNotes([]));
     setSaveMessage('');
+  }
+
+  // 🆕 عرض جديد: تصفير كامل من BLANK + مسح المسودة المحفوظة
+  function startNewQuote() {
+    applyQuoteState(BLANK);
     try {
       localStorage.removeItem(DRAFT_KEY);
     } catch {
@@ -301,6 +343,50 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   function applyPrefill(p) {
     if (!p) return;
     const flashed = new Set();
+
+    // فتح عرض محفوظ للتعديل = **استبدال كامل** للحالة، مو دمج جزئي.
+    // الدمج الجزئي كان يترك بقايا العرض السابق (موقع، أعداد يدوية، ثانوية) بالعرض
+    // اللي بعده — وهذا اللي كان «يتداخل مع العروض المتبقية».
+    if (p.editing) {
+      const a = p.adjustments || {};
+      const x = p.extraUnits || a.extraUnits || {};
+      applyQuoteState({
+        ...BLANK,
+        clientName: p.clientName ?? '',
+        clientPhone: p.clientPhone ?? '',
+        location: p.location ?? '',
+        roofAreaM2: p.roofAreaM2 == null ? '' : String(p.roofAreaM2),
+        ampDay: p.ampDay == null ? '' : String(p.ampDay),
+        ampNight: p.ampNight == null ? '' : String(p.ampNight),
+        nightSupplyHours: p.nightSupplyHours == null ? '' : String(p.nightSupplyHours),
+        systemType: p.systemType || BLANK.systemType,
+        tier: p.tier ?? BLANK.tier,
+        overrides: p.overrides || {},
+        markupPercent: Number(a.markupPercent) > 0 ? String(a.markupPercent) : '',
+        markupMode: a.markupMode === 'distributed' ? 'distributed' : 'visible',
+        discountPercent: Number(a.discountPercent) > 0 ? String(a.discountPercent) : '',
+        installment: !!a.installment?.enabled,
+        installmentPlan: a.installment?.plan === 'cbi' ? 'cbi' : 'company',
+        extraUnits: {
+          panel: Number(x.panel) || 0, battery: Number(x.battery) || 0,
+          inverter: Number(x.inverter) || 0, integrated: Number(x.integrated) || 0,
+        },
+        unitCounts: p.unitCounts || a.unitCounts || {},
+        createdBy: p.createdBy ?? '',
+        secondarySel: p.secondarySelections || {},
+        notes: p.notes || null,
+        editingQuote: p.editing,
+      });
+      for (const k of ['clientName', 'clientPhone', 'location', 'roofAreaM2', 'ampDay', 'ampNight', 'nightSupplyHours']) {
+        if (p[k] != null) flashed.add(k);
+      }
+      setFlashFields(flashed);
+      clearTimeout(flashTimerRef.current);
+      flashTimerRef.current = setTimeout(() => setFlashFields(new Set()), 2600);
+      return;
+    }
+
+    // تعبئة جزئية (المساعد الذكي أو تنبيه التكرار): يملأ اللي يعرفه ويترك الباقي
     const apply = (key, setter, val) => {
       if (val == null) return;
       setter(typeof val === 'string' ? val : String(val));
@@ -346,6 +432,26 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   useEffect(() => {
     if (prefill) applyPrefill(prefill);
   }, [prefill]);
+
+  // تغيّر اسم الزبون وإحنا بوضع التعديل = صار عرضاً لزبون آخر → ينقطع الارتباط
+  // بالعرض القديم وترجع الأعداد للحساب التلقائي، حتى الحفظ ما يدعس على عرض غيره.
+  // المواد الثانوية والملاحظات **ما تنمسح** — شغل البياع الحالي يبقى.
+  // بتأخير نص ثانية حتى ما ينقطع الارتباط بأول حرف يكتبه وهو يصلّح الاسم.
+  useEffect(() => {
+    if (!editingQuote) return undefined;
+    const original = normName(editingQuote.clientName || '');
+    const t = setTimeout(() => {
+      const now = normName(clientName || '');
+      if (!now || now === original) return;
+      setEditingQuote(null);
+      setUnitCounts({});
+      setSaveMessage(
+        `انقطع وضع التعديل — تغيّر اسم الزبون عن العرض ${editingQuote.quote_number}. `
+        + 'الحفظ راح ينشئ عرضاً جديداً، والأعداد رجعت للحساب التلقائي.'
+      );
+    }, 500);
+    return () => clearTimeout(t);
+  }, [clientName, editingQuote]);
 
   // فحص حي أثناء الكتابة: إذا الاسم أو الرقم موجود بعرض سابق يطلع تنبيه وسط الشاشة
   useEffect(() => {

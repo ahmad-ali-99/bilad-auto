@@ -597,7 +597,9 @@ export const api = {
       const draft = quoteService.buildQuoteDraft(options, await this._draftArgs(input));
       const { data: profile } = await supabase.from('company_profile').select('notes_default').eq('id', 1).single();
       const defaultNotes = Array.isArray(profile?.notes_default) ? profile.notes_default : JSON.parse(profile?.notes_default || '[]');
-      const notes = [...(input.notes || defaultNotes), ...draft.warrantyNotes];
+      // إزالة التكرار: فتح العرض للتعديل يرجّع ملاحظاته المحفوظة **وهي أصلاً تحتوي**
+      // ملاحظات الضمان من الحفظة السابقة — فبلا Set تتراكم نسخة بكل تعديل
+      const notes = [...new Set([...(input.notes || defaultNotes), ...draft.warrantyNotes])];
       const quote_number = await nextQuoteNumber();
       const { data: { user } } = await supabase.auth.getUser();
 
@@ -668,7 +670,7 @@ export const api = {
       } : { kind: 'none', why: 'ما انلقطت حالة العرض قبل التعديل' };
       const options = await this._options(input);
       const draft = quoteService.buildQuoteDraft(options, await this._draftArgs(input));
-      const notes = [...(input.notes || []), ...draft.warrantyNotes];
+      const notes = [...new Set([...(input.notes || []), ...draft.warrantyNotes])];
 
       const { data: quote, error } = await supabase
         .from('quotes')
@@ -925,7 +927,9 @@ export const api = {
       const draft = quoteService.buildQuoteDraft(options, await this._draftArgs(input));
       const { data: company } = await supabase.from('company_profile').select('*').eq('id', 1).single();
       const defaultNotes = Array.isArray(company?.notes_default) ? company.notes_default : JSON.parse(company?.notes_default || '[]');
-      const notes = [...(input.notes || defaultNotes), ...draft.warrantyNotes];
+      // إزالة التكرار: فتح العرض للتعديل يرجّع ملاحظاته المحفوظة **وهي أصلاً تحتوي**
+      // ملاحظات الضمان من الحفظة السابقة — فبلا Set تتراكم نسخة بكل تعديل
+      const notes = [...new Set([...(input.notes || defaultNotes), ...draft.warrantyNotes])];
       // رقم العرض التسلسلي للموظفين فقط — الزبون (Google) يطلع ملفه بدون رقم
       const { data: { user: pdfUser } } = await supabase.auth.getUser();
       const isStaffUser = String(pdfUser?.email || '').endsWith('@biladauto.local');

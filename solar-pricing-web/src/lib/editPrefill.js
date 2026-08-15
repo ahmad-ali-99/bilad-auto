@@ -31,7 +31,13 @@ export async function buildEditPrefill(quoteId) {
           : 'full');
 
   return {
-    editing: { id: full.quote.id, quote_number: full.quote.quote_number },
+    // اسم الزبون يمشي مع الارتباط: إذا انبدل بالشاشة معناها صار عرضاً لزبون آخر،
+    // فينقطع وضع التعديل بدل ما يدعس على عرض هذا الزبون
+    editing: {
+      id: full.quote.id,
+      quote_number: full.quote.quote_number,
+      clientName: full.quote.client_name || '',
+    },
     systemType,
     // الأعداد المثبتة يدوياً ترجع كما حُفظت
     unitCounts: adjustments?.unitCounts || null,
