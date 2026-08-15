@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ModalPortal from './ModalPortal.jsx';
 
 // أخطاء قاعدة البيانات تجي بنص إنكليزي خام ما يفهمه البياع — نترجم المعروف منها
 // لكلام واضح يكول شنو المطلوب بالضبط، والباقي يمر كما هو حتى ما نخفي شي.
@@ -92,6 +93,7 @@ export default function MaterialFormModal({ category, initial, onClose, onSave }
   const capacityLabel = category === 'battery' || isIntegrated ? 'السعة (kWh)' : 'القدرة (واط)';
 
   return (
+    <ModalPortal>
     <div className="modal-overlay" onClick={onClose}>
       <div className={maxed ? "modal modal-max" : "modal"} onClick={(e) => e.stopPropagation()}>
         <button type="button" className="modal-zoom-btn" onClick={() => setMaxed((m) => !m)} title="تكبير / تصغير النافذة">{maxed ? "🗕" : "⛶"}</button>
@@ -170,7 +172,7 @@ export default function MaterialFormModal({ category, initial, onClose, onSave }
             </div>
           )}
 
-          <div className="toolbar" style={{ marginTop: 16 }}>
+          <div className="toolbar modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>
               إلغاء
             </button>
@@ -181,5 +183,6 @@ export default function MaterialFormModal({ category, initial, onClose, onSave }
         </form>
       </div>
     </div>
+    </ModalPortal>
   );
 }

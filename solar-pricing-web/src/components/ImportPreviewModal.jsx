@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ModalPortal from './ModalPortal.jsx';
 
 const CATEGORY_OPTIONS = [
   { value: 'panel', label: 'لوح' },
@@ -69,6 +70,7 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
 
   if (result) {
     return (
+      <ModalPortal>
       <div className="modal-overlay" onClick={() => onDone()}>
         <div className="modal" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
           <h3>تم الاستيراد بنجاح ✔</h3>
@@ -86,10 +88,12 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
           </button>
         </div>
       </div>
+      </ModalPortal>
     );
   }
 
   return (
+    <ModalPortal>
     <div className="modal-overlay" onClick={onClose}>
       <div className={maxed ? "modal modal-wide modal-max" : "modal modal-wide"} onClick={(e) => e.stopPropagation()}>
         <button type="button" className="modal-zoom-btn" onClick={() => setMaxed((m) => !m)} title="تكبير / تصغير النافذة">{maxed ? "🗕" : "⛶"}</button>
@@ -235,7 +239,7 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
           </div>
         )}
 
-        <div className="toolbar" style={{ marginTop: 14 }}>
+        <div className="toolbar modal-footer">
           <button className="btn btn-secondary" onClick={onClose} disabled={importing}>
             إلغاء
           </button>
@@ -247,5 +251,6 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }

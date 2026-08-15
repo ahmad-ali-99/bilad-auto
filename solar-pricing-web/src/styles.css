@@ -189,10 +189,29 @@ textarea { resize: vertical; min-height: 70px; }
   position: fixed; inset: 0; background: rgba(0,0,0,0.4);
   /* فوق شريط الإجراءات الثابت (50) وشريط التنقل السفلي (1200) — المودال يغطي كلشي */
   display: flex; align-items: center; justify-content: center; z-index: 1300;
+  /* dvh = الارتفاع المرئي فعلاً. بسفاري الآيفون `100vh` تحسب الشاشة الكاملة بينما
+     شريط العنوان ياكل جزءاً منها، فأسفل النافذة ينزل تحت الحافة ويروح زر الحفظ. */
+  height: 100vh; height: 100dvh;
+  padding-block: 8px;
 }
 .modal {
   background: #fff; border-radius: 10px; padding: 22px;
-  width: 560px; max-height: 88vh; overflow-y: auto;
+  width: 560px; overflow-y: auto;
+  max-height: 88vh; max-height: 88dvh;
+}
+
+/* صف أزرار الإجراء ملتصق بأسفل النافذة — ما ينزل تحت الحافة مهما تمرّر المستخدم.
+   قبل هذا كان آخر عنصر بنافذة تتمرر وفوقه مُمرِّر ثانٍ (جدول المواد)، فالإصبع
+   يمرّر الجدول والنافذة نفسها ما تتمرر، وزر الحفظ يبقى بعيداً عن المتناول. */
+.modal-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  margin: 14px -22px -22px;
+  padding: 12px 22px;
+  background: #fff;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 16px 16px;
 }
 .modal-wide { width: 92vw; max-width: 1200px; }
 
@@ -934,8 +953,15 @@ h2.page-title::before {
   /* شريط الإجراءات يلتصق فوق التنقل مباشرة */
   .action-bar { bottom: 4px; padding: 9px 10px; }
   .action-total { font-size: 1.05rem; }
-  /* المودالات مريحة للتمرير */
-  .modal, .modal-wide { max-height: 86vh; overflow-y: auto; }
+  /* المودالات مريحة للتمرير — dvh حتى ما ينزل أسفلها تحت شريط عنوان سفاري */
+  .modal, .modal-wide { max-height: 86vh; max-height: 88dvh; overflow-y: auto; }
+  /* الهوامش السالبة تطابق padding: 14px مال النافذة بالموبايل */
+  .modal-footer {
+    margin: 12px -14px -14px;
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  }
+  /* تمرير متداخل أقل: الجدول يترك مجالاً للترويسة وصف الأزرار سوية */
+  .import-table-wrap { max-height: 50dvh; }
   /* العلامة بالشريط العلوي أصغر شوية */
   .brand-text b { font-size: 0.9rem; }
   .brand-text small { font-size: 0.6rem; }
@@ -967,8 +993,8 @@ h2.page-title::before {
 .modal-max {
   width: 96vw !important;
   max-width: 96vw !important;
-  height: 93vh !important;
-  max-height: 93vh !important;
+  height: 93dvh !important;
+  max-height: 93dvh !important;
   overflow-y: auto !important;
 }
 .modal-max textarea { min-height: 170px !important; }

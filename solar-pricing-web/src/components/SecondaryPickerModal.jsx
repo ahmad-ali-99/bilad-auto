@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { isPanelSideMaterial } from '../lib/secondaryDefaults.js';
+import ModalPortal from './ModalPortal.jsx';
 
 function fmt(n) {
   return Math.round(n || 0).toLocaleString('en-US');
@@ -51,6 +52,7 @@ export default function SecondaryPickerModal({ secondary, selections, panelCount
   }, 0);
 
   return (
+    <ModalPortal>
     <div className="modal-overlay" onClick={onClose}>
       <div className={maxed ? "modal modal-wide modal-max" : "modal modal-wide"} onClick={(e) => e.stopPropagation()}>
         <button type="button" className="modal-zoom-btn" onClick={() => setMaxed((m) => !m)} title="تكبير / تصغير النافذة">{maxed ? "🗕" : "⛶"}</button>
@@ -119,7 +121,7 @@ export default function SecondaryPickerModal({ secondary, selections, panelCount
         </div>
 
         {defaultsMsg && <div className="alert alert-info" style={{ marginTop: 10 }}>{defaultsMsg}</div>}
-        <div className="toolbar" style={{ marginTop: 14, flexWrap: 'wrap', gap: 8 }}>
+        <div className="toolbar modal-footer" style={{ flexWrap: 'wrap', gap: 8 }}>
           <span className="total-badge">مجموع الثانوية المضافة: {fmt(includedTotal)} دينار</span>
           <div style={{ display: 'flex', gap: 8 }}>
             {/* بوضع الأوف جرد القائمة منقوصة (بلا مواد الألواح) — اعتمادها كافتراضي دائم
@@ -136,6 +138,7 @@ export default function SecondaryPickerModal({ secondary, selections, panelCount
         </div>
       </div>
     </div>
+    </ModalPortal>
   );
 }
 
