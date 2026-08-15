@@ -7,6 +7,34 @@ import { buildInvoiceInnerHtml } from './invoiceHtml.js';
 import { buildStructurePageHtml, panelCountFromItems, integratedFromItems } from './structureDiagram.js';
 import { CABINET_IMAGE } from '../assets/cabinetImage.js';
 
+// اسم ملف العرض المُصدَّر — يُبنى بمكان واحد حتى ما تنضاف نقطة تصدير بلا اسم الزبون.
+// كان الاسم منصوصاً بالإيد («عرض_سعر_معاينة.pdf» لكل المعاينات!)، فالبياع يعيد تسميته
+// بيده قبل ما يرسله بالواتساب. الشكل المطلوب: «حسين نعمة - 204.pdf».
+//
+// التنظيف واجب لأن الاسم يجي من كتابة البياع ويروح لنظام الملفات ولمشاركة أندرويد.
+const MAX_NAME = 80;
+
+export function quoteFileName(clientName, quoteNumber) {
+  const clean = String(clientName || '')
+    // محارف ممنوعة بويندوز/أندرويد + محارف التحكم
+    .replace(/[\\/:*?"<>|]/g, ' ')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MAX_NAME)
+    // ويندوز يرفض النقطة والمسافة بالنهاية
+    .replace(/[.\s]+$/, '');
+
+  // رقم العرض: الزبون (Google) ياخذ '—' بدل رقم تسلسلي — ما ينضاف للاسم
+  const num = quoteNumber != null && /^\d+$/.test(String(quoteNumber).trim())
+    ? String(quoteNumber).trim()
+    : '';
+
+  if (clean) return `${clean}${num ? ` - ${num}` : ''}.pdf`;
+  return num ? `عرض سعر ${num}.pdf` : 'عرض سعر معاينة.pdf';
+}
+
 // الأوزان المستعملة بصفحات العرض (الفاتورة تستعمل 700، والغلاف 600 و800)
 const SHEET_WEIGHTS = [400, 600, 700, 800];
 

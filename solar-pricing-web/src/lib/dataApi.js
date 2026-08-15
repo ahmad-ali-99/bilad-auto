@@ -4,7 +4,7 @@ import { supabase } from './supabase.js';
 import * as quoteService from './quoteService.js';
 import * as calc from './calc.js';
 import * as excelImport from './excelImport.js';
-import { exportInvoicePdf } from './pdfExport.js';
+import { exportInvoicePdf, quoteFileName } from './pdfExport.js';
 import { logActivity } from './activityLog.js';
 import { UNDO, DRAFT } from './activityUndo.js';
 import { isRestrictedUser, canViewQuotes, canEditSettings } from './permissions.js';
@@ -915,7 +915,8 @@ export const api = {
         items: (items || []).map((i) => ({ ...i, description: i.description_snapshot })),
         notes: (notes || []).map((n) => n.note_text),
         company,
-        fileName: `عرض_سعر_${quote.quote_number}.pdf`,
+        // الملف ينزل باسم الزبون — البياع يرسله بالواتساب بلا ما يعيد تسميته
+        fileName: quoteFileName(quote.client_name, quote.quote_number),
         attachment: quote.attachment_data ? { name: quote.attachment_name, data: quote.attachment_data } : null,
       });
     },
@@ -956,7 +957,9 @@ export const api = {
         [UNDO]: { kind: 'none', why: 'تصدير ملف — ماكو شي تغيّر بالبرنامج حتى يُسترجع' },
       });
       return exportInvoicePdf({
-        quote: pseudoQuote, items: draft.items, notes, company, fileName: 'عرض_سعر_معاينة.pdf', installment: draft.installment,
+        quote: pseudoQuote, items: draft.items, notes, company, installment: draft.installment,
+        // كان كل المعاينات تنزل بنفس الاسم وتدعس على بعضها
+        fileName: quoteFileName(input.clientName, pseudoQuote.quote_number),
         integrated: integratedInfo,
         panelCount: draft.counts?.panel ?? null,
         // تفاصيل قدرة المنظومة تنطبع بصفحة التصميم — نفس اللي يشوفه البياع بالمعاينة
