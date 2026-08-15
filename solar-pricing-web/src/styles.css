@@ -870,6 +870,56 @@ h2.page-title::before {
 .table-scroll::-webkit-scrollbar-thumb:hover { background: #91a3b6; }
 .table-scroll { scrollbar-color: #b9c6d4 #f1f4f8; }
 
+/* ====== بطاقات المخزون (شكل الموبايل) ======
+   بديل الجدول بثمانية أعمدة: عرضه الأدنى ٦٤٠ بكسل والتلفون ٤٣٠، فالسعر وأزرار
+   التعديل كانوا برّا الشاشة. بالبطاقة كل شي ظاهر بلا تمرير أفقي، وبلا صندوق
+   تمرير داخلي حتى الصفحة تتمرر عادي وتوصل لآخر مادة. */
+.inv-cards { display: flex; flex-direction: column; gap: 8px; }
+
+.inv-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 1px 2px rgba(18, 41, 67, 0.05);
+}
+.inv-card-off { opacity: 0.6; background: #fbfbfc; }
+
+/* الجيك بوكس بأول السطر مع الاسم — يوفّر سطراً كاملاً ويخلي التأشير أول شي تشوفه */
+.inv-card-head { display: flex; align-items: flex-start; gap: 8px; }
+.inv-card-title { font-size: 0.95rem; color: var(--navy-dark); line-height: 1.5; flex: 1; }
+.inv-card-title b { color: var(--navy); }
+.inv-card-badge {
+  margin-inline-start: 6px; font-size: 0.7rem; font-weight: 700;
+  color: #8a6d3b; background: #fcf3e3; border-radius: 6px; padding: 2px 6px;
+}
+/* هدف لمس ٤٠ بكسل حول مربع ٢٢ — الإصبع ما يصيد مربعاً صغيراً */
+.inv-card-check {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; margin: -9px -8px -9px -4px;
+  cursor: pointer; flex-shrink: 0;
+}
+.inv-card-check input { width: 22px; height: 22px; cursor: pointer; }
+
+.inv-card-meta {
+  display: flex; flex-wrap: wrap; gap: 2px 12px;
+  margin-top: 4px; font-size: 0.78rem; color: var(--muted);
+}
+.inv-card-meta b { color: var(--navy-dark); font-weight: 700; }
+
+.inv-card-price {
+  font-size: 1.2rem; font-weight: 800; color: var(--navy); letter-spacing: -0.3px;
+}
+.inv-card-price small { font-size: 0.72rem; font-weight: 600; color: var(--muted); }
+
+/* السعر والأزرار بسطر واحد — أهم رقم وأكثر إجراء، جنب بعض */
+.inv-card-actions {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border);
+}
+.inv-card-btns { display: flex; gap: 8px; flex-shrink: 0; }
+.inv-card-btns .btn { min-height: 40px; }
+
 /* لمسات موبايل جدية */
 @media (max-width: 700px) {
   .mobile-content { padding: 10px 10px 4px !important; }

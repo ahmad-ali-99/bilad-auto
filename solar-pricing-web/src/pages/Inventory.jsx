@@ -4,6 +4,7 @@ import LaborTable from '../components/LaborTable.jsx';
 import ImportPreviewModal from '../components/ImportPreviewModal.jsx';
 import { getCurrentUsername } from '../lib/agent.js';
 import { canEditInventory } from '../lib/permissions.js';
+import { useMediaQuery, PHONE } from '../lib/useMediaQuery.js';
 
 const TABS = [
   { key: 'panel', label: 'الألواح' },
@@ -20,7 +21,49 @@ function capacityLabel(category) {
   return 'القدرة/السعة';
 }
 
+// بطاقة مادة — شكل الموبايل. الجدول بثمانية أعمدة عرضه الأدنى ٦٤٠ بكسل والتلفون
+// ٤٣٠، فالسعر وأزرار التعديل كانوا يطلعون برّا الشاشة ويحتاجون تمريراً أفقياً
+// داخل صندوق. بالبطاقة كل شي بمتناول الإصبع بلا أي تمرير أفقي.
+function MaterialCard({ m, capacityLabel, canEdit, onToggle, onEdit, onDelete }) {
+  const hidden = m.active === false;
+  return (
+    <div className={`inv-card${hidden ? ' inv-card-off' : ''}`}>
+      <div className="inv-card-head">
+        <label
+          className="inv-card-check"
+          title={hidden ? 'مخفية من العروض — أشّر عليها لتستعملها' : 'مفعّلة — شيل التأشير لتخفيها من العروض'}
+        >
+          <input type="checkbox" checked={!hidden} disabled={!canEdit} onChange={() => onToggle(m)} />
+        </label>
+        <div className="inv-card-title">
+          <b>{m.brand}</b> {m.model}
+          {hidden && <span className="inv-card-badge">مخفية</span>}
+        </div>
+      </div>
+      {/* بلا نقطتين بعد القوس اللاتيني — بالعربي تنطّ النقطتان لمحل غلط */}
+      <div className="inv-card-meta">
+        <span>#{m.id}</span>
+        <span>{m.unit}</span>
+        <span>{capacityLabel} <b>{m.watt_or_capacity ?? '-'}</b></span>
+        <span>ضمان <b>{m.warranty_months ?? '-'}</b> شهر</span>
+      </div>
+      <div className="inv-card-actions">
+        <div className="inv-card-price">
+          {Number(m.price).toLocaleString('en-US')} <small>دينار</small>
+        </div>
+        {canEdit && (
+          <span className="inv-card-btns">
+            <button className="btn btn-secondary btn-sm" onClick={() => onEdit(m)}>تعديل</button>
+            <button className="btn btn-danger btn-sm" onClick={() => onDelete(m.id)}>حذف</button>
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Inventory({ initialSearch }) {
+  const isPhone = useMediaQuery(PHONE);
   const [tab, setTab] = useState('panel');
   // حسابات مقيّدة: تشوف المخزون والأسعار كاملة بس بلا أي تعديل
   const [canEdit, setCanEdit] = useState(true);
@@ -163,6 +206,28 @@ export default function Inventory({ initialSearch }) {
             )}
           </div>
 
+          {isPhone ? (
+            // الموبايل: بطاقات بالصفحة نفسها — بلا صندوق تمرير داخلي، فالصفحة
+            // تتمرر عادي وتوصل لكل مادة، وبلا تمرير أفقي أصلاً
+            <div className="inv-cards">
+              {filtered.map((m) => (
+                <MaterialCard
+                  key={m.id}
+                  m={m}
+                  capacityLabel={capacityLabel(tab)}
+                  canEdit={canEdit}
+                  onToggle={toggleActive}
+                  onEdit={openEditForm}
+                  onDelete={handleDelete}
+                />
+              ))}
+              {filtered.length === 0 && (
+                <div className="card muted" style={{ textAlign: 'center', padding: 20 }}>
+                  لا توجد مواد بهذه الفئة بعد
+                </div>
+              )}
+            </div>
+          ) : (
           <div className="table-scroll">
           <table className="data-table">
             <thead>
@@ -221,6 +286,7 @@ export default function Inventory({ initialSearch }) {
             </tbody>
           </table>
           </div>
+          )}
         </>
       )}
 
