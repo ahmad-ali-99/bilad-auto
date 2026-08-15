@@ -69,6 +69,10 @@ export function buildInvoiceInnerHtml({ quote, items, notes, company, installmen
 .inv-sheet * { box-sizing: border-box; }
 .inv-sheet {
   font-family: 'Cairo', sans-serif;
+  /* شبكة أمان: إذا انضاف وزن مو محمّل، المتصفح ياخذ أقرب وزن حقيقي بدل ما «يزيّف»
+     العريض — التزييف يلزق الحروف العربية ببعضها (يبان بأندرويد أكثر من iOS) */
+  font-synthesis: none;
+  -webkit-font-synthesis: none;
   direction: rtl;
   color: #1a1a1a;
   font-size: ${fontSize}px;

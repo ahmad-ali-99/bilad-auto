@@ -109,7 +109,10 @@ export function buildStructurePageHtml(panelCount, company = {}, imgDataUrl = ''
   return `
 <style>
 .mkt-sheet, .mkt-sheet * { box-sizing: border-box; }
-.mkt-sheet { font-family: 'Cairo', sans-serif; direction: rtl; width: 794px; height: 1122px; padding: 0 0 26px; position: relative; overflow: hidden;
+/* font-synthesis: none — بلاها المتصفح يزيّف الوزن 800 المستعمل بالعناوين ويلزق
+   الحروف العربية ببعضها (يبان بأندرويد أكثر من iOS). الوزن الحقيقي محمّل بـmain.jsx */
+.mkt-sheet { font-family: 'Cairo', sans-serif; font-synthesis: none; -webkit-font-synthesis: none;
+  direction: rtl; width: 794px; height: 1122px; padding: 0 0 26px; position: relative; overflow: hidden;
   display: flex; flex-direction: column; background:
   radial-gradient(120% 80% at 82% -12%, #ffe8a8 0%, rgba(255,232,168,0) 40%),
   linear-gradient(180deg, #dff0ff 0%, #eaf6ff 38%, #f3f6f4 70%, #e7eee0 100%); }

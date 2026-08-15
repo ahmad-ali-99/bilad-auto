@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client';
 import '@fontsource/cairo/400.css';
 import '@fontsource/cairo/600.css';
 import '@fontsource/cairo/700.css';
+// الوزن 800 مستعمل بصفحة الغلاف (structureDiagram.js) — بدونه المتصفح «يزيّف» العريض
+// بالضغط على الحرف، وبالعربي المتصل هذا يلزق الحروف ويطلعها مدهونة (أندرويد أسوأ من iOS)
+import '@fontsource/cairo/800.css';
 import './styles.css';
 import { api } from './lib/dataApi.js';
 import App from './App.jsx';

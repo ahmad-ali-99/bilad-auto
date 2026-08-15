@@ -7,6 +7,31 @@ import { buildInvoiceInnerHtml } from './invoiceHtml.js';
 import { buildStructurePageHtml, panelCountFromItems, integratedFromItems } from './structureDiagram.js';
 import { CABINET_IMAGE } from '../assets/cabinetImage.js';
 
+// الأوزان المستعملة بصفحات العرض (الفاتورة تستعمل 700، والغلاف 600 و800)
+const SHEET_WEIGHTS = [400, 600, 700, 800];
+
+// يضمن إن خط Cairo العربي **فعّال فعلاً** قبل ما يلتقط html2canvas.
+//
+// `document.fonts.ready` لوحدها ما تكفي: حزمة fontsource مقسّمة بـunicode-range مع
+// font-display:swap، فوجه الخط العربي ما ينطلب أصلاً إلا لمّا يصير layout لنص عربي
+// بذاك الوزن. كنا ننتظرها قبل أي reflow مضمون فتنحل فوراً (ماكو شي معلّق)، وبعدين
+// html2canvas يقيس النص بمقاسات خط ويرسمه بخط ثاني — فتنزل الحروف فوق بعضها.
+// الأيفون يكون محمّل الخط أصلاً من الواجهة فما يظهر عنده، وأندرويد يوقع بالسباق.
+//
+// الحل: نجبر layout، ثم نطلب كل وزن **بنص عربي صريح** (الطلب بنص لاتيني ما يجيب
+// الشريحة العربية أبداً بسبب unicode-range)، وبعدها ننتظر fonts.ready.
+async function ensureArabicFont(el) {
+  if (el) el.getBoundingClientRect();
+  try {
+    await Promise.all(
+      SHEET_WEIGHTS.map((w) => document.fonts.load(`${w} 16px Cairo`, 'أبجد هوز حطي').catch(() => {}))
+    );
+  } catch {
+    /* متصفح قديم بلا Font Loading API — ننتظر fonts.ready لوحدها */
+  }
+  await document.fonts.ready;
+}
+
 // يرسم HTML لعنصر مخفي → canvas ويضيفه صفحة كاملة بالـPDF (لصفحة التصميم/الغلاف).
 // ensurePage: يبدأ صفحة جديدة (أو يستخدم الأولى إن كانت فارغة) — حتى نتحكم بالترتيب.
 async function addHtmlPage(pdf, html, ensurePage, pageWmm = 210, pageHmm = 297) {
@@ -15,11 +40,11 @@ async function addHtmlPage(pdf, html, ensurePage, pageWmm = 210, pageHmm = 297) 
   host.innerHTML = html;
   document.body.appendChild(host);
   try {
-    await document.fonts.ready;
     // نختار عنصر المحتوى الفعلي: الـHTML يبدأ بوسم <style> فلا نلتقط أول عنصر
     // (يطلع 0×0 ويكسر الحساب)، بل عنصر الصفحة نفسه.
     const el = host.querySelector('.mkt-sheet') || Array.from(host.children).find((c) => c.tagName !== 'STYLE') || host.firstElementChild;
     if (!el) return;
+    await ensureArabicFont(el);
     const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
     if (!canvas.width || !canvas.height) return; // لا نضيف صفحة فارغة/تالفة
     let w = pageWmm;
@@ -198,8 +223,8 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
   document.body.appendChild(host);
 
   try {
-    await document.fonts.ready;
     const sheet = host.querySelector('.inv-sheet');
+    await ensureArabicFont(sheet);
 
     // نجمع حدود العناصر (صفوف الجدول، الملاحظات، الترويسة...) قبل الرسم — حتى القص
     // بين الصفحات يصير عند حدود الصفوف فقط ولا ينقص أي صف أو رقم من نصه
