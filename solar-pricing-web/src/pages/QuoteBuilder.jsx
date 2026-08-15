@@ -13,6 +13,11 @@ import { normName } from '../lib/quotesFilter.js';
 // مسودة العرض الجارية تنحفظ محلياً — الرفرش أو التنقل بين الصفحات ما يمسح الشغل،
 // والأسعار تتحدث تلقائياً لأن المعاينة تعيد الجلب والحساب من القاعدة بكل مرة
 const DRAFT_KEY = 'quote_draft_v1';
+// الارتباط بعرض محفوظ (وضع التعديل) بذاكرة الجلسة مو الدائمة: التنقل بين القوائم
+// ما يقطعه (الصفحة تنفكّ وترجع تتركب بكل تنقّل)، وإغلاق البرنامج يقطعه — حتى ما
+// تفتح البرنامج وإنت مو داري إنك لسه تعدّل عرضاً قديماً فتدعس عليه.
+const EDIT_KEY = 'quote_editing_v1';
+
 function readSavedDraft() {
   try {
     return JSON.parse(localStorage.getItem(DRAFT_KEY)) || null;
@@ -20,6 +25,33 @@ function readSavedDraft() {
     return null;
   }
 }
+function writeSavedDraft(state) {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(state));
+  } catch {
+    /* التخزين المحلي ممتلئ أو معطل — نكمل بدون حفظ */
+  }
+}
+function readEditingQuote() {
+  try {
+    return JSON.parse(sessionStorage.getItem(EDIT_KEY)) || null;
+  } catch {
+    return null;
+  }
+}
+function writeEditingQuote(q) {
+  try {
+    if (q) sessionStorage.setItem(EDIT_KEY, JSON.stringify(q));
+    else sessionStorage.removeItem(EDIT_KEY);
+  } catch {
+    /* تجاهل */
+  }
+}
+
+// آخر تعبئة انطبقت (رقمها المتسلسل) — **بمستوى الوحدة مو داخل المكوّن** حتى تنجو من
+// فكّ الصفحة وتركيبها. بدونها: كل رجوع لصفحة العرض يعيد تطبيق نفس التعبئة القديمة
+// المخزونة بحالة App، فيندعس كل اللي كتبه البياع بعد فتح العرض.
+let lastAppliedPrefill = null;
 
 // حالة العرض الفارغ — **مصدر واحد** لكل حقل بالشاشة.
 //
@@ -124,9 +156,9 @@ function useDebouncedValue(value, delay) {
   return debounced;
 }
 
-export default function QuoteBuilder({ prefill, onDraftChange }) {
+export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) {
   // المسودة المحفوظة (إن وجدت) تسترد بأول تركيب — تتقدم على القيم الفارغة وتخضع للـprefill
-  const savedDraft = useRef(readSavedDraft()).current;
+  const [savedDraft] = useState(readSavedDraft);
   const [clientName, setClientName] = useState(savedDraft?.clientName ?? '');
   const [clientPhone, setClientPhone] = useState(savedDraft?.clientPhone ?? '');
   const [location, setLocation] = useState(savedDraft?.location ?? '');
@@ -151,8 +183,9 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
   const [extraUnits, setExtraUnits] = useState(savedDraft?.extraUnits ?? { panel: 0, battery: 0, inverter: 0, integrated: 0 });
   // العدد اللي يثبّته البياع بيده — **رقم نهائي** مو فرقاً عن الحساب التلقائي.
   // الفرق كان يتزحزح مع كل تغيير بالأمبيرية أو الساعات فيطلع رقم غير اللي كتبه.
-  // الأعداد اليدوية هم ما تنقرأ من المسودة — ترجع للحساب التلقائي عند فتح البرنامج
-  const [unitCounts, setUnitCounts] = useState({});
+  // ينحفظ بالمسودة مثل باقي المدخلات: كان يضيع بكل تنقّل لقائمة ثانية فيرجع الحساب
+  // تلقائياً والبياع مو داري، ويطلع مجموع غير اللي ثبّته.
+  const [unitCounts, setUnitCounts] = useState(savedDraft?.unitCounts ?? {});
   // قسم الزيادة/الخصم/التقسيط مطوي افتراضياً حتى الشاشة تبقى مرتبة
   const [pricingOpen, setPricingOpen] = useState(savedDraft?.pricingOpen ?? false);
   // العرض التفاعلي 3D (يفتح ملء الشاشة للزبون)
@@ -262,32 +295,40 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
     }
   }
 
-  // وضع تعديل عرض محفوظ: {id, quote_number} — الحفظ يحدث نفس العرض
-  // وضع التعديل ما ينقرأ من المسودة — ينقطع عند إغلاق البرنامج (قرار المستخدم)
-  const [editingQuote, setEditingQuote] = useState(null);
+  // وضع تعديل عرض محفوظ: {id, quote_number} — الحفظ يحدث نفس العرض.
+  // يُقرأ من ذاكرة الجلسة: ينجو من التنقل بين القوائم، وينقطع بإغلاق البرنامج.
+  const [editingQuote, setEditingQuote] = useState(readEditingQuote);
+  useEffect(() => {
+    writeEditingQuote(editingQuote);
+  }, [editingQuote]);
+
+  // كل اللي ينحفظ بالمسودة — كائن واحد يقابل BLANK حقلاً بحقل (عدا `editingQuote`
+  // اللي محله ذاكرة الجلسة). أي حقل جديد يُضاف هنا وبـBLANK سوية.
+  const draftState = {
+    clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours,
+    systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent,
+    installment, installmentPlan, extraUnits, unitCounts, notes, pricingOpen, createdBy,
+  };
+  // مرجع حي للمسودة — يستعمله الحفظ الفوري عند مغادرة الصفحة
+  const draftStateRef = useRef(draftState);
+  draftStateRef.current = draftState;
 
   // حفظ المسودة محلياً بكل تغيير (مؤجل نص ثانية) — الرفرش والتنقل ما يمسحون الشغل
   useEffect(() => {
-    const t = setTimeout(() => {
-      try {
-        localStorage.setItem(
-          DRAFT_KEY,
-          JSON.stringify({
-            clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours,
-            systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent,
-            installment, installmentPlan, extraUnits, notes, pricingOpen, createdBy,
-            // `editingQuote` و`unitCounts` **ما ينحفظان عمداً**: كان وضع التعديل يبقى بعد
-            // إغلاق البرنامج، فتفتح الصفحة وإنت مو داري إنك لسه تعدّل عرضاً قديماً،
-            // وتكتب زبوناً جديداً وتدوس حفظ → يدعس على العرض القديم.
-            // بعد الإغلاق: المدخلات تبقى، والارتباط بالعرض والأعداد اليدوية ينقطعان.
-          })
-        );
-      } catch {
-        /* التخزين المحلي ممتلئ أو معطل — نكمل بدون حفظ */
-      }
-    }, 500);
+    const t = setTimeout(() => writeSavedDraft(draftStateRef.current), 500);
     return () => clearTimeout(t);
-  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits, notes, pricingOpen, createdBy]);
+  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, extraUnits, unitCounts, notes, pricingOpen, createdBy]);
+
+  // حفظ فوري عند مغادرة الصفحة أو إغلاق النافذة — بدونه آخر نص ثانية من الكتابة
+  // تروح: المؤقت ينلغي مع فكّ الصفحة قبل ما يوصل للتخزين.
+  useEffect(() => {
+    const flush = () => writeSavedDraft(draftStateRef.current);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      flush();
+    };
+  }, []);
 
   // كتابة حالة العرض كاملة من كائن واحد — الطريق الوحيد لتصفير الشاشة أو تعبئتها،
   // حتى ما ينُسى حقل مرة ثانية ويتسرّب من عرض لعرض.
@@ -429,9 +470,18 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
     flashTimerRef.current = setTimeout(() => setFlashFields(new Set()), 2600);
   }
 
+  // التعبئة تنطبق **مرة وحدة لكل أمر**. حالة App تحتفظ بآخر تعبئة ولا تمسحها، والصفحة
+  // تنفكّ وترجع تتركب بكل تنقّل بين القوائم — فبلا هذا الحارس: كل رجوع لصفحة العرض
+  // يعيد دعس نفس التعبئة القديمة ويمسح كل اللي كتبه البياع بعد فتح العرض.
   useEffect(() => {
-    if (prefill) applyPrefill(prefill);
-  }, [prefill]);
+    if (!prefill) return;
+    const stamp = prefill.nonce ?? prefill;
+    if (lastAppliedPrefill === stamp) return;
+    lastAppliedPrefill = stamp;
+    applyPrefill(prefill);
+    // نبلّغ App حتى يمسحها من حالته — حزام ثاني فوق الحارس
+    if (onPrefillUsed) onPrefillUsed();
+  }, [prefill, onPrefillUsed]);
 
   // تغيّر اسم الزبون وإحنا بوضع التعديل = صار عرضاً لزبون آخر → ينقطع الارتباط
   // بالعرض القديم وترجع الأعداد للحساب التلقائي، حتى الحفظ ما يدعس على عرض غيره.
@@ -502,23 +552,11 @@ export default function QuoteBuilder({ prefill, onDraftChange }) {
     return cls;
   }
 
+  // إلغاء التعديل = شاشة نظيفة، فيمرّ من نفس طريق «عرض جديد».
+  // كانت قائمة تصفير مكتوبة بالإيد ناسية `unitCounts` و`integrated` — فتخرج من
+  // وضع التعديل وتبقى الأعداد اليدوية للعرض القديم شغّالة بالعرض اللي بعده.
   function exitEditMode() {
-    setEditingQuote(null);
-    setClientName('');
-    setClientPhone('');
-    setLocation('');
-    setRoofAreaM2('');
-    setAmpDay('');
-    setAmpNight('');
-    setNightSupplyHours('');
-    setOverrides({});
-    setMarkupPercent('');
-    setMarkupMode('visible');
-    setDiscountPercent('');
-    setInstallment(false);
-    setExtraUnits({ panel: 0, battery: 0, inverter: 0 });
-    setCreatedBy('');
-    setSaveMessage('');
+    startNewQuote();
   }
 
   async function handleUpdate() {

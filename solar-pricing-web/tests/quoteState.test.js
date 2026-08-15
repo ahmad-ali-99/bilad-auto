@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const builder = fs.readFileSync(path.join(HERE, '../src/pages/QuoteBuilder.jsx'), 'utf8');
+const app = fs.readFileSync(path.join(HERE, '../src/App.jsx'), 'utf8');
 const dataApi = fs.readFileSync(path.join(HERE, '../src/lib/dataApi.js'), 'utf8');
 const prefill = fs.readFileSync(path.join(HERE, '../src/lib/editPrefill.js'), 'utf8');
 
@@ -18,9 +19,9 @@ const blankFields = new Set(
     .map((m) => m.slice(0, -1))
 );
 // الحقول اللي تنحفظ بمسودة localStorage
-const draftBlock = builder.slice(builder.indexOf('JSON.stringify({'), builder.indexOf('JSON.stringify({') + 900);
+const draftBlock = builder.slice(builder.indexOf('const draftState = {'));
 const draftFields = new Set(
-  [...draftBlock.matchAll(/[\s{](\w+),/g)].map((m) => m[1]).filter((f) => f !== 'JSON')
+  [...draftBlock.slice(0, draftBlock.indexOf('\n  };')).matchAll(/[\s{](\w+),/g)].map((m) => m[1])
 );
 
 describe('حالة العرض معزولة بين العروض', () => {
@@ -33,12 +34,40 @@ describe('حالة العرض معزولة بين العروض', () => {
     ).toEqual([]);
   });
 
-  it('وضع التعديل والأعداد اليدوية ما ينحفظان بالمسودة (ينقطعان عند الإغلاق)', () => {
-    expect(draftFields.has('editingQuote'), 'editingQuote لازم ما ينحفظ').toBe(false);
-    expect(draftFields.has('unitCounts'), 'unitCounts لازم ما ينحفظ').toBe(false);
-    // ولا يُقرآن من المسودة عند التشغيل
+  it('الأعداد اليدوية تنحفظ بالمسودة — التنقل بين القوائم ما يرجّعها للحساب التلقائي', () => {
+    expect(draftFields.has('unitCounts'), 'unitCounts لازم ينحفظ بالمسودة').toBe(true);
+    expect(builder).toMatch(/useState\(savedDraft\?\.unitCounts/);
+  });
+
+  it('وضع التعديل بذاكرة الجلسة: ينجو من التنقل وينقطع بإغلاق البرنامج', () => {
+    // مو بالمسودة الدائمة — وإلا يبقى بعد الإغلاق ويدعس على عرض قديم بلا علم البياع
+    expect(draftFields.has('editingQuote'), 'editingQuote ما ينحفظ بالتخزين الدائم').toBe(false);
     expect(builder).not.toMatch(/savedDraft\?\.editingQuote/);
-    expect(builder).not.toMatch(/savedDraft\?\.unitCounts/);
+    // ومو بحالة عابرة — وإلا ينقطع بكل تنقّل ويصير الحفظ عرضاً مكرراً
+    expect(builder).toMatch(/sessionStorage\.getItem\(EDIT_KEY\)/);
+    expect(builder).toMatch(/sessionStorage\.setItem\(EDIT_KEY/);
+    expect(builder).toMatch(/sessionStorage\.removeItem\(EDIT_KEY\)/);
+    expect(builder).toMatch(/useState\(readEditingQuote\)/);
+    // وينكتب مع كل تغيير — مو بمكان واحد ينُسى
+    expect(builder).toMatch(/writeEditingQuote\(editingQuote\);?\s*\n\s*\}, \[editingQuote\]\)/);
+  });
+
+  it('المسودة تنكتب فوراً عند مغادرة الصفحة — آخر نص ثانية من الكتابة ما تضيع', () => {
+    expect(builder).toMatch(/pagehide/);
+    // مؤقت التأجيل ينلغي مع فكّ الصفحة، فلازم كتابة صريحة بالتنظيف
+    const flush = builder.slice(builder.indexOf('const flush = () =>'));
+    expect(flush.slice(0, flush.indexOf('}, []);'))).toMatch(/return \(\) => \{[\s\S]*flush\(\);/);
+  });
+
+  it('التعبئة تنطبق مرة وحدة — الرجوع للصفحة ما يعيد دعس عرض مفتوح على شغل البياع', () => {
+    // الحارس لازم يكون **بمستوى الوحدة**: أي مرجع داخل المكوّن ينمسح مع فكّ الصفحة
+    expect(builder).toMatch(/^let lastAppliedPrefill = null;/m);
+    const eff = builder.slice(builder.indexOf('if (!prefill) return;'));
+    const body = eff.slice(0, eff.indexOf('}, [prefill'));
+    expect(body).toMatch(/if \(lastAppliedPrefill === stamp\) return;/);
+    expect(body).toMatch(/lastAppliedPrefill = stamp;[\s\S]*applyPrefill\(prefill\)/);
+    // وApp يمسحها من حالته بعد الاستهلاك
+    expect(app).toMatch(/onPrefillUsed=\{\(\) => setQuotePrefill\(null\)\}/);
   });
 
   it('«عرض جديد» يمرّ من applyQuoteState(BLANK) مو من قائمة تصفير بالإيد', () => {

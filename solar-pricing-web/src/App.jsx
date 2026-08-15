@@ -306,7 +306,14 @@ export default function App() {
       </header>
       <main className="mobile-content">
         {page === 'quote' && (
-          <QuoteBuilder prefill={quotePrefill} onDraftChange={(d) => (draftRef.current = d)} />
+          <QuoteBuilder
+            prefill={quotePrefill}
+            onDraftChange={(d) => (draftRef.current = d)}
+            // التعبئة تُستهلك مرة وحدة: كانت تبقى بالحالة، وصفحة العرض تنفكّ وترجع
+            // تتركب بكل تنقّل — فيرجع البياع من قائمة ثانية ويلگى شغله انمسح
+            // وحلّت محله بيانات العرض مثل ما انفتح أول مرة
+            onPrefillUsed={() => setQuotePrefill(null)}
+          />
         )}
         {page === 'quotes' && (
           <Quotes
