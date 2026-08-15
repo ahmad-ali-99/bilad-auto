@@ -12,6 +12,7 @@ import History from './pages/History.jsx';
 import { supabase } from './lib/supabase.js';
 import { isAdminName } from './lib/agent.js';
 import { forceUpdateApp } from './lib/appUpdate.js';
+import { startFitTables } from './lib/fitTables.js';
 
 const PAGES = [
   { key: 'quote', label: 'عرض سعر', icon: '🧮' },
@@ -71,6 +72,8 @@ function ResetPasswordScreen({ onDone }) {
 
 export default function App() {
   const [page, setPage] = useState('quote');
+  // صناديق الجداول تاخذ الارتفاع المتاح بالضبط — حتى شريط التمرير الأفقي يبقى ظاهراً
+  useEffect(() => startFitTables(), []);
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   // تعبئة من المساعد: للعرض (حقول جاهزة) أو للمخزون (نص بحث) — nonce حتى تنطبق بكل أمر جديد
@@ -325,6 +328,8 @@ export default function App() {
         )}
         {page === 'settings' && <Settings />}
       </main>
+      {/* المساعد الذكي عنصر بشريط التنقل — كان زراً عائماً يطبق على صفوف الجداول
+          وعلى زر «حفظ التعديلات»، فانتقل هنا حتى ما يغطي ولا بكسل من المحتوى */}
       <nav className="mobile-bottomnav">
         {navPages.map((p) => (
           <button key={p.key} className={page === p.key ? 'active' : ''} onClick={() => setPage(p.key)}>
@@ -332,17 +337,16 @@ export default function App() {
             <span>{p.label}</span>
           </button>
         ))}
+        <button
+          className={`nav-assistant${assistantOpen ? ' active' : ''}`}
+          onClick={() => setAssistantOpen((o) => !o)}
+          title="المساعد الذكي"
+          aria-label="المساعد الذكي"
+        >
+          <span className="nav-icon">{assistantOpen ? '✕' : '🤖'}</span>
+          <span>المساعد</span>
+        </button>
       </nav>
-
-      {/* المساعد الذكي: زر عائم يفتح نافذة محادثة فوق أي صفحة */}
-      <button
-        className="assistant-fab"
-        onClick={() => setAssistantOpen((o) => !o)}
-        title="المساعد الذكي"
-        aria-label="المساعد الذكي"
-      >
-        {assistantOpen ? '✕' : '🤖'}
-      </button>
       {assistantOpen && (
         <div className="assistant-drawer-overlay" onClick={() => setAssistantOpen(false)}>
           <div className="assistant-drawer" onClick={(e) => e.stopPropagation()}>
