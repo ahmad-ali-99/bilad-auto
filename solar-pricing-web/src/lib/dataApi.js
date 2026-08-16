@@ -378,12 +378,16 @@ export const api = {
         ? { rate: 1.26, months: 84 }   // 26% لسبع سنوات
         : { rate: 1.35, months: 60 };
       const cfg = await api.config.get(key);
+      // نسبة وأشهر خاصة بهذا العرض تتقدّم على الإعدادات العامة — حتى يقسّط على
+      // أي مصرف بنسبته بلا ما يغيّر الإعدادات المشتركة لكل الفريق
+      const ownRate = Number(input.installmentRate);
+      const ownMonths = Number(input.installmentMonths);
       return {
         enabled: true,
         plan,
         label: installmentPlanLabel(plan),
-        rate: Number(cfg?.rate) > 0 ? Number(cfg.rate) : fallback.rate,
-        months: Number(cfg?.months) > 0 ? Number(cfg.months) : fallback.months,
+        rate: ownRate > 0 ? ownRate : (Number(cfg?.rate) > 0 ? Number(cfg.rate) : fallback.rate),
+        months: ownMonths > 0 ? ownMonths : (Number(cfg?.months) > 0 ? Number(cfg.months) : fallback.months),
       };
     },
     // وسائط بناء العرض — نقطة واحدة يستعملها الجميع (المعاينة، الحفظ، تصدير PDF).
@@ -538,9 +542,18 @@ export const api = {
           markupPercent: Number(a.markupPercent) || 0,
           markupMode: a.markupMode === 'distributed' ? 'distributed' : 'visible',
           discountPercent: Number(a.discountPercent) || 0,
-          // لقطة نسبة الفائدة والأشهر وقت الحفظ — تغيير الإعدادات لاحقاً لا يغير العروض المحفوظة
+          // لقطة نسبة الفائدة والأشهر والخطة وقت الحفظ — تغيير الإعدادات لاحقاً لا يغير العروض المحفوظة.
+          // `plan` كان ناقصاً فكل عرض محفوظ يرجع باسم «مصرف النهرين» حتى لو انحفظ بمبادرة البنك المركزي.
+          // `distributed` يميّز العروض الجديدة (الفائدة داخل أسعار البنود) عن القديمة (بنود بسعر الكاش) —
+          // بدونه إعادة الطباعة تضرب الفائدة مرتين.
           installment: a.installment?.enabled
-            ? { enabled: true, rate: Number(a.installment.rate) || 1.35, months: Number(a.installment.months) || 60 }
+            ? {
+              enabled: true,
+              plan: a.installment.plan === 'cbi' ? 'cbi' : 'company',
+              rate: Number(a.installment.rate) || 1.35,
+              months: Number(a.installment.months) || 60,
+              distributed: true,
+            }
             : null,
           // الزيادة/النقصان اليدوي بالوحدات — يرجع بوضع التعديل
           extraUnits: hasExtra
@@ -842,13 +855,19 @@ export const api = {
       let installment = null;
       const inst = savedAdj?.installment;
       if (inst?.enabled && Number(inst.rate) > 0) {
+        const rate = Number(inst.rate);
         const months = Math.max(1, Math.round(Number(inst.months) || 60));
-        const totalWithInterest = Math.round(quote.total_price * Number(inst.rate));
+        // العروض الجديدة: الفائدة موزّعة داخل أسعار البنود، فـ`total_price` **هو**
+        // مجموع التقسيط — ضربه بالنسبة مرة ثانية يحسب الفائدة مرتين.
+        // العروض المحفوظة قبل هذا التغيير بنودها بسعر الكاش، فتبقى على حسابها القديم.
+        const distributed = inst.distributed === true;
+        const totalWithInterest = distributed ? quote.total_price : Math.round(quote.total_price * rate);
         const plan = inst.plan === 'cbi' ? 'cbi' : 'company';
         installment = {
-          rate: Number(inst.rate), months, totalWithInterest,
+          rate, months, totalWithInterest,
           monthly: Math.round(totalWithInterest / months),
           plan, label: installmentPlanLabel(plan),
+          cashTotal: distributed ? Math.round(quote.total_price / rate) : quote.total_price,
         };
       }
       // قدرة المنظومة لعرض محفوظ: تُعاد من بنوده (عدد وسعة البطاريات والانفيرترات)

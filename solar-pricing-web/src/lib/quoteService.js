@@ -163,18 +163,32 @@ function applyAdjustments(items, total, adjustments) {
     total -= amount;
   }
 
-  // التقسيط المصرفي: المبلغ الكلي النهائي × نسبة الفائدة (معامل ضرب مثل 1.35 بدون جمع 1)
-  // ÷ عدد الأشهر = القسط الشهري. لا يغير مجموع العرض النقدي — يُعرض كسطرين إضافيين.
+  // التقسيط المصرفي: نسبة المصرف (معامل ضرب مثل 1.35 بدون جمع 1) **تتوزع على
+  // أسعار البنود نفسها**، فمجموع العرض يصير هو مجموع التقسيط — وسعر الكاش
+  // ينشال من ملف الزبون (قرار المستخدم: يبقى بالشاشة للبياع فقط).
+  //
+  // التوزيع على البنود مو ضرب المجموع: الضرب على المجموع يخلي فرقاً بينه وبين
+  // جمع السطور، فالزبون يجمع الأعمدة ويطلعله رقم غير المكتوب.
   const inst = adjustments?.installment;
   if (inst?.enabled) {
     const rate = Number(inst.rate) || 0;
     const months = Math.max(1, Math.round(Number(inst.months) || 60));
     if (rate > 0) {
-      const totalWithInterest = Math.round(total * rate);
+      const cashTotal = total;
+      if (rate > 1) {
+        for (const item of items) {
+          item.unit_price = roundAdjustedPrice(item.unit_price * rate);
+          item.subtotal = Math.round(item.quantity * item.unit_price);
+        }
+        total = items.reduce((s, i) => s + i.subtotal, 0);
+      }
       const plan = inst.plan === 'cbi' ? 'cbi' : 'company';
       summary.installment = {
-        rate, months, totalWithInterest, monthly: Math.round(totalWithInterest / months),
-        plan, label: installmentPlanLabel(plan),
+        rate, months, plan, label: installmentPlanLabel(plan),
+        totalWithInterest: total,
+        monthly: Math.round(total / months),
+        cashTotal,
+        interestAmount: total - cashTotal,
       };
     }
   }

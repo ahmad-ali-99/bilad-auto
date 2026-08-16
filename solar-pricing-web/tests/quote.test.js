@@ -137,19 +137,22 @@ describe('نسبة الزيادة والخصم على العرض', () => {
   });
 });
 
-describe('التقسيط المصرفي: المجموع × النسبة ÷ الأشهر (بدون جمع 1)', () => {
+describe('التقسيط المصرفي: النسبة تتوزع على البنود والمجموع يصير مجموع التقسيط', () => {
   const base = () => optionsFor({ roofAreaM2: 28, ampDay: 15, ampNight: 15, nightSupplyHours: 8 });
 
-  it('نسبة 1.3 و60 شهر تطابق عروض الشركة القديمة', () => {
+  it('نسبة 1.3 و60 شهر: البنود تنضرب والمجموع = جمعها، وسعر الكاش محفوظ', () => {
     const draft = buildQuoteDraft(base(), {
       tier: 'economy',
       cableMeters: { 6: 143 },
       adjustments: { installment: { enabled: true, rate: 1.3, months: 60 } },
     });
-    expect(draft.total).toBe(9686000); // المجموع النقدي ما يتغير
-    expect(draft.installment.totalWithInterest).toBe(Math.round(9686000 * 1.3));
-    expect(draft.installment.monthly).toBe(Math.round((9686000 * 1.3) / 60));
-    // ما ينضاف أي سطر للجدول
+    const sum = draft.items.reduce((s, i) => s + i.subtotal, 0);
+    expect(draft.total).toBe(sum);                       // المجموع = جمع السطور بالضبط
+    expect(draft.installment.cashTotal).toBe(9686000);   // سعر الكاش للبياع
+    expect(draft.installment.totalWithInterest).toBe(sum);
+    expect(draft.installment.monthly).toBe(Math.round(sum / 60));
+    expect(sum).toBeGreaterThan(9686000);
+    // ما ينضاف أي سطر للجدول — الفائدة داخل الأسعار مو سطراً مستقلاً
     expect(draft.items.some((i) => /تقسيط|فائدة/.test(i.description))).toBe(false);
   });
 
@@ -159,10 +162,9 @@ describe('التقسيط المصرفي: المجموع × النسبة ÷ ال�
       cableMeters: { 6: 143 },
       adjustments: { markupPercent: 10, markupMode: 'visible', installment: { enabled: true, rate: 1.35, months: 60 } },
     });
-    const finalTotal = 9686000 + 968600;
-    expect(draft.total).toBe(finalTotal);
-    expect(draft.installment.totalWithInterest).toBe(Math.round(finalTotal * 1.35));
-    expect(draft.installment.monthly).toBe(Math.round((finalTotal * 1.35) / 60));
+    expect(draft.installment.cashTotal).toBe(9686000 + 968600);
+    expect(draft.total).toBe(draft.items.reduce((s, i) => s + i.subtotal, 0));
+    expect(draft.installment.monthly).toBe(Math.round(draft.total / 60));
   });
 
   it('بدون تأشير: لا يوجد تقسيط بالمسودة', () => {
