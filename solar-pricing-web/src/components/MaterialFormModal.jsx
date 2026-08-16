@@ -1,25 +1,6 @@
 import React, { useState } from 'react';
 import ModalPortal from './ModalPortal.jsx';
-
-// أخطاء قاعدة البيانات تجي بنص إنكليزي خام ما يفهمه البياع — نترجم المعروف منها
-// لكلام واضح يكول شنو المطلوب بالضبط، والباقي يمر كما هو حتى ما نخفي شي.
-function humanizeSaveError(err, category) {
-  const raw = String(err?.message || err || 'خطأ غير معروف');
-  const low = raw.toLowerCase();
-  if (low.includes('check constraint') || low.includes('violates check')) {
-    if (category === 'integrated') {
-      return 'قاعدة البيانات ما تقبل فئة «سستم متكامل» بعد — لازم يتشغّل كويري التفعيل مرة وحدة (ملف integrated-v2.sql) وبعدها تنحفظ عادي.';
-    }
-    return `القاعدة رفضت قيمة بأحد الحقول: ${raw}`;
-  }
-  if (low.includes('row-level security') || low.includes('permission') || low.includes('محصور') || low.includes('صلاحية')) {
-    return `ما عندك صلاحية للحفظ: ${raw}`;
-  }
-  if (low.includes('failed to fetch') || low.includes('networkerror')) {
-    return 'ما وصلنا للقاعدة — تأكد من الإنترنت وحاول مرة ثانية.';
-  }
-  return raw;
-}
+import { humanizeSaveError } from '../lib/saveErrors.js';
 
 function emptyForm(category) {
   return {

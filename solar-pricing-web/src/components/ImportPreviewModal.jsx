@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ModalPortal from './ModalPortal.jsx';
+import { humanizeSaveError } from '../lib/saveErrors.js';
 
 const CATEGORY_OPTIONS = [
   { value: 'panel', label: 'لوح' },
@@ -19,6 +20,7 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
   const [existingLaborAmps, setExistingLaborAmps] = useState(null);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState(null);
+  const [importError, setImportError] = useState('');
 
   useEffect(() => {
     if (parsed.labor.length === 0) return;
@@ -41,6 +43,7 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
 
   async function handleImport() {
     setImporting(true);
+    setImportError('');
     try {
       const materials = rows
         .filter((r) => r.include)
@@ -63,6 +66,11 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
           .map((l) => ({ system_amps: Number(l.system_amps), price: Number(l.price) || 0, note: l.note })),
       });
       setResult(summary);
+    } catch (err) {
+      // بلا هذا الـcatch كان الخطأ يروح للكونسول والنافذة تبقى مثل ما هي —
+      // البياع يدوس «استيراد» وما يشوف ولا كلمة، ويعيد الرفع فيلگى كلشي «جديد»
+      // مرة ثانية لأن ماكو شي انحفظ أصلاً.
+      setImportError(humanizeSaveError(err));
     } finally {
       setImporting(false);
     }
@@ -73,7 +81,7 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
       <ModalPortal>
       <div className="modal-overlay" onClick={() => onDone()}>
         <div className="modal" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
-          <h3>تم الاستيراد بنجاح ✔</h3>
+          <h3>{result.failed && result.failed.length > 0 ? 'الاستيراد خلص — بس بيه صفوف فشلت ⚠' : 'تم الاستيراد بنجاح ✔'}</h3>
           <p>
             مواد جديدة: <b>{result.added}</b> — مواد محدّثة: <b>{result.updated}</b>
             {(result.laborAdded > 0 || result.laborUpdated > 0) && (
@@ -83,6 +91,17 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
               </>
             )}
           </p>
+          {result.failed && result.failed.length > 0 && (
+            <div className="alert alert-danger" style={{ textAlign: 'start', whiteSpace: 'pre-line' }}>
+              <b>ما انحفظت {result.failed.length} مادة:</b>
+              {result.failed.slice(0, 6).map((f, i) => (
+                <div key={i} style={{ marginTop: 6 }}>
+                  • <b>{f.model}</b> — {humanizeSaveError({ message: f.reason }, f.category)}
+                </div>
+              ))}
+              {result.failed.length > 6 && <div style={{ marginTop: 6 }}>… و{result.failed.length - 6} غيرها بنفس السبب</div>}
+            </div>
+          )}
           <button className="btn btn-primary" onClick={() => onDone()}>
             إغلاق
           </button>
@@ -236,6 +255,12 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {importError && (
+          <div className="alert alert-danger" style={{ whiteSpace: 'pre-line', marginTop: 12 }}>
+            ⚠ ما انحفظ الاستيراد — {importError}
           </div>
         )}
 

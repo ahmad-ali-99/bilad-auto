@@ -260,17 +260,24 @@ export const api = {
       const existing = await allMaterials();
       let added = 0;
       let updated = 0;
+      // صف يفشل ما يوقف الباقي: كانت الحلقة ترمي بأول خطأ فتضيع كل المواد اللي بعده،
+      // والنافذة تبلع الخطأ فما يظهر شي أصلاً. هسه نجمع أسباب الفشل ونرجّعها للعرض.
+      const failed = [];
       for (const raw of materials) {
         const m = excelImport.normalizeImportedMaterial(raw);
         const match = excelImport.findExistingMaterial(existing, m);
-        if (match) {
-          const { error } = await supabase.from('materials').update({ ...m, updated_at: new Date().toISOString() }).eq('id', match.id);
-          throwIf(error);
-          updated++;
-        } else {
-          const { error } = await supabase.from('materials').insert(m);
-          throwIf(error);
-          added++;
+        try {
+          if (match) {
+            const { error } = await supabase.from('materials').update({ ...m, updated_at: new Date().toISOString() }).eq('id', match.id);
+            throwIf(error);
+            updated++;
+          } else {
+            const { error } = await supabase.from('materials').insert(m);
+            throwIf(error);
+            added++;
+          }
+        } catch (err) {
+          failed.push({ model: m.model || m.full_description, category: m.category, reason: err.message });
         }
       }
       let laborAdded = 0;
@@ -279,22 +286,27 @@ export const api = {
         const { data: existingLabor } = await supabase.from('labor_tiers').select('*');
         for (const l of labor) {
           const match = (existingLabor || []).find((x) => x.system_amps === l.system_amps);
-          if (match) {
-            const { error } = await supabase.from('labor_tiers').update({ price: l.price, note: l.note || null }).eq('id', match.id);
-            throwIf(error);
-            laborUpdated++;
-          } else {
-            const { error } = await supabase.from('labor_tiers').insert({ system_amps: l.system_amps, price: l.price, note: l.note || null });
-            throwIf(error);
-            laborAdded++;
+          try {
+            if (match) {
+              const { error } = await supabase.from('labor_tiers').update({ price: l.price, note: l.note || null }).eq('id', match.id);
+              throwIf(error);
+              laborUpdated++;
+            } else {
+              const { error } = await supabase.from('labor_tiers').insert({ system_amps: l.system_amps, price: l.price, note: l.note || null });
+              throwIf(error);
+              laborAdded++;
+            }
+          } catch (err) {
+            failed.push({ model: `أجور عمل ${l.system_amps} أمبير`, category: 'labor', reason: err.message });
           }
         }
       }
       logActivity('استيراد إكسل للمخزون', 'المخزون', {
         'مواد مضافة': added, 'مواد محدثة': updated, 'أجور مضافة': laborAdded, 'أجور محدثة': laborUpdated,
+        ...(failed.length ? { 'صفوف فشلت': failed.length, 'سبب أول فشل': failed[0].reason } : {}),
         [UNDO]: { kind: 'none', why: 'الاستيراد يمس صفوفاً كثيرة دفعة واحدة — ما ينرجع بضغطة' },
       });
-      return { added, updated, laborAdded, laborUpdated };
+      return { added, updated, laborAdded, laborUpdated, failed };
     },
     async downloadTemplate() {
       const XLSX = await import('xlsx');
