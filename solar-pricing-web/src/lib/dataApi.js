@@ -9,6 +9,7 @@ import { logActivity } from './activityLog.js';
 import { UNDO, DRAFT } from './activityUndo.js';
 import { isRestrictedUser, canViewQuotes, canEditSettings } from './permissions.js';
 import { installmentPlanLabel } from './installment.js';
+import { imageKey, isImageKey } from './materialImages.js';
 
 function throwIf(error) {
   if (error) throw new Error(error.message || 'خطأ بالاتصال بقاعدة البيانات');
@@ -108,7 +109,7 @@ async function withActive(rows) {
 
 // المفاتيح الداخلية ما تنسجل كـ«تعديل إعداد مشترك» — إلها تسجيلها الخاص بمكان الاستدعاء
 const isInternalConfigKey = (key) =>
-  key.startsWith('quote_') || key.startsWith('integrated_specs_') || key === MATERIALS_DISABLED_KEY;
+  key.startsWith('quote_') || key.startsWith('integrated_specs_') || isImageKey(key) || key === MATERIALS_DISABLED_KEY;
 
 async function allMaterials() {
   const { data, error } = await supabase.from('materials').select('*').order('category').order('id');
@@ -178,6 +179,36 @@ export const api = {
       const { data, error } = await q;
       throwIf(error);
       return withActive(await withIntegratedKw(data || []));
+    },
+    // صورة المنتج لكل مادة — تُستعمل بمنشور الباقات. تنخزن بـapp_config
+    // (نفس منفذ التوسعة اللي يمشي بلا تعديل بنية القاعدة).
+    async setImage(id, dataUrl) {
+      await assertCanEdit('المخزون');
+      const { error } = dataUrl
+        ? await supabase.from('app_config').upsert({ key: imageKey(id), value: JSON.stringify(dataUrl) })
+        : await supabase.from('app_config').delete().eq('key', imageKey(id));
+      throwIf(error);
+      logActivity(dataUrl ? 'إضافة صورة لمادة' : 'حذف صورة مادة', 'المخزون', {
+        'المعرف': id,
+        [UNDO]: { kind: 'none', why: 'الصورة تنبدل أو تنشال من نافذة المادة مباشرة' },
+      });
+      return { ok: true };
+    },
+    async getImage(id) {
+      return api.config.get(imageKey(id));
+    },
+    // كل الصور دفعة وحدة — المنشور يحتاج صور عدة مواد بنداء واحد
+    async images(ids = null) {
+      const { data, error } = await supabase.from('app_config').select('key,value').like('key', 'material_image_%');
+      throwIf(error);
+      const want = ids ? new Set(ids.map(Number)) : null;
+      const out = {};
+      for (const row of data || []) {
+        const mid = Number(row.key.slice('material_image_'.length));
+        if (!Number.isFinite(mid) || (want && !want.has(mid))) continue;
+        try { out[mid] = JSON.parse(row.value); } catch { /* قيمة تالفة — نتجاهلها */ }
+      }
+      return out;
     },
     // الجيك بوكس بصفحة المخزون: المادة المفعّلة تنعرض وتنستعمل بالعروض، والمخفية
     // تبقى بالمخزون بس تختفي من كل مسارات الاستخدام. الحركة تنسجل ولها استرجاع.

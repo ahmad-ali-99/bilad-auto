@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ModalPortal from './ModalPortal.jsx';
 import { humanizeSaveError } from '../lib/saveErrors.js';
+import { compressImageFile } from '../lib/materialImages.js';
 
 function emptyForm(category) {
   return {
@@ -35,6 +36,36 @@ export default function MaterialFormModal({ category, initial, onClose, onSave }
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  // صورة المنتج — تُستعمل بمنشور الباقات. `undefined` = ما انلمست، `null` = المستخدم شالها
+  const [image, setImage] = useState(undefined);
+  const [imageError, setImageError] = useState('');
+  const [imageBusy, setImageBusy] = useState(false);
+  // الصورة المحمّلة من القاعدة — تنقارن بيها حتى ما ينكتب أمر صورة بكل حفظة.
+  // بدونها كل تعديل سعر لمادة بلا صورة يسجّل «حذف صورة مادة» بسجل الحركات.
+  const loadedImage = useRef(undefined);
+
+  useEffect(() => {
+    if (!initial?.id) return;
+    window.api.materials.getImage(initial.id).then((v) => {
+      loadedImage.current = v || null;
+      setImage(v || null);
+    }).catch(() => {});
+  }, [initial?.id]);
+
+  async function pickImage(file) {
+    setImageError('');
+    if (!file) return;
+    setImageBusy(true);
+    try {
+      const { dataUrl, bytes } = await compressImageFile(file);
+      setImage(dataUrl);
+      setImageError(`تم — حجم الصورة بعد الضغط ${Math.round(bytes / 1024)} كيلوبايت`);
+    } catch (err) {
+      setImageError(err.message);
+    } finally {
+      setImageBusy(false);
+    }
+  }
 
   function set(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -60,6 +91,8 @@ export default function MaterialFormModal({ category, initial, onClose, onSave }
       qty_per_panel: form.qty_per_panel === '' ? null : Number(form.qty_per_panel),
       // قدرة انفيرتر الكابينة (kW) — تنخزن بـapp_config لأن الجدول ما بيه عمود إلها
         ...(isIntegrated ? { integrated_kw: form.integrated_kw === '' ? null : Number(form.integrated_kw) } : {}),
+        // الصورة تنمرّر بس إذا تغيّرت فعلاً — بلا هيك كل حفظة تكتب أو تمسح صورة بلا داعي
+        ...(image === loadedImage.current ? {} : { product_image: image }),
       });
     } catch (err) {
       // البيانات تبقى بالنموذج كما هي — الخطأ يظهر والبياع يعيد المحاولة بلا ما يكتب من جديد
@@ -146,6 +179,34 @@ export default function MaterialFormModal({ category, initial, onClose, onSave }
               <input type="text" value={form.warranty_note || ''} onChange={(e) => set('warranty_note', e.target.value)} placeholder="مثال: ضمان الألواح 10 سنوات لا يشمل الكسر" />
             </div>
           )}
+
+          {/* صورة المنتج — تطلع بمنشور الباقات. اختيارية تماماً. */}
+          <div className="field" style={{ marginTop: 12 }}>
+            <label>صورة المنتج (اختيارية — تظهر بمنشور الباقات)</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              {image ? (
+                <img
+                  src={image} alt=""
+                  style={{ width: 84, height: 84, objectFit: 'contain', background: '#fff', border: '1px solid var(--border)', borderRadius: 10, padding: 4 }}
+                />
+              ) : (
+                <div style={{ width: 84, height: 84, border: '2px dashed #ccd7e4', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9db0c4', fontSize: '1.6rem' }}>🖼</div>
+              )}
+              <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', margin: 0 }}>
+                {imageBusy ? '⏳ جاري الضغط…' : (image ? 'تبديل الصورة' : 'اختيار صورة')}
+                <input
+                  type="file" accept="image/*" style={{ display: 'none' }}
+                  onChange={(e) => { pickImage(e.target.files && e.target.files[0]); e.target.value = ''; }}
+                />
+              </label>
+              {image && (
+                <button type="button" className="btn btn-danger btn-sm" onClick={() => { setImage(null); setImageError(''); }}>
+                  حذف الصورة
+                </button>
+              )}
+            </div>
+            {imageError && <div className="muted" style={{ fontSize: '0.8rem', marginTop: 6 }}>{imageError}</div>}
+          </div>
 
           {saveError && (
             <div className="alert alert-danger" style={{ marginTop: 14, whiteSpace: 'pre-line' }}>

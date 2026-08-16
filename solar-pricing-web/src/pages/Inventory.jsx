@@ -142,10 +142,15 @@ export default function Inventory({ initialSearch }) {
   }
 
   async function handleSaveForm(data) {
-    if (editingMaterial) {
-      await window.api.materials.update(editingMaterial.id, data);
-    } else {
-      await window.api.materials.create(data);
+    // صورة المنتج مو عمود بجدول المواد — تنفصل وتنحفظ بـapp_config.
+    // بدون الفصل يفشل الحفظ كله بـ«column product_image does not exist».
+    const { product_image: image, ...fields } = data;
+    const saved = editingMaterial
+      ? await window.api.materials.update(editingMaterial.id, fields)
+      : await window.api.materials.create(fields);
+    const id = editingMaterial ? editingMaterial.id : saved?.id;
+    if (image !== undefined && id != null) {
+      await window.api.materials.setImage(id, image);
     }
     setShowForm(false);
     reload();

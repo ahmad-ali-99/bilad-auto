@@ -353,3 +353,30 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
     document.body.removeChild(host);
   }
 }
+
+// تصدير منشور الباقات صورة PNG — نفس مسار الفاتورة الآمن للحروف العربية
+// (`ensureArabicFont` قبل html2canvas)، بس المخرج صورة مو PDF.
+export async function exportPosterPng(innerHtml, fileName, { width = 1300, height = 1080, scale = 2 } = {}) {
+  const host = document.createElement('div');
+  host.style.cssText = `position:fixed;left:-4000px;top:0;width:${width}px;background:#fff;z-index:-1;`;
+  host.innerHTML = innerHtml;
+  document.body.appendChild(host);
+  try {
+    await ensureArabicFont(host);
+    // ننتظر تحميل صور المنتجات — html2canvas يرسم إطاراً فارغاً إذا صوّر قبلها
+    await Promise.all(
+      [...host.querySelectorAll('img')].map((img) => (img.complete ? null : new Promise((res) => {
+        img.onload = res; img.onerror = res;
+      })))
+    );
+    const canvas = await html2canvas(host.firstElementChild || host, {
+      scale, useCORS: true, backgroundColor: '#ffffff', width, height,
+    });
+    const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
+    if (!blob) throw new Error('ما انبنت الصورة');
+    downloadBlob(blob, fileName);
+    return { canceled: false, width: canvas.width, height: canvas.height };
+  } finally {
+    document.body.removeChild(host);
+  }
+}
