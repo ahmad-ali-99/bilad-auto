@@ -235,15 +235,58 @@ function findExistingMaterial(existingMaterials, material) {
   );
 }
 
+// مرشحات «نفس المادة باسم ثاني»: نفس الفئة ونفس السعة/القدرة والموديل مختلف.
+//
+// المطابقة تمشي على (الفئة + الموديل + السعة). فإذا البياع بدّل اسم الموديل
+// بالمخزون بيده — مثل ما صار: `HZ6000-ES-C10` صار `HZ-ES-C10 6K` — وبعدين رفع
+// نفس الإكسل بالاسم القديم، ما ينلكه تطابق فينضاف **نسخة ثانية من نفس المادة**.
+// هنا ننبّهه قبل الحفظ بدل ما يكتشفها بعدين بالمخزون.
+function findRenamedCandidates(existingMaterials, material) {
+  // الثانوية بلا سعة — مقارنتها بالسعة تعطي مرشحين غلط
+  if (material.category === 'secondary') return [];
+  const cap = material.watt_or_capacity ?? null;
+  if (cap == null) return [];
+  return existingMaterials.filter(
+    (m) => m.category === material.category
+      && (m.watt_or_capacity ?? null) === cap
+      && m.model !== material.model
+  );
+}
+
 // يضيف حالة المطابقة لكل صف معاينة: 'new' أو 'update' (مع اسم المادة اللي راح تتحدث)
 function annotateMatches(existingMaterials, rows) {
   return rows.map((row) => {
     const existing = findExistingMaterial(existingMaterials, row);
+    if (existing) {
+      return {
+        ...row,
+        matchStatus: 'update',
+        matchTarget: `${existing.model}${existing.watt_or_capacity ? ` (${existing.watt_or_capacity})` : ''}`,
+        existingId: existing.id,
+        nearMatches: [],
+      };
+    }
+    // ماكو تطابق تام — نشوف إذا نفس المادة موجودة باسم ثاني
+    const near = findRenamedCandidates(existingMaterials, row);
+    const issues = [...row.issues];
+    if (near.length === 1) {
+      issues.push(
+        `اكو مادة بنفس الفئة والسعة بالمخزون اسمها «${near[0].model}» — إذا هي نفسها بدّل الموديل هنا لنفس الاسم `
+        + 'حتى تنحدّث بدل ما تنضاف نسخة ثانية'
+      );
+    } else if (near.length > 1) {
+      issues.push(
+        `اكو ${near.length} مواد بنفس الفئة والسعة بالمخزون بأسماء مختلفة — تأكد إن هذي مادة جديدة فعلاً `
+        + 'مو نسخة ثانية من وحدة موجودة'
+      );
+    }
     return {
       ...row,
-      matchStatus: existing ? 'update' : 'new',
-      matchTarget: existing ? `${existing.model}${existing.watt_or_capacity ? ` (${existing.watt_or_capacity})` : ''}` : null,
-      existingId: existing ? existing.id : null,
+      matchStatus: 'new',
+      matchTarget: null,
+      existingId: null,
+      nearMatches: near.map((m) => ({ id: m.id, model: m.model })),
+      issues,
     };
   });
 }
