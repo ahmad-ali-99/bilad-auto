@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { buildOptions, buildQuoteDraft } from '../src/lib/quoteService.js';
 import { buildPackagesPosterHtml, buildPackageRow, POSTER_W, POSTER_H } from '../src/lib/packagesPoster.js';
 import { imageKey, isImageKey, materialIdFromKey, IMAGE_KEY_PREFIX } from '../src/lib/materialImages.js';
+import { computeSecondaryDefaults } from '../src/lib/secondaryDefaults.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const read = (p) => fs.readFileSync(path.join(HERE, p), 'utf8');
@@ -139,6 +140,89 @@ describe('لوحة المنشور', () => {
     const html = buildPackagesPosterHtml({ packages: [rowFor(10).row], title: '<script>x</script>' });
     expect(html).not.toContain('<script>x');
     expect(html).toContain('&lt;script&gt;');
+  });
+});
+
+// ==== الانحراف اللي طلع بالاستعمال الحقيقي ====
+// النافذة كانت تمرر secondarySelections: null فيرجع المحرك لسلوكه القديم ويحشر
+// كل مادة ثانوية بالمخزون بكل باقة — والمجموع طلع أربعة أضعاف اللي تطلعه شاشة العرض.
+describe('مجموع المنشور يساوي مجموع شاشة العرض بالضبط', () => {
+  const SEC = [
+    { id: 20, category: 'secondary', model: 'هيكل الألواح', unit: 'عدد', price: 65000, qty_per_panel: 1 },
+    { id: 21, category: 'secondary', model: 'صبات كونكريت', unit: 'عدد', price: 25000, qty_per_panel: 2 },
+    // مواد موجودة بالمخزون بس مو ضمن المعتمدة — ما تدخل أي عرض
+    { id: 22, category: 'secondary', model: 'ستاند أرضي مغلون', unit: 'عدد', price: 450000, qty_per_panel: 1 },
+    { id: 23, category: 'secondary', model: 'منظومة تتبع شمسي', unit: 'عدد', price: 2500000, qty_per_panel: 1 },
+  ];
+  const ALL = [...MATERIALS.filter((m) => m.category !== 'secondary'), ...SEC];
+  const SAVED_DEFAULT_IDS = [20, 21];
+
+  const totalFor = (secondarySelections) => {
+    const options = buildOptions({
+      materials: ALL, laborTiers: LABOR, settingsRow: SETTINGS,
+      roofAreaM2: Number.MAX_SAFE_INTEGER, ampDay: 20, ampNight: 20, nightSupplyHours: 8,
+    });
+    return buildQuoteDraft(options, { tier: 'economy', overrides: {}, cableMeters: {}, secondarySelections, adjustments: {} });
+  };
+
+  it('المواد الثانوية المعتمدة بس هي اللي تدخل — مو كل المخزون', () => {
+    const sel = computeSecondaryDefaults(SEC, SAVED_DEFAULT_IDS, 'full');
+    const screen = totalFor(sel);
+    const included = screen.items.map((i) => i.description);
+    expect(included).toContain('هيكل الألواح');
+    expect(included).not.toContain('منظومة تتبع شمسي');
+    expect(included).not.toContain('ستاند أرضي مغلون');
+  });
+
+  it('لو مررنا null ينفخ المجموع أضعافاً — هذا هو الانحراف اللي انصلّح', () => {
+    const sel = computeSecondaryDefaults(SEC, SAVED_DEFAULT_IDS, 'full');
+    expect(totalFor(null).total).toBeGreaterThan(totalFor(sel).total * 2);
+  });
+
+  it('النافذة تمرّر الاختيار المعتمد مو null', () => {
+    expect(modal).toContain('computeSecondaryDefaults');
+    expect(modal).toContain("window.api.config.get('secondary_defaults')");
+    expect(modal).toContain('secondarySelections: secondarySel');
+    expect(modal).not.toContain('secondarySelections: null');
+  });
+
+  it('ماكو قيد مساحة سطح بمنشور إعلاني — وإلا كل باقة تطلع بخطأ مساحة', () => {
+    expect(modal).toContain('Number.MAX_SAFE_INTEGER');
+    const d = totalFor(computeSecondaryDefaults(SEC, SAVED_DEFAULT_IDS, 'full'));
+    expect(d.errors.roofArea).toBeUndefined();
+  });
+
+  it('المسودة اللي بيها خطأ ما تنطبع منشوراً', () => {
+    expect(modal).toContain('draft.errors');
+    expect(modal).toContain('problems.length > 0');
+  });
+});
+
+describe('البياع يتحكم بالمواد من المخزون', () => {
+  it('تثبيت مادة بيده يتقدّم على الاختيار التلقائي', () => {
+    const options = buildOptions({
+      materials: [...MATERIALS, { id: 9, category: 'inverter', brand: 'HORIZON', model: 'HZ 12K', full_description: 'انفيرتر 12', unit: 'عدد', watt_or_capacity: 12000, price: 2900000 }],
+      laborTiers: LABOR, settingsRow: SETTINGS,
+      roofAreaM2: Number.MAX_SAFE_INTEGER, ampDay: 20, ampNight: 20, nightSupplyHours: 8,
+    });
+    const mk = (overrides) => buildQuoteDraft(options, { tier: 'economy', overrides, cableMeters: {}, secondarySelections: {}, adjustments: {} });
+    const auto = mk({});
+    const autoInverter = auto.items.find((i) => [2, 9].includes(i.material_id)).material_id;
+    const other = autoInverter === 9 ? 2 : 9;
+    const forced = mk({ inverter: other });
+    expect(forced.items.some((i) => i.material_id === other)).toBe(true);
+    expect(forced.items.some((i) => i.material_id === autoInverter)).toBe(false);
+  });
+
+  it('النافذة تعرض قوائم المخزون وتمرّرها كـoverrides', () => {
+    expect(modal).toContain('overrides[key] = Number(r.pick[key])');
+    expect(modal).toContain('tier: r.tier, overrides');
+    for (const c of ['panel', 'inverter', 'battery']) expect(modal).toContain(`'${c}'`);
+  });
+
+  it('تفصيل الحساب معروض قبل النشر — البياع يشوف من وين طلع الرقم', () => {
+    expect(modal).toContain('تفصيل الحساب');
+    expect(modal).toContain('p.draft.items.map');
   });
 });
 

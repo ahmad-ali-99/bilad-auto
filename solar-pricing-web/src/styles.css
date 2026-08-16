@@ -1430,3 +1430,13 @@ h2.page-title::before {
   padding: 12px 22px; font-family: 'Cairo', sans-serif; font-weight: 800; font-size: 1rem;
   color: #1B2A4A; cursor: pointer; box-shadow: 0 8px 24px rgba(27,42,74,0.35);
 }
+
+/* ====== بلوكات باقات المنشور ======
+   كل باقة بلوك مستقل مو صف بجدول: الصف يحتاج تسعة أعمدة (أمبيران وساعات وجودة
+   وثلاث قوائم مخزون) وهذا نصه يطلع برّا شاشة التلفون. */
+.pkg-rows { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.pkg-row { padding: 12px; }
+.pkg-row-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px; color: var(--navy);
+}
