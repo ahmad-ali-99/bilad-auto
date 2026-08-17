@@ -194,7 +194,8 @@ export function buildPackageRow({ draft, materials, images = {}, ampDay, ampNigh
     battery: bat
       ? { image: images[bat.m.id], count: bat.qty, label: 'بطارية', title: `ليثيوم ${kwh(bat.m)}`, code: bat.m.model }
       : { image: null, count: 0, label: 'بطارية', title: '—' },
-    total: draft.total,
+    // مع التقسيط المطبوع هو مجموع التقسيط، وبلاه مجموع الكاش
+    total: draft.installment?.totalWithInterest ?? draft.total,
     monthly: draft.installment?.monthly || 0,
   };
 }

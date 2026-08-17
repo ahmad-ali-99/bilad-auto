@@ -163,33 +163,25 @@ function applyAdjustments(items, total, adjustments) {
     total -= amount;
   }
 
-  // التقسيط المصرفي: نسبة المصرف (معامل ضرب مثل 1.35 بدون جمع 1) **تتوزع على
-  // أسعار البنود نفسها**، فمجموع العرض يصير هو مجموع التقسيط — وسعر الكاش
-  // ينشال من ملف الزبون (قرار المستخدم: يبقى بالشاشة للبياع فقط).
-  //
-  // التوزيع على البنود مو ضرب المجموع: الضرب على المجموع يخلي فرقاً بينه وبين
-  // جمع السطور، فالزبون يجمع الأعمدة ويطلعله رقم غير المكتوب.
+  // التقسيط المصرفي: نسبة المصرف (معامل ضرب مثل 1.35 بدون جمع 1) تنضرب على
+  // **المجموع** فقط — أسعار البنود تبقى مثل ما هي بالمخزون بلا أي زيادة
+  // (قرار المستخدم). فبالعرض يطلع المجموع الطبيعي، وتحته مجموع التقسيط
+  // والقسط الشهري.
   const inst = adjustments?.installment;
   if (inst?.enabled) {
     const rate = Number(inst.rate) || 0;
     const months = Math.max(1, Math.round(Number(inst.months) || 60));
     if (rate > 0) {
       const cashTotal = total;
-      if (rate > 1) {
-        for (const item of items) {
-          item.unit_price = roundAdjustedPrice(item.unit_price * rate);
-          item.subtotal = Math.round(item.quantity * item.unit_price);
-        }
-        total = items.reduce((s, i) => s + i.subtotal, 0);
-      }
+      const totalWithInterest = Math.round(cashTotal * rate);
       const plan = inst.plan === 'cbi' ? 'cbi' : 'company';
       summary.installment = {
         rate, months, plan, label: installmentPlanLabel(plan),
-        totalWithInterest: total,
-        monthly: Math.round(total / months),
+        totalWithInterest,
+        monthly: Math.round(totalWithInterest / months),
         cashTotal,
-        interestAmount: total - cashTotal,
-        // قرار العرض: يخفي المبلغ الكلي من ملف الزبون ويخلي القسط الشهري بس
+        interestAmount: totalWithInterest - cashTotal,
+        // قرار العرض: يخفي المجموع الكلي (الكاش) من ملف الزبون ويخلي التقسيط بس
         hideTotal: inst.hideTotal === true,
       };
     }

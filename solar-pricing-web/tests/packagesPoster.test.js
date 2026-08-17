@@ -65,6 +65,22 @@ describe('صف الباقة يجي من محرك التسعير مو من إدخ
     expect(on.monthly * 60).toBeCloseTo(on.total, -4);
   });
 
+  // النسبة ما عادت تتوزع على البنود، فمجموع المسودة كاش — والمنشور لازم يطبع
+  // مجموع التقسيط مو الكاش، وإلا طلع القسط الشهري ما يطابق المبلغ المكتوب جنبه
+  it('المطبوع بالمنشور مجموع التقسيط مو الكاش', () => {
+    const adj = { installment: { enabled: true, plan: 'company', rate: 1.35, months: 60 } };
+    const { draft, row } = rowFor(20, adj);
+    expect(draft.total).toBe(draft.installment.cashTotal);
+    expect(row.total).toBe(draft.installment.totalWithInterest);
+    expect(row.total).toBeGreaterThan(draft.total);
+    expect(row.monthly).toBe(Math.round(row.total / 60));
+  });
+
+  it('بلا تقسيط المطبوع هو مجموع العرض نفسه', () => {
+    const { draft, row } = rowFor(20);
+    expect(row.total).toBe(draft.total);
+  });
+
   it('صورة المادة تنركّب بالخلية، واللي بلا صورة تاخذ بديلاً مو صورة مادة ثانية', () => {
     const { row } = rowFor(20);
     expect(row.panel.image).toBe('data:image/png;base64,AAA');   // المادة ١ عدها صورة

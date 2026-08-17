@@ -145,11 +145,11 @@ export function buildInvoiceInnerHtml({ quote, items, notes, company, installmen
     </thead>
     <tbody>
       ${rowsHtml}
-      ${installment ? `${installment.hideTotal ? '' : `
-      <tr class="total-row"><td colspan="5">المجموع الكلي بالتقسيط — ${escapeHtml(installment.label || installmentPlanLabel(installment.plan))}</td><td>${formatNumber(installment.totalWithInterest)}</td></tr>`}
-      <tr class="inst-row inst-monthly"><td colspan="5">القسط الشهري لمدة ${formatNumber(installment.months)} شهر</td><td>${formatNumber(installment.monthly)}</td></tr>`
-      : `
+      ${installment?.hideTotal ? '' : `
       <tr class="total-row"><td colspan="5">المجموع الكلي</td><td>${formatNumber(quote.total_price)}</td></tr>`}
+      ${installment ? `
+      <tr class="inst-row"><td colspan="5">المجموع الكلي بالتقسيط — ${escapeHtml(installment.label || installmentPlanLabel(installment.plan))}</td><td>${formatNumber(installment.totalWithInterest)}</td></tr>
+      <tr class="inst-row inst-monthly"><td colspan="5">القسط الشهري لمدة ${formatNumber(installment.months)} شهر</td><td>${formatNumber(installment.monthly)}</td></tr>` : ''}
     </tbody>
   </table>
   <div class="notes-section"><h3>ملاحظات:</h3>${notesHtml}</div>

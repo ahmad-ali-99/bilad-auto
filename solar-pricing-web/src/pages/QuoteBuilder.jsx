@@ -1060,8 +1060,8 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
               <span>
                 <b>إخفاء المجموع الكلي من ملف الزبون</b>
                 <small className="muted">
-                  الزبون يشوف البنود والقسط الشهري بس — بلا المبلغ الكلي.
-                  الأسعار بالملف تشمل نسبة المصرف بالحالتين، والمجموع يبقى ظاهر إلك بالشاشة.
+                  أسعار البنود تبقى مثل ما هي بالمخزون، ونسبة المصرف تنضرب على المجموع بس.
+                  بالتأشير ينشال سطر «المجموع الكلي» من الملف ويبقى مجموع التقسيط والقسط الشهري.
                 </small>
               </span>
             </label>
@@ -1170,13 +1170,12 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
 
             {draft.installment && (
               <div className="alert alert-info" style={{ marginTop: 6, display: 'flex', gap: 16, flexWrap: 'wrap', fontWeight: 700 }}>
+                <span>💰 المجموع الكلي: {fmt(draft.installment.cashTotal)} دينار</span>
                 <span>🏦 {draft.installment.label} (×{draft.installment.rate}): {fmt(draft.installment.totalWithInterest)} دينار</span>
                 <span>القسط الشهري لمدة {draft.installment.months} شهر: {fmt(draft.installment.monthly)} دينار</span>
-                {/* سعر الكاش للبياع فقط — ما يدخل ملف الزبون أبداً (قرار المستخدم) */}
-                {draft.installment.cashTotal > 0 && (
+                {draft.installment.interestAmount > 0 && (
                   <span style={{ fontWeight: 600, color: 'var(--muted)' }}>
-                    🔒 سعر الكاش قبل الفائدة: {fmt(draft.installment.cashTotal)} دينار
-                    {draft.installment.interestAmount > 0 && <> — فائدة المصرف: {fmt(draft.installment.interestAmount)}</>}
+                    فائدة المصرف: {fmt(draft.installment.interestAmount)} دينار
                   </span>
                 )}
               </div>

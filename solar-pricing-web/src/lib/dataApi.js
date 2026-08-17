@@ -584,7 +584,10 @@ export const api = {
               plan: a.installment.plan === 'cbi' ? 'cbi' : 'company',
               rate: Number(a.installment.rate) || 1.35,
               months: Number(a.installment.months) || 60,
-              distributed: true,
+              // النسبة ما عادت تتوزع على أسعار البنود — `total_price` هو سعر
+              // الكاش، ومجموع التقسيط ينحسب بضربه بالنسبة. العروض المحفوظة
+              // بفترة التوزيع عدها `distributed: true` وتبقى على حسابها.
+              distributed: false,
               // قرار البياع: هل يشوف الزبون المبلغ الكلي بالملف؟ ينحفظ مع العرض
               // حتى إعادة الطباعة بعد شهر تطلع بنفس الشكل بلا ما ينضبط من جديد
               hideTotal: a.installment.hideTotal === true,

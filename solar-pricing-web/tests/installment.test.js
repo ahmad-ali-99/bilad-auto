@@ -31,26 +31,26 @@ function draft(adjustments) {
 }
 const inst = (over = {}) => ({ installment: { enabled: true, rate: 1.35, months: 60, plan: 'company', ...over } });
 
-describe('التقسيط: النسبة تتوزع على البنود', () => {
-  it('كل بند سعره ×النسبة، والمجموع = جمع السطور بالضبط', () => {
+// قرار المستخدم: نسبة المصرف ما تتوزع على أسعار البنود. البنود تبقى بسعرها
+// الطبيعي من المخزون، والنسبة تنضرب على المجموع فقط.
+describe('التقسيط: النسبة على المجموع بس — البنود ما تتغيّر', () => {
+  it('ولا بند يتغيّر سعره، والمجموع يبقى مجموع الكاش', () => {
     const cash = draft(null);
     const d = draft(inst());
     expect(d.items).toHaveLength(cash.items.length);
-    for (let i = 0; i < d.items.length; i++) {
-      expect(d.items[i].unit_price).toBeGreaterThan(cash.items[i].unit_price);
-      expect(d.items[i].subtotal).toBe(Math.round(d.items[i].quantity * d.items[i].unit_price));
-    }
-    // الزبون يجمع العمود لازم يطلعله نفس المجموع — بلا فرق تقريب ولا دينار
-    const sum = d.items.reduce((s, i) => s + i.subtotal, 0);
-    expect(d.total).toBe(sum);
-    expect(d.installment.totalWithInterest).toBe(sum);
+    expect(d.items.map((i) => i.unit_price)).toEqual(cash.items.map((i) => i.unit_price));
+    expect(d.items.map((i) => i.subtotal)).toEqual(cash.items.map((i) => i.subtotal));
+    // مجموع العرض = جمع السطور بالضبط، والزبون يجمع العمود ويطلعله نفس الرقم
+    expect(d.total).toBe(d.items.reduce((s, i) => s + i.subtotal, 0));
+    expect(d.total).toBe(cash.total);
   });
 
-  it('سعر الكاش ومبلغ الفائدة محفوظان للبياع', () => {
+  it('مجموع التقسيط = المجموع × النسبة', () => {
     const cash = draft(null);
-    const d = draft(inst());
+    const d = draft(inst({ rate: 1.35 }));
     expect(d.installment.cashTotal).toBe(cash.total);
-    expect(d.installment.interestAmount).toBe(d.total - cash.total);
+    expect(d.installment.totalWithInterest).toBe(Math.round(cash.total * 1.35));
+    expect(d.installment.interestAmount).toBe(d.installment.totalWithInterest - cash.total);
     expect(d.installment.interestAmount).toBeGreaterThan(0);
   });
 
@@ -71,7 +71,8 @@ describe('التقسيط: النسبة تتوزع على البنود', () => {
     const withMarkup = draft({ markupPercent: 10, markupMode: 'distributed' });
     const both = draft({ markupPercent: 10, markupMode: 'distributed', ...inst() });
     expect(both.installment.cashTotal).toBe(withMarkup.total);
-    expect(both.total).toBeGreaterThan(withMarkup.total);
+    expect(both.total).toBe(withMarkup.total);                       // المجموع كاش
+    expect(both.installment.totalWithInterest).toBeGreaterThan(withMarkup.total);
   });
 
   it('بلا تقسيط: البنود والمجموع ما يتغيّرون ولا بدينار (فحص انحدار)', () => {
@@ -82,15 +83,16 @@ describe('التقسيط: النسبة تتوزع على البنود', () => {
     expect(b.installment).toBeNull();
   });
 
-  it('نسبة 1 (بلا فائدة) ما تلمس الأسعار', () => {
+  it('نسبة 1 (بلا فائدة) تخلي مجموع التقسيط = الكاش', () => {
     const a = draft(null);
     const d = draft(inst({ rate: 1 }));
     expect(d.items.map((i) => i.unit_price)).toEqual(a.items.map((i) => i.unit_price));
+    expect(d.installment.totalWithInterest).toBe(a.total);
     expect(d.installment.interestAmount).toBe(0);
   });
 });
 
-describe('ملف الزبون: سعر الكاش ينشال عند التقسيط', () => {
+describe('ملف الزبون: المجموع الكلي ومجموع التقسيط سوية', () => {
   const base = {
     quote: { quote_number: 300, client_name: 'زبون', total_price: 10000000, created_at: '2026-08-16' },
     items: [{ description: 'لوح', unit: 'عدد', quantity: 10, unit_price: 250000, subtotal: 2500000 }],
@@ -98,12 +100,12 @@ describe('ملف الزبون: سعر الكاش ينشال عند التقسي�
     company: { company_name: 'بلاد اوتو' },
   };
 
-  it('بتقسيط: ماكو سطر «المجموع الكلي» الكاش، واسم المصرف ظاهر', () => {
+  it('بتقسيط: المجموع الكلي ومجموع التقسيط والقسط الشهري — ثلاثتهم', () => {
     const html = buildInvoiceInnerHtml({
       ...base,
       installment: { rate: 1.35, months: 60, totalWithInterest: 13500000, monthly: 225000, plan: 'company', label: 'مصرف النهرين' },
     });
-    expect(html).not.toMatch(/>المجموع الكلي<\/td>/);
+    expect(html).toMatch(/>المجموع الكلي<\/td>/);
     expect(html).toContain('المجموع الكلي بالتقسيط — مصرف النهرين');
     expect(html).toContain('القسط الشهري لمدة 60 شهر');
   });
@@ -148,6 +150,12 @@ describe('النسبة والأشهر يوصلون لكل مسار — مو بس
     expect(draftState.slice(0, draftState.indexOf('\n  };'))).toMatch(/installmentRate, installmentMonths/);
   });
 
+  it('العروض الجديدة تنحفظ بلا توزيع — `total_price` سعر كاش', () => {
+    expect(dataApi).toContain('distributed: false');
+    // إعادة البناء تضرب بالنسبة لمن ما يكون موزّعاً
+    expect(dataApi).toContain('distributed ? quote.total_price : Math.round(quote.total_price * rate)');
+  });
+
   it('لقطة العرض المحفوظ تخزن الخطة وعلَم التوزيع — وإلا الاسم والأرقام تطلع غلط', () => {
     const snap = dataApi.slice(dataApi.indexOf('installment: a.installment?.enabled'), dataApi.indexOf('// الزيادة/النقصان اليدوي بالوحدات'));
     expect(snap).toMatch(/plan: a\.installment\.plan === 'cbi'/);
@@ -167,17 +175,20 @@ describe('خانة إخفاء المجموع الكلي', () => {
   const items = [{ description: 'ألواح', unit: 'عدد', quantity: 8, unit_price: 250000, subtotal: 2000000 }];
   const html = (installment) => buildInvoiceInnerHtml({ quote, items, notes: [], company, installment });
 
-  it('بالوضع الاعتيادي يطلع المجموع والقسط سوية', () => {
-    const h = html({ rate: 1.35, months: 60, totalWithInterest: 20000000, monthly: 333333, plan: 'company' });
+  it('بالوضع الاعتيادي يطلع المجموع الكلي ومجموع التقسيط والقسط', () => {
+    const h = html({ rate: 1.35, months: 60, totalWithInterest: 27000000, monthly: 450000, plan: 'company' });
+    expect(h).toMatch(/>المجموع الكلي<\/td>/);
     expect(h).toContain('المجموع الكلي بالتقسيط');
     expect(h).toContain('القسط الشهري لمدة');
   });
 
-  it('مع التأشير ينشال المجموع ويبقى القسط الشهري', () => {
-    const h = html({ rate: 1.35, months: 60, totalWithInterest: 20000000, monthly: 333333, plan: 'company', hideTotal: true });
-    expect(h).not.toContain('المجموع الكلي');
+  it('مع التأشير ينشال سطر المجموع الكلي بس — التقسيط والقسط يبقون', () => {
+    const h = html({ rate: 1.35, months: 60, totalWithInterest: 27000000, monthly: 450000, plan: 'company', hideTotal: true });
+    expect(h, 'سطر الكاش لازم ينشال').not.toMatch(/>المجموع الكلي<\/td>/);
+    expect(h).toContain('المجموع الكلي بالتقسيط');
     expect(h).toContain('القسط الشهري لمدة');
-    expect(h).toContain('333,333');
+    expect(h).toContain('450,000');
+    expect(h, 'رقم الكاش ما ينطبع أبداً').not.toContain('20,000,000');
   });
 
   it('بلا تقسيط ما تتأثر الفاتورة بالخانة', () => {
