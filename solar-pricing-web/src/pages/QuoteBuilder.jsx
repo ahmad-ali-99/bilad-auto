@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
+import { useDebouncedValue } from '../lib/useDebouncedValue.js';
 import SecondaryPickerModal from '../components/SecondaryPickerModal.jsx';
 // العرض التفاعلي 3D يُحمّل عند الطلب فقط (يجرّ three.js) حتى ما يثقل فتح الصفحة
 const SystemShowcase = lazy(() => import('../components/SystemShowcase.jsx'));
@@ -147,15 +148,6 @@ function UnitCounter({ label, count, base, onChange }) {
       </button>
     </span>
   );
-}
-
-function useDebouncedValue(value, delay) {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(t);
-  }, [value, delay]);
-  return debounced;
 }
 
 export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) {

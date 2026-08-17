@@ -59,7 +59,7 @@ describe('أزرار الحفظ بالنوافذ المنبثقة تبقى ظا�
   });
 
   it('جسم قابل للتمرير بكل نافذة، والنموذج يورّث العمود المرن', () => {
-    for (const f of [...MODALS, 'src/components/PackagesModal.jsx']) {
+    for (const f of MODALS) {
       const src = read(f);
       const bodies = (src.match(/className="modal-body"/g) || []).length;
       const footers = (src.match(/className="toolbar modal-footer"/g) || []).length;
@@ -71,7 +71,7 @@ describe('أزرار الحفظ بالنوافذ المنبثقة تبقى ظا�
 
   // كان الضغط برّا النافذة يغلقها ويضيّع التعديلات وسط الكتابة
   it('الضغط برّا النافذة ما يغلقها — الإغلاق بالأزرار بس', () => {
-    for (const f of [...MODALS, 'src/components/PackagesModal.jsx']) {
+    for (const f of MODALS) {
       const src = read(f);
       expect(src, `${f}: الغطاء لازم يكون بلا onClick`).not.toMatch(/className="modal-overlay" onClick/);
       expect(src, `${f}: ما عاد يحتاج stopPropagation`).not.toMatch(/stopPropagation/);

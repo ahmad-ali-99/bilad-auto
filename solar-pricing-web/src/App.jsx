@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Inventory from './pages/Inventory.jsx';
 import QuoteBuilder from './pages/QuoteBuilder.jsx';
 import Quotes from './pages/Quotes.jsx';
+import Packages from './pages/Packages.jsx';
 import Settings from './pages/Settings.jsx';
 import Login from './pages/Login.jsx';
 import GlobalLoadingBar from './components/GlobalLoadingBar.jsx';
@@ -258,6 +259,7 @@ export default function App() {
   // «العروض» متاحة للجميع — لكن البياع يشوف عروضه هو فقط (الفلترة بطبقة البيانات)
   const navPages = [
     ...(isAdmin ? [...PAGES.slice(0, 2), ...ADMIN_PAGES, ...PAGES.slice(2)] : PAGES),
+    { key: 'packages', label: 'الباقات', icon: '🖼' },
     ...(isAhmad ? [{ key: 'history', label: 'الحركات', icon: '🕓' }] : []),
   ];
 
@@ -333,6 +335,7 @@ export default function App() {
             }}
           />
         )}
+        {page === 'packages' && <Packages />}
         {page === 'settings' && <Settings />}
       </main>
       {/* المساعد الذكي عنصر بشريط التنقل — كان زراً عائماً يطبق على صفوف الجداول

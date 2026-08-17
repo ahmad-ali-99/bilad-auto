@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useDebouncedValue } from '../lib/useDebouncedValue.js';
 import { supabase } from '../lib/supabase.js';
 import { computeSecondaryDefaults } from '../lib/secondaryDefaults.js';
 import { parseRequest } from '../lib/assistant.js';
@@ -16,15 +17,6 @@ const TIERS = [
 
 function fmt(n) {
   return Math.round(n || 0).toLocaleString('en-US');
-}
-
-function useDebouncedValue(value, delay) {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(t);
-  }, [value, delay]);
-  return debounced;
 }
 
 export default function CustomerView({ user }) {

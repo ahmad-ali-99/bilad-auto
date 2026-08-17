@@ -9,7 +9,8 @@ import { computeSecondaryDefaults } from '../src/lib/secondaryDefaults.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const read = (p) => fs.readFileSync(path.join(HERE, p), 'utf8');
-const modal = read('../src/components/PackagesModal.jsx');
+const page = read('../src/pages/Packages.jsx');
+const app = read('../src/App.jsx');
 const dataApi = read('../src/lib/dataApi.js');
 const inventory = read('../src/pages/Inventory.jsx');
 const quotes = read('../src/pages/Quotes.jsx');
@@ -180,21 +181,21 @@ describe('مجموع المنشور يساوي مجموع شاشة العرض ب
   });
 
   it('النافذة تمرّر الاختيار المعتمد مو null', () => {
-    expect(modal).toContain('computeSecondaryDefaults');
-    expect(modal).toContain("window.api.config.get('secondary_defaults')");
-    expect(modal).toContain('secondarySelections: secondarySel');
-    expect(modal).not.toContain('secondarySelections: null');
+    expect(page).toContain('computeSecondaryDefaults');
+    expect(page).toContain("window.api.config.get('secondary_defaults')");
+    expect(page).toContain('secondarySelections: secondarySel');
+    expect(page).not.toContain('secondarySelections: null');
   });
 
   it('ماكو قيد مساحة سطح بمنشور إعلاني — وإلا كل باقة تطلع بخطأ مساحة', () => {
-    expect(modal).toContain('Number.MAX_SAFE_INTEGER');
+    expect(page).toContain('Number.MAX_SAFE_INTEGER');
     const d = totalFor(computeSecondaryDefaults(SEC, SAVED_DEFAULT_IDS, 'full'));
     expect(d.errors.roofArea).toBeUndefined();
   });
 
   it('المسودة اللي بيها خطأ ما تنطبع منشوراً', () => {
-    expect(modal).toContain('draft.errors');
-    expect(modal).toContain('problems.length > 0');
+    expect(page).toContain('draft.errors');
+    expect(page).toContain('problems.length > 0');
   });
 });
 
@@ -215,39 +216,57 @@ describe('البياع يتحكم بالمواد من المخزون', () => {
   });
 
   it('النافذة تعرض قوائم المخزون وتمرّرها كـoverrides', () => {
-    expect(modal).toContain('overrides[key] = Number(r.pick[key])');
-    expect(modal).toContain('tier: r.tier, overrides');
-    for (const c of ['panel', 'inverter', 'battery']) expect(modal).toContain(`'${c}'`);
+    expect(page).toContain('overrides[key] = Number(r.pick[key])');
+    expect(page).toContain('tier: r.tier, overrides');
+    for (const c of ['panel', 'inverter', 'battery']) expect(page).toContain(`'${c}'`);
   });
 
   it('تفصيل الحساب معروض قبل النشر — البياع يشوف من وين طلع الرقم', () => {
-    expect(modal).toContain('تفصيل الحساب');
-    expect(modal).toContain('p.draft.items.map');
+    expect(page).toContain('تفصيل الحساب');
+    expect(page).toContain('p.draft.items.map');
   });
 });
 
 describe('نافذة الباقات موصولة بالبرنامج نفسه', () => {
   it('تحسب بمسار المعاينة الحقيقي — ماكو محرك تسعير موازٍ', () => {
-    expect(modal).toContain('window.api.quotes.preview');
-    expect(modal).toContain('window.api.materials.list');
-    expect(modal).toContain('window.api.materials.images');
-    expect(modal).toContain('buildPackageRow');
+    expect(page).toContain('window.api.quotes.preview');
+    expect(page).toContain('window.api.materials.list');
+    expect(page).toContain('window.api.materials.images');
+    expect(page).toContain('buildPackageRow');
   });
 
   it('تمرّر الأمبير وحالة التقسيط اللي يختارها البياع', () => {
     for (const f of ['ampDay', 'ampNight', 'nightSupplyHours', 'installment', 'installmentPlan']) {
-      expect(modal).toContain(f);
+      expect(page).toContain(f);
     }
   });
 
   it('تنزّل المنشور بمقاس اللوحة نفسه', () => {
-    expect(modal).toContain('exportPosterPng');
-    expect(modal).toContain('width: POSTER_W, height: POSTER_H');
+    expect(page).toContain('exportPosterPng');
+    expect(page).toContain('width: POSTER_W, height: POSTER_H');
   });
 
-  it('زر «منشور باقات» موجود بشاشة العروض', () => {
-    expect(quotes).toContain('PackagesModal');
-    expect(quotes).toContain('منشور باقات');
+  // صار قسماً رئيسياً بشريط التنقل بدل نافذة تنفتح من شاشة العروض
+  it('«الباقات» قسم بشريط التنقل، وانشال من شاشة العروض', () => {
+    expect(app).toContain("key: 'packages'");
+    expect(app).toContain('<Packages />');
+    expect(app).toContain("import Packages from './pages/Packages.jsx'");
+    expect(quotes).not.toContain('PackagesModal');
+    expect(quotes).not.toContain('منشور باقات');
+  });
+
+  // كان لازم يضغط «احسب واعرض» بعد كل تعديل ويكعد ينطر المحرك
+  it('الحساب حي: أي تعديل يعيد بناء المنشور لحاله بلا زر', () => {
+    expect(page).toContain('useDebouncedValue');
+    expect(page).not.toContain('احسب واعرض');
+    expect(page, 'useMemo ضروري وإلا يتجدد الكائن بكل رندر وتصير حلقة حساب')
+      .toContain('const inputs = useMemo(');
+    expect(page, 'الطلب الملغى ما يدعس على نتيجة أحدث منه').toContain('cancelled');
+  });
+
+  it('إعدادات الباقات تبقى بين الزيارات', () => {
+    expect(page).toContain("STATE_KEY = 'packages_state_v1'");
+    expect(page).toContain('localStorage.setItem(STATE_KEY');
   });
 });
 

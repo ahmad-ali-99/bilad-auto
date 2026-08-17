@@ -1,4 +1,3 @@
-import PackagesModal from '../components/PackagesModal.jsx';
 import React, { useEffect, useRef, useState } from 'react';
 import { buildEditPrefill } from '../lib/editPrefill.js';
 import { getCurrentUsername } from '../lib/agent.js';
@@ -132,7 +131,6 @@ export default function Quotes({ onEditQuote }) {
   });
   // بطاقة رفع عرض جاهز
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [packagesOpen, setPackagesOpen] = useState(false);
   const [uploadForm, setUploadForm] = useState({ clientName: '', clientPhone: '', location: '', totalPrice: '' });
   const [uploadFile, setUploadFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -363,9 +361,6 @@ export default function Quotes({ onEditQuote }) {
         />
         <button className="btn btn-primary" onClick={() => setUploadOpen((v) => !v)}>
           ⬆ رفع عرض جاهز
-        </button>
-        <button className="btn btn-secondary" onClick={() => setPackagesOpen(true)}>
-          🖼 منشور باقات
         </button>
         <button className="btn btn-secondary" onClick={() => setShowTrash((v) => !v)}>
           🗑 سلة المحذوفات ({deleted.length})
@@ -642,7 +637,6 @@ export default function Quotes({ onEditQuote }) {
         </tbody>
       </table>
       </div>
-      {packagesOpen && <PackagesModal onClose={() => setPackagesOpen(false)} />}
     </div>
   );
 }
