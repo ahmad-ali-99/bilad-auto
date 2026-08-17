@@ -1,0 +1,55 @@
+import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const read = (p) => fs.readFileSync(path.join(HERE, '..', p), 'utf8');
+const styles = read('src/styles.css');
+const app = read('src/App.jsx');
+
+const blockOf = (sel, from = 0) => {
+  const i = styles.indexOf(`${sel} {`, from);
+  return i < 0 ? '' : styles.slice(i, styles.indexOf('}', i));
+};
+
+// «اكو واجهات محتوى فوق محتوى ثاني» — الأشرطة الثابتة كانت تنطبع فوق النص
+describe('ماكو محتوى فوق محتوى', () => {
+  it('شريط الإجراءات خلفيته صلبة — الشفافية كانت تخلي النص يبان من تحته', () => {
+    const bar = blockOf('.action-bar');
+    expect(bar).toMatch(/background: #fff/);
+    expect(bar, 'أي شفافية ترجّع تداخل النص').not.toMatch(/rgba\(255, 255, 255, 0\.\d+\)/);
+  });
+
+  it('أزرار شريط التنقل تنكمش — بلا min-width:0 يطفح الشريط برّا الشاشة', () => {
+    const btn = blockOf('.mobile-bottomnav button');
+    expect(btn).toMatch(/min-width: 0/);
+    expect(btn).toMatch(/flex: 1/);
+  });
+
+  it('تسمية التبويب ما تكسر سطرين ولا تمدّ الزر', () => {
+    const label = blockOf('.mobile-bottomnav button > span:last-child');
+    expect(label).toMatch(/white-space: nowrap/);
+    expect(label).toMatch(/overflow: hidden/);
+    expect(label).toMatch(/text-overflow: ellipsis/);
+  });
+
+  // ترتيب الكاسكيد: قاعدة 700px تجي قبل قواعد الشاشات الأضيق وإلا تتقدّم عليها
+  it('قواعد الشاشات الضيقة بعد قاعدة 700px بالملف', () => {
+    const wide = styles.indexOf('@media (max-width: 700px)');
+    const narrow = styles.indexOf('@media (max-width: 480px)');
+    const tiny = styles.indexOf('@media (max-width: 380px)');
+    expect(wide).toBeGreaterThan(-1);
+    expect(narrow, 'قاعدة 480px لازم بعد 700px').toBeGreaterThan(wide);
+    expect(tiny, 'قاعدة 380px لازم بعد 480px').toBeGreaterThan(narrow);
+  });
+
+  // ثمانية تبويبات بحساب أحمد: عرض + العروض + طلبات + مخزون + إعدادات + باقات + حركات + مساعد
+  it('تسميات التبويبات قصيرة — الطويلة كانت تنقصّ بالتلفون', () => {
+    const labels = [...app.matchAll(/label: '([^']+)'/g)].map((m) => m[1]);
+    expect(labels.length).toBeGreaterThanOrEqual(6);
+    for (const l of labels) {
+      expect(l.length, `«${l}» طويلة على شريط التنقل`).toBeLessThanOrEqual(8);
+    }
+  });
+});

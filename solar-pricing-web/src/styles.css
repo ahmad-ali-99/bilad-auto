@@ -412,6 +412,9 @@ textarea { resize: vertical; min-height: 70px; }
 
 .mobile-bottomnav button {
   flex: 1;
+  /* بلا min-width:0 ما ينكمش الزر تحت عرض تسميته، فالشريط يطفح برّا الشاشة
+     ويتقصّ آخر تبويب. مع ثمانية تبويبات بحساب أحمد هذا يصير بكل تلفون. */
+  min-width: 0;
   background: none;
   border: none;
   font-family: inherit;
@@ -428,12 +431,15 @@ textarea { resize: vertical; min-height: 70px; }
 .mobile-bottomnav button.active { color: var(--navy); font-weight: 700; }
 .mobile-bottomnav .nav-icon { font-size: 1.25rem; }
 
-/* سبعة عناصر بحساب أحمد (٦ صفحات + المساعد) — نضغط الخط شوي بالشاشات الضيقة
-   حتى ما تنكسر التسميات على سطرين */
-@media (max-width: 420px) {
-  .mobile-bottomnav button { padding: 7px 2px 9px; font-size: 0.63rem; gap: 1px; }
-  .mobile-bottomnav .nav-icon { font-size: 1.1rem; }
+/* التسمية ما تكسر سطرين ولا تدفع الشريط برّا الشاشة */
+.mobile-bottomnav button > span:last-child {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+
+
 
 /* شاشات صغيرة: الشبكات تصير عمود/عمودين */
 @media (max-width: 700px) {
@@ -833,8 +839,10 @@ h2.page-title::before {
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(8px);
+  /* خلفية صلبة: بـ٠.٩٢ شفافية كان نص المحتوى يبان من تحت الشريط ويتداخل مع
+     المجموع والأزرار — ومحركات بلا `backdrop-filter` (وبب فيو أندرويد القديم)
+     تخليه مقروءاً بوضوح. */
+  background: #fff;
   border: 1px solid #e2e9f1;
   border-radius: 16px;
   padding: 10px 14px;
@@ -956,8 +964,10 @@ h2.page-title::before {
   .big-inputs .field input { font-size: 17px !important; font-weight: 700; }
   /* أهداف لمس أكبر */
   .btn { min-height: 42px; }
-  .mobile-bottomnav button { min-height: 54px; font-size: 0.74rem; }
-  .mobile-bottomnav .nav-icon { font-size: 1.35rem; }
+  /* التسمية تصغر كل ما ضاقت الشاشة — بثمانية تبويبات «إعدادات» كانت تنقصّ.
+     القياس بالتلفون: الزر ٤٦ بكسل والتسمية تحتاج ٤٠ عند ٠.٧٤rem. */
+  .mobile-bottomnav button { min-height: 54px; font-size: 0.68rem; }
+  .mobile-bottomnav .nav-icon { font-size: 1.3rem; }
   /* شريط الإجراءات يلتصق فوق التنقل مباشرة */
   .action-bar { bottom: 4px; padding: 9px 10px; }
   .action-total { font-size: 1.05rem; }
@@ -1486,3 +1496,15 @@ h2.page-title::before {
   justify-content: space-between;
 }
 .save-nudge b { color: #8a5b00; }
+
+/* ثمانية عناصر بحساب أحمد (٧ صفحات + المساعد) — نضغط الخط بالشاشات الضيقة.
+   موضعها بآخر الملف مقصود: قاعدة `max-width: 700px` أعلاه تحدد 0.68rem،
+   وبدون التأخير هنا تتقدّم عليها وترجع التسميات تنقصّ. */
+@media (max-width: 480px) {
+  .mobile-bottomnav button { padding: 7px 1px 9px; font-size: 0.6rem; gap: 1px; }
+  .mobile-bottomnav .nav-icon { font-size: 1.1rem; }
+}
+@media (max-width: 380px) {
+  .mobile-bottomnav button { font-size: 0.54rem; }
+  .mobile-bottomnav .nav-icon { font-size: 1rem; }
+}

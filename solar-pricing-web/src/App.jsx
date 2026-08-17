@@ -16,14 +16,14 @@ import { forceUpdateApp } from './lib/appUpdate.js';
 import { startFitTables } from './lib/fitTables.js';
 
 const PAGES = [
-  { key: 'quote', label: 'عرض سعر', icon: '🧮' },
+  { key: 'quote', label: 'عرض', icon: '🧮' },
   { key: 'quotes', label: 'العروض', icon: '📄' },
-  { key: 'inventory', label: 'المخزون', icon: '📦' },
-  { key: 'settings', label: 'الإعدادات', icon: '⚙' },
+  { key: 'inventory', label: 'مخزون', icon: '📦' },
+  { key: 'settings', label: 'إعدادات', icon: '⚙' },
 ];
 
 // صفحة الطلبات (جهات التواصل + طلبات العروض) للمشرفين الثلاثة فقط
-const ADMIN_PAGES = [{ key: 'requests', label: 'الطلبات', icon: '📨' }];
+const ADMIN_PAGES = [{ key: 'requests', label: 'طلبات', icon: '📨' }];
 
 // شاشة تعيين كلمة مرور جديدة — تظهر عند فتح رابط الاستعادة من الإيميل
 function ResetPasswordScreen({ onDone }) {
@@ -261,8 +261,8 @@ export default function App() {
   // «العروض» متاحة للجميع — لكن البياع يشوف عروضه هو فقط (الفلترة بطبقة البيانات)
   const navPages = [
     ...(isAdmin ? [...PAGES.slice(0, 2), ...ADMIN_PAGES, ...PAGES.slice(2)] : PAGES),
-    { key: 'packages', label: 'الباقات', icon: '🖼' },
-    ...(isAhmad ? [{ key: 'history', label: 'الحركات', icon: '🕓' }] : []),
+    { key: 'packages', label: 'باقات', icon: '🖼' },
+    ...(isAhmad ? [{ key: 'history', label: 'حركات', icon: '🕓' }] : []),
   ];
 
   // مغادرة صفحة العرض وبيه عرض محسوب ما انحفظ: نسأل بدل ما يروح ويرجع فيلگى
@@ -369,7 +369,7 @@ export default function App() {
           aria-label="المساعد الذكي"
         >
           <span className="nav-icon">{assistantOpen ? '✕' : '🤖'}</span>
-          <span>المساعد</span>
+          <span>مساعد</span>
         </button>
       </nav>
       {assistantOpen && (
