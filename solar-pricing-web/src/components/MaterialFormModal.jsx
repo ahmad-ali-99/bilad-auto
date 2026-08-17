@@ -108,11 +108,12 @@ export default function MaterialFormModal({ category, initial, onClose, onSave }
 
   return (
     <ModalPortal>
-    <div className="modal-overlay" onClick={onClose}>
-      <div className={maxed ? "modal modal-max" : "modal"} onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay">
+      <div className={maxed ? "modal modal-max" : "modal"}>
         <button type="button" className="modal-zoom-btn" onClick={() => setMaxed((m) => !m)} title="تكبير / تصغير النافذة">{maxed ? "🗕" : "⛶"}</button>
         <h3>{initial ? 'تعديل مادة' : 'إضافة مادة جديدة'}</h3>
         <form onSubmit={handleSubmit}>
+          <div className="modal-body">
           <div className="grid-2">
             <div className="field">
               <label>الماركة</label>
@@ -214,6 +215,7 @@ export default function MaterialFormModal({ category, initial, onClose, onSave }
             </div>
           )}
 
+          </div>
           <div className="toolbar modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>
               إلغاء

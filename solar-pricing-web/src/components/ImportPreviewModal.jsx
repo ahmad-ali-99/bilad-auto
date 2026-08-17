@@ -79,8 +79,8 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
   if (result) {
     return (
       <ModalPortal>
-      <div className="modal-overlay" onClick={() => onDone()}>
-        <div className="modal" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
+      <div className="modal-overlay">
+        <div className="modal" style={{ textAlign: 'center' }}>
           <h3>{result.failed && result.failed.length > 0 ? 'الاستيراد خلص — بس بيه صفوف فشلت ⚠' : 'تم الاستيراد بنجاح ✔'}</h3>
           <p>
             مواد جديدة: <b>{result.added}</b> — مواد محدّثة: <b>{result.updated}</b>
@@ -113,10 +113,11 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
 
   return (
     <ModalPortal>
-    <div className="modal-overlay" onClick={onClose}>
-      <div className={maxed ? "modal modal-wide modal-max" : "modal modal-wide"} onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay">
+      <div className={maxed ? "modal modal-wide modal-max" : "modal modal-wide"}>
         <button type="button" className="modal-zoom-btn" onClick={() => setMaxed((m) => !m)} title="تكبير / تصغير النافذة">{maxed ? "🗕" : "⛶"}</button>
         <h3>معاينة الاستيراد — {parsed.fileName}</h3>
+        <div className="modal-body">
         <p className="muted">
           راجع الصفوف وصحّح أي خطأ قبل الحفظ. المواد المعلّمة "تحديث" ستُحدّث سعر وكمية مادة موجودة
           (نفس الفئة والموديل والسعة)، والمعلّمة "جديد" تُضاف كمادة جديدة.
@@ -264,6 +265,7 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
           </div>
         )}
 
+        </div>
         <div className="toolbar modal-footer">
           <button className="btn btn-secondary" onClick={onClose} disabled={importing}>
             إلغاء

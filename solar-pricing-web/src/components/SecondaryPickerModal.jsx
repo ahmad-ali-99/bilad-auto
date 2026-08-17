@@ -53,10 +53,11 @@ export default function SecondaryPickerModal({ secondary, selections, panelCount
 
   return (
     <ModalPortal>
-    <div className="modal-overlay" onClick={onClose}>
-      <div className={maxed ? "modal modal-wide modal-max" : "modal modal-wide"} onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay">
+      <div className={maxed ? "modal modal-wide modal-max" : "modal modal-wide"}>
         <button type="button" className="modal-zoom-btn" onClick={() => setMaxed((m) => !m)} title="تكبير / تصغير النافذة">{maxed ? "🗕" : "⛶"}</button>
         <h3>المواد الثانوية للعرض</h3>
+        <div className="modal-body">
         <p className="muted">
           {systemType === 'offgrid'
             ? 'منظومة أوف جرد: مواد الألواح (الهيكل والصبات وبوردة الحماية DC) غير معروضة لأنها لا تدخل هذا العرض. أشّر على الأسلاك والبوردات وبقية التفاصيل المطلوبة — ومواد المتر تحتاج إدخال الأمتار.'
@@ -121,6 +122,7 @@ export default function SecondaryPickerModal({ secondary, selections, panelCount
         </div>
 
         {defaultsMsg && <div className="alert alert-info" style={{ marginTop: 10 }}>{defaultsMsg}</div>}
+        </div>
         <div className="toolbar modal-footer" style={{ flexWrap: 'wrap', gap: 8 }}>
           <span className="total-badge">مجموع الثانوية المضافة: {fmt(includedTotal)} دينار</span>
           <div style={{ display: 'flex', gap: 8 }}>

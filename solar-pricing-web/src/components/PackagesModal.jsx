@@ -126,9 +126,10 @@ export default function PackagesModal({ onClose }) {
 
   return (
     <ModalPortal>
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-overlay">
+      <div className="modal modal-wide">
         <h3>🖼 منشور الباقات</h3>
+        <div className="modal-body">
         <p className="muted">
           اكتب أمبير كل باقة والبرنامج يطلع الألواح والانفيرتر والبطاريات والمجموع من مخزونك وأسعارك —
           بنفس حساب شاشة العرض بالضبط. تكدر تثبّت أي مادة بيدك من قوائم المخزون.
@@ -275,6 +276,7 @@ export default function PackagesModal({ onClose }) {
           );
         })()}
 
+        </div>
         <div className="toolbar modal-footer">
           <button className="btn btn-secondary" onClick={onClose} disabled={busy}>إغلاق</button>
           <button className="btn btn-secondary" onClick={compute} disabled={busy}>
