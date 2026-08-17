@@ -18,7 +18,9 @@ export function isPanelSideMaterial(m) {
 export function computeSecondaryDefaults(secondaryMaterials, savedIds, systemType = 'full') {
   const offgrid = systemType === 'offgrid';
   const defaults = {};
-  if (Array.isArray(savedIds) && savedIds.length > 0) {
+  // قائمة معتمدة موجودة — حتى لو فارغة. الفارغة تعني «ماكو مواد ثانوية افتراضية»،
+  // وإرجاعها للمحسوب كان يخلي «اعتماد» بلا تأشير ما يسوي شي.
+  if (Array.isArray(savedIds)) {
     const byId = new Map(secondaryMaterials.map((m) => [m.id, m]));
     for (const id of savedIds) {
       const m = byId.get(id);

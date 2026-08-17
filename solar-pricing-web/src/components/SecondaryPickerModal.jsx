@@ -16,7 +16,7 @@ function effectiveQty(material, sel, panelCount) {
 }
 
 // نافذة وحدة لاختيار المواد الثانوية للعرض — الأساسيات محددة افتراضياً والباقي حسب الحاجة
-export default function SecondaryPickerModal({ secondary, selections, panelCount, onChange, onClose, systemType = 'full' }) {
+export default function SecondaryPickerModal({ secondary, selections, panelCount, onChange, onClose, onDefaultsSaved, systemType = 'full' }) {
   // عرض أوف جرد (بلا ألواح): مواد جهة الألواح (هيكل/صبات/بورد DC) ما تنعرض أصلاً —
   // كميتها تطلع صفر وتنشال من العرض، فعرضها بالقائمة تشويش يغلّط البياع
   const list = systemType === 'offgrid' ? secondary.filter((m) => !isPanelSideMaterial(m)) : secondary;
@@ -28,6 +28,9 @@ export default function SecondaryPickerModal({ secondary, selections, panelCount
     try {
       const ids = list.filter((m) => selections[m.id]).map((m) => m.id);
       await window.api.config.set('secondary_defaults', ids);
+      // نبلّغ شاشة العرض فوراً: هي حاسبة الافتراضيات مرة وحدة عند فتحها، فبدون
+      // هذا البلاغ يبقى «عرض جديد» ياخذ القائمة القديمة لحد ما ينعاد تحميل الصفحة
+      if (onDefaultsSaved) onDefaultsSaved(ids);
       setDefaultsMsg(`تم ✔ أصبحت هذه المواد (${ids.length}) افتراضية دائمة في كل عرض جديد ولجميع الموظفين`);
     } catch (err) {
       setDefaultsMsg('خطأ بالحفظ: ' + err.message);

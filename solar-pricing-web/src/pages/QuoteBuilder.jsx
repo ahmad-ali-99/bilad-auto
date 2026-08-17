@@ -1107,6 +1107,12 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
           selections={secondarySel}
           panelCount={preview?.draft?.panelBreakdown ? preview.draft.panelBreakdown.feedPanels + preview.draft.panelBreakdown.chargePanels : 0}
           onChange={setSecondarySel}
+          onDefaultsSaved={(ids) => {
+            // القائمة المعتمدة توّها انحفظت — نحدّث المرجعين حتى «عرض جديد»
+            // ياخذها فوراً بدل القائمة اللي انحسبت عند فتح الشاشة
+            savedSecondaryIdsRef.current = ids;
+            secondaryDefaultsRef.current = computeSecondaryDefaults(secondaryMaterials, ids, systemTypeRef.current);
+          }}
           onClose={() => setPickerOpen(false)}
         />
       )}
