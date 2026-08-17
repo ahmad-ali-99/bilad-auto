@@ -73,6 +73,8 @@ function ResetPasswordScreen({ onDone }) {
 
 export default function App() {
   const [page, setPage] = useState('quote');
+  // عرض محسوب وما انحفظ بعد — نسأل قبل ما نغادر صفحته
+  const [quoteUnsaved, setQuoteUnsaved] = useState(false);
   // صناديق الجداول تاخذ الارتفاع المتاح بالضبط — حتى شريط التمرير الأفقي يبقى ظاهراً
   useEffect(() => startFitTables(), []);
   const [session, setSession] = useState(null);
@@ -263,6 +265,18 @@ export default function App() {
     ...(isAhmad ? [{ key: 'history', label: 'الحركات', icon: '🕓' }] : []),
   ];
 
+  // مغادرة صفحة العرض وبيه عرض محسوب ما انحفظ: نسأل بدل ما يروح ويرجع فيلگى
+  // الأعداد انحسبت من جديد. المسودة المحلية تبقى محفوظة بالحالتين — السؤال عن
+  // الحفظ بقاعدة البيانات مو عن ضياع المكتوب.
+  function goToPage(next) {
+    if (next === page) return;
+    if (page === 'quote' && quoteUnsaved) {
+      const go = confirm('العرض ما محفوظ بعد. تريد تطلع من الصفحة؟\n\nشغلك ما يضيع — بس العرض ما ينحفظ بقاعدة البيانات إلا بزر الحفظ.');
+      if (!go) return;
+    }
+    setPage(next);
+  }
+
   // خروج فوري: نمسح الجلسة محلياً بدون انتظار السيرفر (كان يعلق إذا الشبكة بطيئة)
   async function logout() {
     try {
@@ -311,6 +325,7 @@ export default function App() {
           <QuoteBuilder
             prefill={quotePrefill}
             onDraftChange={(d) => (draftRef.current = d)}
+            onUnsavedChange={setQuoteUnsaved}
             // التعبئة تُستهلك مرة وحدة: كانت تبقى بالحالة، وصفحة العرض تنفكّ وترجع
             // تتركب بكل تنقّل — فيرجع البياع من قائمة ثانية ويلگى شغله انمسح
             // وحلّت محله بيانات العرض مثل ما انفتح أول مرة
@@ -342,7 +357,7 @@ export default function App() {
           وعلى زر «حفظ التعديلات»، فانتقل هنا حتى ما يغطي ولا بكسل من المحتوى */}
       <nav className="mobile-bottomnav">
         {navPages.map((p) => (
-          <button key={p.key} className={page === p.key ? 'active' : ''} onClick={() => setPage(p.key)}>
+          <button key={p.key} className={page === p.key ? 'active' : ''} onClick={() => goToPage(p.key)}>
             <span className="nav-icon">{p.icon}</span>
             <span>{p.label}</span>
           </button>

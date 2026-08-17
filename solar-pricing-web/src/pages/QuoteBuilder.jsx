@@ -150,7 +150,7 @@ function UnitCounter({ label, count, base, onChange }) {
   );
 }
 
-export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) {
+export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, onUnsavedChange }) {
   // المسودة المحفوظة (إن وجدت) تسترد بأول تركيب — تتقدم على القيم الفارغة وتخضع للـprefill
   const [savedDraft] = useState(readSavedDraft);
   const [clientName, setClientName] = useState(savedDraft?.clientName ?? '');
@@ -578,6 +578,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) 
       dupDismissedRef.current.add(editingQuote.id);
       if (saved?.id != null) dupDismissedRef.current.add(saved.id);
       setSaveMessage(`تم تحديث العرض رقم ${saved.quote_number} بنجاح ✔`);
+      setSavedSnapshot(inputsKey);
       setEditingQuote(null);
     } catch (err) {
       setSaveMessage('حدث خطأ أثناء التحديث: ' + err.message);
@@ -592,6 +593,13 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) 
     [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts]
   );
   const debouncedInputs = useDebouncedValue(inputs, 300);
+
+  // لقطة آخر إدخال انحفظ — أي تغيير بعده يرجّع الشاشة لحالة «ما محفوظ»
+  const [savedSnapshot, setSavedSnapshot] = useState(null);
+  const inputsKey = JSON.stringify({ ...inputs, clientName, clientPhone, location });
+  useEffect(() => {
+    setSavedSnapshot((prev) => (prev != null && prev !== inputsKey ? null : prev));
+  }, [inputsKey]);
 
   const validInputs =
     Number(debouncedInputs.ampDay) >= 0 && Number(debouncedInputs.ampNight) >= 0 &&
@@ -629,9 +637,25 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) 
         unitCounts: debouncedInputs.unitCounts,
         systemType: debouncedInputs.systemType,
       })
-      .then(setPreview)
+      .then((res) => {
+        setPreview(res);
+        // تثبيت نسبة المصرف وأشهره بالمسودة بعد أول حساب: بدونها يرجع للعرض
+        // بنسبة الإعدادات وقت الفتح، فلو تغيّرت الإعدادات يطلع مجموع غير اللي
+        // شافه آخر مرة ويضطر يعدّله من جديد. التثبيت ينفكّ لمن يبدّل المصرف.
+        const inst = res?.draft?.installment;
+        if (inst && !debouncedInputs.installmentRate) setInstallmentRate(String(inst.rate));
+        if (inst && !debouncedInputs.installmentMonths) setInstallmentMonths(String(inst.months));
+      })
       .finally(() => setCalculating(false));
   }, [debouncedInputs, validInputs, isAdmin]);
+
+  // تبديل المصرف يفكّ التثبيت — وإلا بقيت نسبة المصرف القديم مثبّتة على الجديد
+  function changeInstallmentPlan(next) {
+    if (next === installmentPlan) return;
+    setInstallmentPlan(next);
+    setInstallmentRate('');
+    setInstallmentMonths('');
+  }
 
   function setOverride(category, materialId) {
     setOverrides((o) => ({ ...o, [category]: materialId ? Number(materialId) : undefined }));
@@ -698,6 +722,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) 
       // العرض المحفوظ توه ما نحذر عنه — بلياها الفحص الحي يلگيه فوراً ويطلع التنبيه
       if (saved?.id != null) dupDismissedRef.current.add(saved.id);
       setSaveMessage(`تم حفظ العرض رقم ${saved.quote_number} بنجاح ✔`);
+      setSavedSnapshot(inputsKey);
     } catch (err) {
       setSaveMessage('حدث خطأ أثناء الحفظ: ' + err.message);
     } finally {
@@ -720,6 +745,15 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) 
 
   const draft = preview?.draft;
   const hasBlockingErrors = draft && Object.keys(draft.errors).length > 0;
+
+  // «عرض ما محفوظ»: أكو حساب فعلي بالشاشة وما انحفظ منذ آخر تعديل. المسودة
+  // المحلية تحمي من ضياع الشغل، بس هي مو عرضاً محفوظاً — والبياع كان يرجع
+  // ويلگى أعداد المواد انحسبت من جديد لأن العرض ما انحفظ أصلاً.
+  const unsaved = !!draft && draft.items.length > 0 && !savedSnapshot;
+  useEffect(() => {
+    if (onUnsavedChange) onUnsavedChange(unsaved);
+    return () => { if (onUnsavedChange) onUnsavedChange(false); };
+  }, [unsaved, onUnsavedChange]);
   // رفع المسودة الحية للتطبيق — حتى المساعد الذكي العائم يقرأ نتيجة الحساب الحالية
   useEffect(() => {
     if (onDraftChange) onDraftChange(draft || null);
@@ -996,7 +1030,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) 
                 <button
                   key={pl.key}
                   type="button"
-                  onClick={() => setInstallmentPlan(pl.key)}
+                  onClick={() => changeInstallmentPlan(pl.key)}
                   style={{
                     flex: '1 1 190px', textAlign: 'right', cursor: 'pointer', borderRadius: 12, padding: '9px 12px',
                     border: installmentPlan === pl.key ? '2px solid var(--navy)' : '1px solid #ccd6e2',
@@ -1311,6 +1345,17 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) 
           </div>
 
           {saveMessage && <div className="alert alert-info">{saveMessage}</div>}
+          {/* تذكير الحفظ: المسودة المحلية تحمي الشغل من الضياع، بس العرض ما ينحفظ
+              بقاعدة البيانات إلا بالزر — وبدون الحفظ يرجع البياع فيلگى الأعداد
+              انحسبت من جديد بدل ما ترجع مثل ما تركها. */}
+          {unsaved && !hasBlockingErrors && (
+            <div className="alert alert-warning save-nudge">
+              <span>⚠ هذا العرض <b>ما محفوظ</b> — احفظه حتى يرجع بنفس المواد والأعداد لمن تفتحه.</span>
+              <button className="btn btn-primary btn-sm" disabled={saving} onClick={editingQuote ? handleUpdate : handleSave}>
+                {editingQuote ? '💾 حفظ التعديلات' : '💾 حفظ العرض'}
+              </button>
+            </div>
+          )}
           {/* شريط إجراءات ثابت أسفل المحتوى: المجموع + الحفظ دائماً بمتناول اليد حتى مع التمرير */}
           <div className="action-bar">
             <span className="action-total">

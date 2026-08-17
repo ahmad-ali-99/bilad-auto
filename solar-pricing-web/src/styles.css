@@ -1479,3 +1479,10 @@ h2.page-title::before {
 .opt-line input[type=checkbox] { width: 18px; height: 18px; flex: 0 0 auto; margin-top: 2px; }
 .opt-line > span { display: flex; flex-direction: column; gap: 2px; }
 .opt-line small { font-weight: 600; font-size: 0.76rem; line-height: 1.5; }
+
+/* تذكير حفظ العرض — سطر تنبيه بيه زر الحفظ مباشرة */
+.save-nudge {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  justify-content: space-between;
+}
+.save-nudge b { color: #8a5b00; }

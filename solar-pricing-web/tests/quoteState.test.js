@@ -104,3 +104,59 @@ describe('ملاحظات الضمان ما تتكرر بكل تعديل', () => 
     expect([...new Set([...saved, ...warranty])]).toEqual(['الدفعات حسب الاتفاق', 'ضمان الألواح 15 سنة']);
   });
 });
+
+// ==== تذكير حفظ العرض ====
+// المسودة المحلية تحمي المكتوب من الضياع، بس العرض ما ينحفظ بقاعدة البيانات إلا
+// بالزر — وبدون حفظ يرجع البياع فيلگى الأعداد انحسبت من جديد بدل ما ترجع مثل
+// ما تركها. فصار البرنامج يذكّره بالحفظ ويسأله قبل ما يغادر الصفحة.
+describe('البرنامج يطلب حفظ العرض', () => {
+  it('التذكير يطلع بس إذا أكو عرض محسوب وما انحفظ', () => {
+    expect(builder).toContain('const unsaved = !!draft && draft.items.length > 0 && !savedSnapshot');
+    expect(builder).toContain('save-nudge');
+    expect(builder).toContain('ما محفوظ');
+  });
+
+  it('التذكير يختفي بالحفظ ويرجع بأي تعديل بعده', () => {
+    // الحفظ والتحديث يثبّتان لقطة المدخلات
+    expect((builder.match(/setSavedSnapshot\(inputsKey\)/g) || []).length).toBe(2);
+    // وأي تغيير بالمدخلات يفكّ اللقطة
+    expect(builder).toContain('setSavedSnapshot((prev) => (prev != null && prev !== inputsKey ? null : prev))');
+  });
+
+  it('زر الحفظ بالتذكير يحدّث العرض المفتوح مو ينشئ نسخة ثانية', () => {
+    expect(builder).toContain('onClick={editingQuote ? handleUpdate : handleSave}');
+  });
+
+  it('التطبيق يسأل قبل مغادرة صفحة العرض وهو ما محفوظ', () => {
+    expect(builder).toContain('onUnsavedChange');
+    expect(app).toContain('onUnsavedChange={setQuoteUnsaved}');
+    expect(app).toContain('function goToPage(next)');
+    expect(app).toContain("page === 'quote' && quoteUnsaved");
+    // كل أزرار التنقل تمرّ بالبوابة — وإلا انفلت التنقل من زر
+    expect(app).not.toMatch(/className=\{page === p\.key \? 'active' : ''\} onClick=\{\(\) => setPage\(p\.key\)\}/);
+  });
+});
+
+// ==== ثبات مجموع التقسيط ====
+describe('التقسيط يرجع بنفس المجموع', () => {
+  it('النسبة والأشهر تنثبتان بالمسودة بعد أول حساب', () => {
+    expect(builder).toContain('if (inst && !debouncedInputs.installmentRate) setInstallmentRate(String(inst.rate))');
+    expect(builder).toContain('if (inst && !debouncedInputs.installmentMonths) setInstallmentMonths(String(inst.months))');
+  });
+
+  it('تبديل المصرف يفكّ التثبيت — وإلا بقيت نسبة المصرف القديم', () => {
+    expect(builder).toContain('function changeInstallmentPlan(next)');
+    expect(builder).toContain('changeInstallmentPlan(pl.key)');
+    const fn = builder.slice(builder.indexOf('function changeInstallmentPlan(next)'));
+    const body = fn.slice(0, fn.indexOf('\n  }'));
+    expect(body).toContain("setInstallmentRate('')");
+    expect(body).toContain("setInstallmentMonths('')");
+  });
+
+  it('النسبة والأشهر والمواد المختارة كلها بذاكرة المسودة', () => {
+    for (const f of ['installment', 'installmentPlan', 'installmentRate', 'installmentMonths',
+                     'overrides', 'secondarySel', 'unitCounts', 'extraUnits', 'notes', 'tier']) {
+      expect(draftFields.has(f), `${f} مو بذاكرة المسودة`).toBe(true);
+    }
+  });
+});
