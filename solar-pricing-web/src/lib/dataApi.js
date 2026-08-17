@@ -419,6 +419,7 @@ export const api = {
         label: installmentPlanLabel(plan),
         rate: ownRate > 0 ? ownRate : (Number(cfg?.rate) > 0 ? Number(cfg.rate) : fallback.rate),
         months: ownMonths > 0 ? ownMonths : (Number(cfg?.months) > 0 ? Number(cfg.months) : fallback.months),
+        hideTotal: input.hideTotalInPdf === true,
       };
     },
     // وسائط بناء العرض — نقطة واحدة يستعملها الجميع (المعاينة، الحفظ، تصدير PDF).
@@ -584,6 +585,9 @@ export const api = {
               rate: Number(a.installment.rate) || 1.35,
               months: Number(a.installment.months) || 60,
               distributed: true,
+              // قرار البياع: هل يشوف الزبون المبلغ الكلي بالملف؟ ينحفظ مع العرض
+              // حتى إعادة الطباعة بعد شهر تطلع بنفس الشكل بلا ما ينضبط من جديد
+              hideTotal: a.installment.hideTotal === true,
             }
             : null,
           // الزيادة/النقصان اليدوي بالوحدات — يرجع بوضع التعديل
@@ -899,6 +903,7 @@ export const api = {
           monthly: Math.round(totalWithInterest / months),
           plan, label: installmentPlanLabel(plan),
           cashTotal: distributed ? Math.round(quote.total_price / rate) : quote.total_price,
+          hideTotal: inst.hideTotal === true,
         };
       }
       // قدرة المنظومة لعرض محفوظ: تُعاد من بنوده (عدد وسعة البطاريات والانفيرترات)

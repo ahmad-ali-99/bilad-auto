@@ -1450,3 +1450,32 @@ h2.page-title::before {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 8px; color: var(--navy);
 }
+
+/* ═══ مجموعات خيارات التسعير — «زيادة/خصم» و«تقسيط» ═══
+   كانت الخيارات مرصوفة ورا بعض بلا فاصل ولا عنوان، فتقرأ كهوسة وحدة. */
+.opt-group {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fbfcfe;
+}
+.opt-group-title {
+  font-weight: 800;
+  color: var(--navy);
+  font-size: 0.88rem;
+  margin-bottom: 8px;
+}
+.opt-group .field { margin-bottom: 0; }
+.opt-group .tier-toggle { margin-bottom: 0; }
+/* سطر خيار: مربع تأشير + عنوان + شرح تحته — بمحاذاة أعلى حتى ما يزحف المربع */
+.opt-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  cursor: pointer;
+  color: var(--navy);
+}
+.opt-line input[type=checkbox] { width: 18px; height: 18px; flex: 0 0 auto; margin-top: 2px; }
+.opt-line > span { display: flex; flex-direction: column; gap: 2px; }
+.opt-line small { font-weight: 600; font-size: 0.76rem; line-height: 1.5; }

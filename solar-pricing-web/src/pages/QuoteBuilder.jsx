@@ -67,6 +67,7 @@ const BLANK = {
   markupPercent: '', markupMode: 'visible', discountPercent: '',
   installment: false, installmentPlan: 'company',
   installmentRate: '', installmentMonths: '',
+  hideTotalInPdf: false,
   extraUnits: { panel: 0, battery: 0, inverter: 0, integrated: 0 },
   unitCounts: {},
   createdBy: '',
@@ -183,6 +184,8 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) 
   // نسبة وأشهر خاصة بهذا العرض — فارغة تعني «خذها من الإعدادات العامة»
   const [installmentRate, setInstallmentRate] = useState(savedDraft?.installmentRate ?? '');
   const [installmentMonths, setInstallmentMonths] = useState(savedDraft?.installmentMonths ?? '');
+  // إخفاء المجموع الكلي من ملف الزبون — الأسعار والقسط الشهري يبقون
+  const [hideTotalInPdf, setHideTotalInPdf] = useState(savedDraft?.hideTotalInPdf ?? false);
   // زيادة/نقصان يدوي بالوحدات (لوح ±2، بطارية وانفيرتر ±1) — للمستخدمين الرئيسيين فقط
   const [extraUnits, setExtraUnits] = useState(savedDraft?.extraUnits ?? { panel: 0, battery: 0, inverter: 0, integrated: 0 });
   // العدد اللي يثبّته البياع بيده — **رقم نهائي** مو فرقاً عن الحساب التلقائي.
@@ -311,7 +314,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) 
   const draftState = {
     clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours,
     systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent,
-    installment, installmentPlan, installmentRate, installmentMonths,
+    installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf,
     extraUnits, unitCounts, notes, pricingOpen, createdBy,
   };
   // مرجع حي للمسودة — يستعمله الحفظ الفوري عند مغادرة الصفحة
@@ -322,7 +325,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) 
   useEffect(() => {
     const t = setTimeout(() => writeSavedDraft(draftStateRef.current), 500);
     return () => clearTimeout(t);
-  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, extraUnits, unitCounts, notes, pricingOpen, createdBy]);
+  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts, notes, pricingOpen, createdBy]);
 
   // حفظ فوري عند مغادرة الصفحة أو إغلاق النافذة — بدونه آخر نص ثانية من الكتابة
   // تروح: المؤقت ينلغي مع فكّ الصفحة قبل ما يوصل للتخزين.
@@ -356,6 +359,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) 
     setInstallmentPlan(s.installmentPlan);
     setInstallmentRate(s.installmentRate);
     setInstallmentMonths(s.installmentMonths);
+    setHideTotalInPdf(s.hideTotalInPdf);
     setExtraUnits(s.extraUnits);
     setUnitCounts(s.unitCounts);
     setCreatedBy(s.createdBy);
@@ -417,6 +421,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) 
         installmentPlan: a.installment?.plan === 'cbi' ? 'cbi' : 'company',
         installmentRate: a.installment?.rate ? String(a.installment.rate) : '',
         installmentMonths: a.installment?.months ? String(a.installment.months) : '',
+        hideTotalInPdf: a.installment?.hideTotal === true,
         extraUnits: {
           panel: Number(x.panel) || 0, battery: Number(x.battery) || 0,
           inverter: Number(x.inverter) || 0, integrated: Number(x.integrated) || 0,
@@ -467,6 +472,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) 
       setInstallmentPlan(a.installment?.plan === 'cbi' ? 'cbi' : 'company');
       setInstallmentRate(a.installment?.rate ? String(a.installment.rate) : '');
       setInstallmentMonths(a.installment?.months ? String(a.installment.months) : '');
+      setHideTotalInPdf(a.installment?.hideTotal === true);
       const x = p.extraUnits || a.extraUnits || {};
       setExtraUnits({ panel: Number(x.panel) || 0, battery: Number(x.battery) || 0, inverter: Number(x.inverter) || 0, integrated: Number(x.integrated) || 0 });
       setUnitCounts(p.unitCounts || a.unitCounts || {});
@@ -590,8 +596,8 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) 
 
   // useMemo ضروري: بدونه الكائن يتجدد بكل رندر → المؤقت ينعاد → حلقة إعادة حساب لا نهائية
   const inputs = useMemo(
-    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, extraUnits, unitCounts }),
-    [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, extraUnits, unitCounts]
+    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts }),
+    [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts]
   );
   const debouncedInputs = useDebouncedValue(inputs, 300);
 
@@ -661,6 +667,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) 
       installmentPlan,
       installmentRate,
       installmentMonths,
+      hideTotalInPdf,
       extraUnits,
       // الأعداد اللي ثبّتها البياع بيده — بدونها الحفظ وملف الـPDF يرجعون للحساب
       // التلقائي ويطلع رقم غير اللي كتبه بالشاشة
@@ -932,7 +939,9 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) 
           <>
           {/* الزيادة والخصم: صلاحية المشرفين فقط — البياع الاعتيادي يشوف التقسيط فقط */}
           {isAdmin && (
-          <div className="grid-3" style={{ marginTop: 8 }}>
+          <div className="opt-group">
+          <div className="opt-group-title">الزيادة والخصم</div>
+          <div className="grid-3">
             <div className={fieldClass('markupPercent')}>
               <label>نسبة الزيادة %</label>
               <input
@@ -977,10 +986,13 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) 
               />
             </div>
           </div>
+          </div>
           )}
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, fontWeight: 700, color: 'var(--navy)', cursor: 'pointer' }}>
-            <input type="checkbox" checked={installment} onChange={(e) => setInstallment(e.target.checked)} style={{ width: 18, height: 18 }} />
-            🏦 إدراج التقسيط بالعرض
+          <div className="opt-group">
+          <div className="opt-group-title">التقسيط</div>
+          <label className="opt-line">
+            <input type="checkbox" checked={installment} onChange={(e) => setInstallment(e.target.checked)} />
+            <span><b>🏦 إدراج التقسيط بالعرض</b></span>
           </label>
           {/* خطتان: نظام الشركة المعتاد، أو مبادرة البنك المركزي (26% لسبع سنوات) */}
           {installment && (
@@ -1008,36 +1020,27 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed }) 
               ))}
             </div>
           )}
-          {/* نسبة وأشهر خاصة بهذا العرض — تتقدّم على الإعدادات العامة، فيقسّط على أي
-              مصرف بنسبته بلا ما يغيّر إعدادات الفريق كلهم */}
+          {/* نسبة المصرف وأشهره تجي من الإعدادات لكل خطة — كانت هنا خانتان فارغتان
+              «من الإعدادات» ما ينكتب بيهن شي بالعادة، فانشالن. والعرض المحفوظ يخزن
+              النسبة والأشهر اللي انحسب بيهن فعلاً، فيرجع بنفس المجموع مهما تغيّرت
+              الإعدادات بعدين. */}
           {installment && (
-            <div className="grid-2" style={{ marginTop: 8 }}>
-              <div className="field">
-                <label>نسبة المصرف لهذا العرض</label>
-                <input
-                  type="number" step="0.01" min="1" inputMode="decimal"
-                  value={installmentRate}
-                  onChange={(e) => setInstallmentRate(e.target.value)}
-                  placeholder="من الإعدادات"
-                  title="معامل الضرب مثل 1.35 يعني فائدة 35% — اتركه فارغاً ليأخذ نسبة الإعدادات"
-                />
-              </div>
-              <div className="field">
-                <label>عدد الأشهر لهذا العرض</label>
-                <input
-                  type="number" min="1" inputMode="numeric"
-                  value={installmentMonths}
-                  onChange={(e) => setInstallmentMonths(e.target.value)}
-                  placeholder="من الإعدادات"
-                />
-              </div>
-            </div>
+            <label className="opt-line" style={{ marginTop: 10 }}>
+              <input
+                type="checkbox"
+                checked={hideTotalInPdf}
+                onChange={(e) => setHideTotalInPdf(e.target.checked)}
+              />
+              <span>
+                <b>إخفاء المجموع الكلي من ملف الزبون</b>
+                <small className="muted">
+                  الزبون يشوف البنود والقسط الشهري بس — بلا المبلغ الكلي.
+                  الأسعار بالملف تشمل نسبة المصرف بالحالتين، والمجموع يبقى ظاهر إلك بالشاشة.
+                </small>
+              </span>
+            </label>
           )}
-          {installment && (
-            <div className="muted" style={{ fontSize: '0.78rem', marginTop: 6 }}>
-              نسبة المصرف تتوزع على أسعار البنود، ويطلع بملف الزبون <b>مجموع التقسيط والقسط الشهري فقط</b> — بلا سعر الكاش.
-            </div>
-          )}
+          </div>
           </>
           )}
         </div>

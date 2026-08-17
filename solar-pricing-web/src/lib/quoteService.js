@@ -189,6 +189,8 @@ function applyAdjustments(items, total, adjustments) {
         monthly: Math.round(total / months),
         cashTotal,
         interestAmount: total - cashTotal,
+        // قرار العرض: يخفي المبلغ الكلي من ملف الزبون ويخلي القسط الشهري بس
+        hideTotal: inst.hideTotal === true,
       };
     }
   }

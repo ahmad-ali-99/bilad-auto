@@ -157,3 +157,54 @@ describe('النسبة والأشهر يوصلون لكل مسار — مو بس
     expect(dataApi).toMatch(/distributed \? quote\.total_price : Math\.round\(quote\.total_price \* rate\)/);
   });
 });
+
+// ==== إخفاء المجموع الكلي من ملف الزبون ====
+// كانت بالشاشة خانتان فارغتان (نسبة وأشهر خاصة بالعرض) نادراً ما تنكتبان، وانشالن.
+// محلهن خانة تأشير وحدة: الزبون يشوف القسط الشهري بلا المبلغ الكلي.
+describe('خانة إخفاء المجموع الكلي', () => {
+  const company = { company_name: 'بلاد اوتو' };
+  const quote = { quote_number: 7401, client_name: 'زبون', total_price: 20000000, created_at: '2026-08-17' };
+  const items = [{ description: 'ألواح', unit: 'عدد', quantity: 8, unit_price: 250000, subtotal: 2000000 }];
+  const html = (installment) => buildInvoiceInnerHtml({ quote, items, notes: [], company, installment });
+
+  it('بالوضع الاعتيادي يطلع المجموع والقسط سوية', () => {
+    const h = html({ rate: 1.35, months: 60, totalWithInterest: 20000000, monthly: 333333, plan: 'company' });
+    expect(h).toContain('المجموع الكلي بالتقسيط');
+    expect(h).toContain('القسط الشهري لمدة');
+  });
+
+  it('مع التأشير ينشال المجموع ويبقى القسط الشهري', () => {
+    const h = html({ rate: 1.35, months: 60, totalWithInterest: 20000000, monthly: 333333, plan: 'company', hideTotal: true });
+    expect(h).not.toContain('المجموع الكلي');
+    expect(h).toContain('القسط الشهري لمدة');
+    expect(h).toContain('333,333');
+  });
+
+  it('بلا تقسيط ما تتأثر الفاتورة بالخانة', () => {
+    expect(html(null)).toContain('المجموع الكلي');
+  });
+
+  it('القرار يوصل من المسودة للفاتورة', () => {
+    expect(draft(inst({ hideTotal: true })).installment.hideTotal).toBe(true);
+    expect(draft(inst()).installment.hideTotal).toBe(false);
+  });
+
+  it('الخانتان الفارغتان انشالن من الشاشة', () => {
+    expect(builder).not.toContain('نسبة المصرف لهذا العرض');
+    expect(builder).not.toContain('عدد الأشهر لهذا العرض');
+  });
+
+  it('القرار ينحفظ مع العرض ويرجع عند فتحه — بلا ضبط من جديد', () => {
+    expect(builder).toContain('hideTotalInPdf');
+    expect(builder).toContain('setHideTotalInPdf(a.installment?.hideTotal === true)');
+    expect(dataApi).toContain('hideTotal: input.hideTotalInPdf === true');
+    expect(dataApi).toContain('hideTotal: a.installment.hideTotal === true');   // لقطة الحفظ
+    expect(dataApi).toContain('hideTotal: inst.hideTotal === true');            // إعادة البناء
+  });
+
+  it('الخانة داخل مجموعة «التقسيط» المعنونة — مو مرمية بالهوسة', () => {
+    expect(builder).toContain('opt-group-title');
+    expect(builder).toMatch(/opt-group-title">التقسيط/);
+    expect(builder).toMatch(/opt-group-title">الزيادة والخصم/);
+  });
+});
