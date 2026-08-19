@@ -104,8 +104,7 @@ describe('المواد المخفية ما تدخل أي مسار استخدام
     // المفعّلة تنفرز أول، وبعدها ينطبق فلتر البراند على الناتج — فالمخفية
     // ما توصل المحرك بأي حالة
     expect(dataApiSrc).toMatch(/const active = materials\.filter\(\(m\) => m\.active !== false\)/);
-    expect(dataApiSrc).toMatch(/\? active\.filter\(/);
-    expect(dataApiSrc).toMatch(/: active;/);
+    expect(dataApiSrc).toMatch(/filterMaterialsByBrands\(active, picked\)/);
     expect(dataApiSrc).toMatch(/materials: filtered,/);
   });
 

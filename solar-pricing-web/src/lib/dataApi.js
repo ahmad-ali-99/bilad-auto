@@ -10,6 +10,9 @@ import { UNDO, DRAFT } from './activityUndo.js';
 import { isRestrictedUser, canEditSettings, canViewQuotes, canAddMaterial, canEditMaterial, canImportInventory, canImportUpdates, canEditLabor } from './permissions.js';
 import { installmentPlanLabel } from './installment.js';
 import { imageKey, isImageKey } from './materialImages.js';
+import {
+  BRAND_CATEGORIES, normalizeBrandPick, pruneBrandPick, filterMaterialsByBrands, hasBrandPick,
+} from './brandPick.js';
 
 function throwIf(error) {
   if (error) throw new Error(error.message || 'خطأ بالاتصال بقاعدة البيانات');
@@ -224,21 +227,25 @@ export const api = {
     async getImage(id) {
       return api.config.get(imageKey(id));
     },
-    // أسماء الماركات الموجودة فعلاً بالمخزون — تغذّي مبدّل «البراند» بشاشة العرض.
-    // بس ماركات المواد الأساسية، وبس المفعّلة، ومرتبة أبجدياً.
+    // أسماء الماركات الموجودة فعلاً بالمخزون — تغذّي أقسام «البراند» بشاشة العرض.
+    // ترجع **مقسّمة على الفئات** لأن كل قسم (لوح · بطارية · انفيرتر · كابينة)
+    // يتنتخب لحاله: { panel: [...], battery: [...], inverter: [...], integrated: [...] }
+    // وبس المواد المفعّلة (المخفية بالمخزون ما تدخل)، ومرتبة أبجدياً.
     async brands() {
-      const { data, error } = await supabase.from('materials').select('brand,category').order('brand');
-      throwIf(error);
-      const MAIN = ['battery', 'inverter'];
-      const seen = new Map();
-      for (const m of data || []) {
-        if (!MAIN.includes(m.category)) continue;
+      const materials = await allMaterials();
+      const buckets = {};
+      for (const c of BRAND_CATEGORIES) buckets[c] = new Map();
+      for (const m of materials) {
+        const bucket = buckets[m.category];
+        if (!bucket || m.active === false) continue;
         const b = String(m.brand || '').trim();
         if (!b) continue;
         const k = b.toLowerCase();
-        if (!seen.has(k)) seen.set(k, b);
+        if (!bucket.has(k)) bucket.set(k, b);
       }
-      return [...seen.values()].sort((a, b) => a.localeCompare(b, 'ar'));
+      const out = {};
+      for (const c of BRAND_CATEGORIES) out[c] = [...buckets[c].values()].sort((a, b) => a.localeCompare(b, 'ar'));
+      return out;
     },
     // مُلّاك كل المواد بنداء واحد — شاشة المخزون تحتاجهم حتى تعرف أي مادة
     // يقدر الحساب الحالي يعدّلها. { [id]: 'اسم الحساب' }
@@ -532,16 +539,14 @@ export const api = {
         // معاملات أمان البطاريات لكل مستوى — من الإعدادات المشتركة (وإلا الافتراضي بالمحرك)
         api.config.get('battery_factors'),
       ]);
-      // فلتر البراند: يحصر **الانفيرتر والبطارية** بماركة واحدة (قرار المستخدم).
-      // الألواح والكابينات والمواد الثانوية والأجور تبقى مثل ما هي — فالبرنامج
-      // يبقى حر يختار أنسب لوح، والثانوية أغلبها بلا ماركة وحذفها يكسر العرض.
-      const MAIN = ['battery', 'inverter'];
-      const wanted = String(input.brand || '').trim();
-      const brandOf = (m) => String(m.brand || '').trim().toLowerCase();
+      // فلتر البراند: كل قسم بماركته المختارة لحاله (لوح · بطارية · انفيرتر ·
+      // كابينة)، والأقسام بلا اختيار تبقى مفتوحة. المواد الثانوية والأجور ما
+      // تنفلتر إطلاقاً — أغلبها بلا ماركة وحذفها يكسر العرض.
+      // الماركات المنتخبة تنقصّ على نوع المنظومة أولاً حتى ما يبقى فلتر مخفي
+      // على قسم أصلاً مو داخل بالعرض.
       const active = materials.filter((m) => m.active !== false);
-      const filtered = wanted
-        ? active.filter((m) => !MAIN.includes(m.category) || brandOf(m) === wanted.toLowerCase())
-        : active;
+      const picked = pruneBrandPick(normalizeBrandPick(input), input.systemType);
+      const filtered = filterMaterialsByBrands(active, picked);
 
       return quoteService.buildOptions({
         // المواد المخفية (بلا جيك بوكس) ما تدخل محرك التسعير إطلاقاً: لا اختيار
@@ -659,9 +664,12 @@ export const api = {
       // نوع المنظومة واختيار الكابينة المتكاملة جزء من ذاكرة العرض — بدونهما العرض
       // المحفوظ يرجع بنوع «كاملة» عند التعديل وتضيع الكابينة
       const systemType = input.systemType || null;
+      // ماركات الأقسام المنتخبة (لوح · بطارية · انفيرتر · كابينة) — بدونها يرجع
+      // العرض المحفوظ بكل الماركات وتتبدل مواده عند إعادة الفتح
+      const picked = pruneBrandPick(normalizeBrandPick(input), systemType);
       const active =
         (Number(a.markupPercent) || 0) > 0 || (Number(a.discountPercent) || 0) > 0 || a.installment?.enabled ||
-        hasExtra || !!sel || !!systemType || !!counts || !!input.brand;
+        hasExtra || !!sel || !!systemType || !!counts || hasBrandPick(picked);
       try {
         await api.config.set(`quote_adj_${quoteId}`, active ? {
           // ذاكرة المواد الثانوية كما أدخلها البياع — فتح التعديل يرجعها حرفياً
@@ -669,8 +677,10 @@ export const api = {
           markupPercent: Number(a.markupPercent) || 0,
           markupMode: a.markupMode === 'distributed' ? 'distributed' : 'visible',
           discountPercent: Number(a.discountPercent) || 0,
-          // البراند المختار — بدونه يرجع العرض المحفوظ بكل الماركات وتتبدل مواده
-          brand: input.brand || null,
+          // ماركة كل قسم لحاله. `brand` القديم ينحفظ هم للتوافق مع أي قارئ قديم
+          // (كان يعني الانفيرتر والبطارية بس) — والقراءة تعتمد `brands` أولاً.
+          brands: picked,
+          brand: (picked.battery && picked.battery === picked.inverter) ? picked.battery : null,
           // لقطة نسبة الفائدة والأشهر والخطة وقت الحفظ — تغيير الإعدادات لاحقاً لا يغير العروض المحفوظة.
           // `plan` كان ناقصاً فكل عرض محفوظ يرجع باسم «مصرف النهرين» حتى لو انحفظ بمبادرة البنك المركزي.
           // `distributed` يميّز العروض الجديدة (الفائدة داخل أسعار البنود) عن القديمة (بنود بسعر الكاش) —

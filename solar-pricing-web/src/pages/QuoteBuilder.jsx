@@ -9,6 +9,9 @@ import { buildEditPrefill } from '../lib/editPrefill.js';
 import { detectSceneType } from '../lib/sceneType.js';
 import { getIsAdmin, getCurrentUsername, ADMIN_USERS } from '../lib/agent.js';
 import { canPickBrand } from '../lib/permissions.js';
+import {
+  brandSectionsFor, emptyBrandPick, pruneBrandPick, BRAND_SECTION_LABELS,
+} from '../lib/brandPick.js';
 import { computeSecondaryDefaults, isPanelSideMaterial } from '../lib/secondaryDefaults.js';
 import { normName } from '../lib/quotesFilter.js';
 import BrandLogo from '../components/BrandLogo.jsx';
@@ -65,7 +68,7 @@ let lastAppliedPrefill = null;
 const BLANK = {
   clientName: '', clientPhone: '', location: '',
   roofAreaM2: '', ampDay: '', ampNight: '', nightSupplyHours: '',
-  systemType: 'full', tier: 'economy', brand: '',
+  systemType: 'full', tier: 'economy', brands: emptyBrandPick(),
   overrides: {},
   markupPercent: '', markupMode: 'visible', discountPercent: '',
   installment: false, installmentPlan: 'company',
@@ -167,9 +170,11 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   // بطاريات) — الزر هنا يضبط الحقول ويخفي غير اللازم بدل ما يحفظ البياع الحيلة بباله.
   const [systemType, setSystemType] = useState(savedDraft?.systemType ?? 'full');
   const [tier, setTier] = useState(savedDraft?.tier ?? 'economy');
-  // البراند: يحصر اللوح والبطارية والانفيرتر بماركة وحدة. فارغ = كل الماركات.
-  const [brand, setBrand] = useState(savedDraft?.brand ?? '');
-  const [brands, setBrands] = useState([]);
+  // البراند: كل قسم بماركته لحاله (لوح · بطارية · انفيرتر · كابينة). فارغ = كل
+  // الماركات لهذا القسم — والاختيار ما يغيّر تحجيم المنظومة، بس يحصر المواد.
+  const [brands, setBrands] = useState(() => ({ ...emptyBrandPick(), ...(savedDraft?.brands || {}) }));
+  // الماركات المتوفرة بالمخزون مقسّمة على الفئات
+  const [brandOptions, setBrandOptions] = useState(null);
   // المبدّل معروض لحسابات محددة حالياً (بكر وأحمد)
   const [mayPickBrand, setMayPickBrand] = useState(false);
   // نسبة الزيادة: علنية (سطر بالعرض) أو موزعة (تنضرب على أسعار البنود نفسها) + نسبة الخصم
@@ -244,6 +249,13 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   // السستم المتكامل: كابينة وحدة محل البطاريات والانفيرتر — التحجيم تلقائي
   // والتبديل والعدد يمشون بنفس مسار باقي الفئات (overrides + extraUnits)
   const isIntegrated = systemType === 'integrated';
+  // أقسام البراند المعروضة تتبع نوع المنظومة: النهارية بلا بطاريات، والأوف جرد
+  // بلا ألواح، والمتكامل بكابينة محل الاثنين
+  const brandSections = brandSectionsFor(systemType);
+  // تثبيت ماركة قسم — والباقي ما ينمس
+  function pickBrand(cat, value) {
+    setBrands((prev) => ({ ...prev, [cat]: value }));
+  }
 
   useEffect(() => {
     // الملاحظات الافتراضية فقط إذا ماكو ملاحظات قائمة (مسودة محفوظة أو عرض مفتوح للتعديل) —
@@ -252,7 +264,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
     getCurrentUsername().then((n) => {
       if (!canPickBrand(n)) return;
       setMayPickBrand(true);
-      window.api.materials.brands().then(setBrands).catch(() => {});
+      window.api.materials.brands().then(setBrandOptions).catch(() => {});
     }).catch(() => {});
     // ساعات التجهيز الليلي بدون قيمة افتراضية — البياع يحددها بكل عرض
     // الافتراضي: القائمة الدائمة المشتركة من قاعدة البيانات (يحفظها الفريق من نافذة الثانوية)،
@@ -275,6 +287,8 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
     if (next === systemType) return;
     setSystemType(next);
     systemTypeRef.current = next;
+    // ماركات الأقسام اللي طلعت من العرض تنشال — حتى ما يبقى فلتر مخفي شغّال
+    setBrands((prev) => pruneBrandPick(prev, next));
     if (next === 'offgrid') {
       setAmpDay('0');
       setRoofAreaM2('');
@@ -317,7 +331,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   // اللي محله ذاكرة الجلسة). أي حقل جديد يُضاف هنا وبـBLANK سوية.
   const draftState = {
     clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours,
-    systemType, tier, brand, overrides, secondarySel, markupPercent, markupMode, discountPercent,
+    systemType, tier, brands, overrides, secondarySel, markupPercent, markupMode, discountPercent,
     installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf,
     extraUnits, unitCounts, notes, pricingOpen, createdBy,
   };
@@ -329,7 +343,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   useEffect(() => {
     const t = setTimeout(() => writeSavedDraft(draftStateRef.current), 500);
     return () => clearTimeout(t);
-  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brand, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts, notes, pricingOpen, createdBy]);
+  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts, notes, pricingOpen, createdBy]);
 
   // حفظ فوري عند مغادرة الصفحة أو إغلاق النافذة — بدونه آخر نص ثانية من الكتابة
   // تروح: المؤقت ينلغي مع فكّ الصفحة قبل ما يوصل للتخزين.
@@ -355,7 +369,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
     setSystemType(s.systemType);
     systemTypeRef.current = s.systemType;
     setTier(s.tier);
-    setBrand(s.brand);
+    setBrands({ ...emptyBrandPick(), ...(s.brands || {}) });
     setOverrides(s.overrides);
     setMarkupPercent(s.markupPercent);
     setMarkupMode(s.markupMode);
@@ -424,7 +438,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
         discountPercent: Number(a.discountPercent) > 0 ? String(a.discountPercent) : '',
         installment: !!a.installment?.enabled,
         installmentPlan: a.installment?.plan === 'cbi' ? 'cbi' : 'company',
-        brand: a.brand || '',
+        brands: { ...emptyBrandPick(), ...(p.brands || {}) },
         installmentRate: a.installment?.rate ? String(a.installment.rate) : '',
         installmentMonths: a.installment?.months ? String(a.installment.months) : '',
         hideTotalInPdf: a.installment?.hideTotal === true,
@@ -476,7 +490,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
       setDiscountPercent(Number(a.discountPercent) > 0 ? String(a.discountPercent) : '');
       setInstallment(!!a.installment?.enabled);
       setInstallmentPlan(a.installment?.plan === 'cbi' ? 'cbi' : 'company');
-      if (a.brand !== undefined) setBrand(a.brand || '');
+      if (p.brands) setBrands({ ...emptyBrandPick(), ...p.brands });
       setInstallmentRate(a.installment?.rate ? String(a.installment.rate) : '');
       setInstallmentMonths(a.installment?.months ? String(a.installment.months) : '');
       setHideTotalInPdf(a.installment?.hideTotal === true);
@@ -604,8 +618,8 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
 
   // useMemo ضروري: بدونه الكائن يتجدد بكل رندر → المؤقت ينعاد → حلقة إعادة حساب لا نهائية
   const inputs = useMemo(
-    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brand, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts }),
-    [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brand, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts]
+    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts }),
+    [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts]
   );
   const debouncedInputs = useDebouncedValue(inputs, 300);
 
@@ -637,7 +651,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
         ampNight: Number(debouncedInputs.ampNight),
         nightSupplyHours: debouncedInputs.nightSupplyHours === '' ? null : Number(debouncedInputs.nightSupplyHours),
         tier: debouncedInputs.tier,
-        brand: debouncedInputs.brand,
+        brands: debouncedInputs.brands,
         overrides: debouncedInputs.overrides,
         secondarySelections: debouncedInputs.secondarySel,
         adjustments: {
@@ -687,7 +701,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
       ampNight: Number(ampNight),
       nightSupplyHours: nightSupplyHours === '' ? null : Number(nightSupplyHours),
       tier,
-      brand,
+      brands,
       overrides,
       secondarySelections: secondarySel,
       adjustments: {
@@ -927,12 +941,6 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
               />
             </div>
           )}
-          {isDayOnly && (
-            <div className={fieldClass('ampDay')}>
-              <label>أمبير مطلوب نهاراً</label>
-              <input type="number" value={ampDay} onChange={(e) => setAmpDay(e.target.value)} />
-            </div>
-          )}
         </div>
         {isOffgrid && (
           <p className="muted" style={{ margin: '2px 0 0', fontSize: '0.82rem' }}>
@@ -941,36 +949,47 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
           </p>
         )}
 
-        {/* البراند: يحصر اللوح والبطارية والانفيرتر بماركة وحدة — والمواد الثانوية
-            والأجور تبقى مثل ما هي. الأسماء تجي من المخزون نفسه. */}
-        {mayPickBrand && brands.length > 0 && (
+        {/* البراند: قسم مستقل لكل فئة (لوح · بطارية · انفيرتر · كابينة) — المنظومة
+            تنبني من الماركات المختارة، والأقسام المعروضة تتبع نوع المنظومة:
+            النهارية بلا بطاريات، والأوف جرد بلا ألواح. الاختيار ما يمس تحجيم
+            المنظومة إطلاقاً — بس يحصر المواد اللي ينتخب منها المحرك. */}
+        {mayPickBrand && brandOptions && brandSections.length > 0 && (
           <div className="brand-pick">
             <div className="brand-pick-head">
               <b>البراند</b>
-              <span className="muted">اختر ماركة تنبني منها المنظومة، أو «كل الماركات» ليختار البرنامج الأنسب</span>
+              <span className="muted">اختر ماركة كل قسم لحاله، أو «كل الماركات» ليختار البرنامج الأنسب</span>
             </div>
-            <div className="brand-row">
-              <button
-                type="button"
-                className={`brand-chip${brand === '' ? ' active' : ''}`}
-                onClick={() => setBrand('')}
-              >
-                <span className="brand-all">الكل</span>
-                <span className="brand-name">كل الماركات</span>
-              </button>
-              {brands.map((b) => (
-                <button
-                  key={b}
-                  type="button"
-                  className={`brand-chip${brand === b ? ' active' : ''}`}
-                  onClick={() => setBrand(brand === b ? '' : b)}
-                  title={b}
-                >
-                  <BrandLogo name={b} />
-                  <span className="brand-name">{b}</span>
-                </button>
-              ))}
-            </div>
+            {brandSections.map((cat) => (
+              <div className="brand-section" key={cat}>
+                <div className="brand-section-title">{BRAND_SECTION_LABELS[cat]}</div>
+                {(brandOptions[cat] || []).length === 0 ? (
+                  <p className="muted brand-empty">ماكو ماركات مسجّلة لهذا القسم بالمخزون</p>
+                ) : (
+                  <div className="brand-row">
+                    <button
+                      type="button"
+                      className={`brand-chip${!brands[cat] ? ' active' : ''}`}
+                      onClick={() => pickBrand(cat, '')}
+                    >
+                      <span className="brand-all">الكل</span>
+                      <span className="brand-name">كل الماركات</span>
+                    </button>
+                    {(brandOptions[cat] || []).map((b) => (
+                      <button
+                        key={b}
+                        type="button"
+                        className={`brand-chip${brands[cat] === b ? ' active' : ''}`}
+                        onClick={() => pickBrand(cat, brands[cat] === b ? '' : b)}
+                        title={b}
+                      >
+                        <BrandLogo name={b} />
+                        <span className="brand-name">{b}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
 

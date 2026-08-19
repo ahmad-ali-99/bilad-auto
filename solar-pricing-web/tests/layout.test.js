@@ -53,3 +53,16 @@ describe('ماكو محتوى فوق محتوى', () => {
     }
   });
 });
+
+// وضع «نهارية بلا بطاريات» كان يرسم حقل «أمبير مطلوب نهاراً» مرتين (كتلتان
+// شرطاهما يتحققان سوية) — حقلان بنفس الاسم مربوطان بنفس الحالة.
+describe('حقول متطلبات المنظومة ما تتكرر', () => {
+  const src = fs.readFileSync(path.join(HERE, '../src/pages/QuoteBuilder.jsx'), 'utf8');
+  it('حقل أمبير النهار مرسوم مرة وحدة بس', () => {
+    const hits = [...src.matchAll(/<label>أمبير مطلوب نهاراً<\/label>/g)];
+    expect(hits.length, 'حقل أمبير النهار متكرر بالواجهة').toBe(1);
+  });
+  it('وشرطه واحد: يظهر بكل نوع عدا الأوف جرد', () => {
+    expect(src).not.toContain('{isDayOnly && (\n            <div className={fieldClass(\'ampDay\')}>');
+  });
+});

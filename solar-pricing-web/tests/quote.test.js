@@ -448,6 +448,79 @@ describe('كابينة HoyUltra 215kWh: سقف التكبير بالممتاز (
   });
 });
 
+// قرار الشركة: الاقتصادي ما عاد مجبوراً بأقل عدد وحدات — إذا قطعتين أصغر أرخص
+// من قطعة كبيرة ياخذ القطعتين، بسقف وحدة زيادة على أقل عدد ممكن.
+describe('الاقتصادي: قطعتين أصغر إذا أرخص', () => {
+  const { selectInverterTiers, selectBatteryTiers } = calcModule;
+  const S = { systemVoltage: 220, inverterSafetyFactor: 1.25, dod: 0.9, nightCoverageHours: 8 };
+
+  it('انفيرتر: 2×6kW أرخص من 1×12kW → الاقتصادي ياخذ الاثنين', () => {
+    const inverters = [
+      { id: 1, category: 'inverter', brand: 'Deye', model: 'D 12kW', full_description: 'انفيرتر IP21', watt_or_capacity: 12000, price: 2600000 },
+      { id: 2, category: 'inverter', brand: 'Deye', model: 'D 6kW',  full_description: 'انفيرتر IP21', watt_or_capacity: 6000,  price: 1100000 },
+    ];
+    const tiers = selectInverterTiers(inverters, 40, 40, S, 0, 40);
+    expect(tiers.economy.material.id).toBe(2);
+    expect(tiers.economy.units).toBe(2);
+    expect(tiers.economy.totalPrice).toBe(2200000);
+    // والقدرة الكلية تغطي الطلب فعلاً — مو مجرد أرخص
+    expect(tiers.economy.units * tiers.economy.material.watt_or_capacity)
+      .toBeGreaterThanOrEqual(40 * 220 * 1.25);
+  });
+
+  it('انفيرتر: 2×6kW أغلى → يبقى الجهاز الكبير الواحد', () => {
+    const inverters = [
+      { id: 1, category: 'inverter', brand: 'Deye', model: 'D 12kW', full_description: 'انفيرتر IP21', watt_or_capacity: 12000, price: 2000000 },
+      { id: 2, category: 'inverter', brand: 'Deye', model: 'D 6kW',  full_description: 'انفيرتر IP21', watt_or_capacity: 6000,  price: 1100000 },
+    ];
+    const tiers = selectInverterTiers(inverters, 40, 40, S, 0, 40);
+    expect(tiers.economy.material.id).toBe(1);
+    expect(tiers.economy.units).toBe(1);
+  });
+
+  it('الـIP يبقى قبل السعر: قطعتين IP65 أرخص ما تسحبن الاقتصادي من IP21', () => {
+    const inverters = [
+      { id: 1, category: 'inverter', brand: 'A', model: 'A 12kW', full_description: 'انفيرتر IP21', watt_or_capacity: 12000, price: 2600000 },
+      { id: 2, category: 'inverter', brand: 'B', model: 'B 6kW',  full_description: 'انفيرتر IP65', watt_or_capacity: 6000,  price: 900000 },
+    ];
+    const tiers = selectInverterTiers(inverters, 40, 40, S, 0, 40);
+    expect(tiers.economy.material.id, 'IP21 يفوز حتى لو أغلى').toBe(1);
+  });
+
+  it('السقف: ثلاث قطع أرخص ما تنتخب — وحدة زيادة بس على أقل عدد', () => {
+    const inverters = [
+      { id: 1, category: 'inverter', brand: 'A', model: 'A 12kW', full_description: 'انفيرتر IP21', watt_or_capacity: 12000, price: 2600000 },
+      { id: 2, category: 'inverter', brand: 'A', model: 'A 4kW',  full_description: 'انفيرتر IP21', watt_or_capacity: 4000,  price: 400000 },
+    ];
+    // المطلوب 11000W ← 4kW يحتاج 3 قطع (1.2مليون، أرخص) بس أقل عدد ممكن 1 والسقف 2
+    const tiers = selectInverterTiers(inverters, 40, 40, S, 0, 40);
+    expect(tiers.economy.units).toBeLessThanOrEqual(2);
+    expect(tiers.economy.material.id).toBe(1);
+  });
+
+  it('بطاريات: 2×5kWh أرخص من 1×16kWh → الاقتصادي ياخذ الاثنتين', () => {
+    const batteries = [
+      { id: 1, category: 'battery', brand: 'Deye', model: 'D 16', watt_or_capacity: 16, price: 3000000 },
+      { id: 2, category: 'battery', brand: 'Deye', model: 'D 8',  watt_or_capacity: 8,  price: 1200000 },
+    ];
+    // 5 أمبير × 220 × 8 ساعات = 8.8kWh ← ×0.9 ÷0.9 dod = 8.8kWh ← 16 توليفة وحدة، 8 توليفتين
+    const tiers = selectBatteryTiers(batteries, 5, 8, S, { factors: { economy: 0.9, standard: 0.85, premium: 0.8 } });
+    expect(tiers.economy.material.id).toBe(2);
+    expect(tiers.economy.units).toBe(2);
+    expect(tiers.economy.totalPrice).toBe(2400000);
+  });
+
+  it('بطاريات: الكبيرة الواحدة أرخص → تبقى هي', () => {
+    const batteries = [
+      { id: 1, category: 'battery', brand: 'Deye', model: 'D 16', watt_or_capacity: 16, price: 2000000 },
+      { id: 2, category: 'battery', brand: 'Deye', model: 'D 8',  watt_or_capacity: 8,  price: 1200000 },
+    ];
+    const tiers = selectBatteryTiers(batteries, 5, 8, S, { factors: { economy: 0.9, standard: 0.85, premium: 0.8 } });
+    expect(tiers.economy.material.id).toBe(1);
+    expect(tiers.economy.units).toBe(1);
+  });
+});
+
 describe('الاقتصادي انفيرترات: أدنى فئة IP (تبدأ من IP21) ثم الأرخص', () => {
   const { selectInverterTiers } = calcModule;
   const S = { systemVoltage: 220, inverterSafetyFactor: 1.25 };

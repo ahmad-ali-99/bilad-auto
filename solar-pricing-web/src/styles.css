@@ -1523,7 +1523,8 @@ h2.page-title::before {
 }
 
 /* ═══ مبدّل البراند بشاشة العرض ═══════════════════════════════════════
-   يحصر اللوح والبطارية والانفيرتر بماركة وحدة. الأسماء تجي من المخزون. */
+   قسم مستقل لكل فئة (لوح · بطارية · انفيرتر · كابينة) — المنظومة تنبني من
+   الماركات المختارة. الأسماء تجي من المخزون. */
 .brand-pick {
   margin-bottom: 14px;
   padding: 12px;
@@ -1540,6 +1541,19 @@ h2.page-title::before {
   color: var(--navy);
 }
 .brand-pick-head .muted { font-size: 0.78rem; font-weight: 600; }
+/* قسم لكل فئة — عنوان صغير فوق صف الماركات، وفاصل خفيف بين الأقسام */
+.brand-section + .brand-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+.brand-section-title {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--navy);
+  margin-bottom: 6px;
+}
+.brand-empty { font-size: 0.76rem; margin: 0; }
 /* صف أفقي يتمرّر بالتلفون بدل ما يكسر الشاشة */
 .brand-row {
   display: flex;

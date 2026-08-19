@@ -5,6 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { buildOptions, buildQuoteDraft } from '../src/lib/quoteService.js';
 import { brandSlug, brandInitials, brandColor, brandLogoCandidates } from '../src/lib/brandLogos.js';
 import { canPickBrand } from '../src/lib/permissions.js';
+import {
+  BRAND_CATEGORIES, brandSectionsFor, emptyBrandPick, normalizeBrandPick,
+  hasBrandPick, filterMaterialsByBrands, pruneBrandPick,
+} from '../src/lib/brandPick.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const read = (p) => fs.readFileSync(path.join(HERE, '..', p), 'utf8');
@@ -28,82 +32,144 @@ const ALL = [
   { id: 20, category: 'secondary', model: 'هيكل', full_description: 'هيكل', unit: 'عدد', price: 65000, qty_per_panel: 1 },
 ];
 const LABOR = [{ id: 1, system_amps: 10, price: 400000 }, { id: 2, system_amps: 20, price: 700000 }];
+const BY = new Map(ALL.map((m) => [m.id, m]));
 
-// نفس فلتر البراند اللي بـdataApi._options — الانفيرتر والبطارية بس
-const MAIN = ['battery', 'inverter'];
-const filterBrand = (mats, brand) => (brand
-  ? mats.filter((m) => !MAIN.includes(m.category) || String(m.brand || '').toLowerCase() === brand.toLowerCase())
-  : mats);
-
-function draftFor(brand) {
+function draftFor(pick) {
+  const picked = { ...emptyBrandPick(), ...(pick || {}) };
   const options = buildOptions({
-    materials: filterBrand(ALL, brand), laborTiers: LABOR, settingsRow: SETTINGS,
+    materials: filterMaterialsByBrands(ALL, picked), laborTiers: LABOR, settingsRow: SETTINGS,
     roofAreaM2: 100, ampDay: 15, ampNight: 15, nightSupplyHours: 8,
   });
   return buildQuoteDraft(options, { tier: 'economy', overrides: {}, cableMeters: {}, secondarySelections: { 20: { qty: '' } }, adjustments: {} });
 }
-const brandsOf = (d, byId) => [...new Set(d.items.map((i) => byId.get(i.material_id)?.brand).filter(Boolean))];
-const BY = new Map(ALL.map((m) => [m.id, m]));
+const catOf = (d, cat) => d.items
+  .map((i) => BY.get(i.material_id))
+  .filter((m) => m && m.category === cat)
+  .map((m) => m.brand);
 
-describe('اختيار البراند', () => {
-  const catOf = (d, cat) => d.items
-    .map((i) => BY.get(i.material_id))
-    .filter((m) => m && m.category === cat)
-    .map((m) => m.brand);
-
-  it('الانفيرتر والبطارية من الماركة المختارة فقط', () => {
-    for (const b of ['JINKO', 'Deye']) {
-      expect(catOf(draftFor(b), 'inverter'), `انفيرتر ${b}`).toEqual([b]);
-      expect(catOf(draftFor(b), 'battery'), `بطارية ${b}`).toEqual([b]);
-    }
+describe('اختيار البراند لكل قسم على حدة', () => {
+  it('كل قسم ينحصر بماركته هو بس', () => {
+    const d = draftFor({ panel: 'Deye', battery: 'JINKO', inverter: 'Deye' });
+    expect(catOf(d, 'panel')).toEqual(['Deye']);
+    expect(catOf(d, 'battery')).toEqual(['JINKO']);
+    expect(catOf(d, 'inverter')).toEqual(['Deye']);
   });
 
-  it('اللوح ما ينفلتر — البرنامج يبقى حر يختار الأنسب', () => {
-    // المحرك يختار اللوح بسعر الواط (JINKO 620و/250ألف = 403 د/واط أرخص من
-    // Deye 550و/240ألف = 436 د/واط)، فيبقى JINKO حتى لو الماركة المختارة Deye.
-    const panels = catOf(draftFor('Deye'), 'panel');
-    expect(panels.length).toBe(1);
-    expect(panels[0], 'اللوح ما يتبع الماركة المختارة').toBe('JINKO');
-    // وبنفس الوقت الانفيرتر والبطارية انحصروا بـDeye
-    expect(catOf(draftFor('Deye'), 'inverter')).toEqual(['Deye']);
+  it('قسم بلا اختيار يبقى مفتوح — البرنامج يختار الأنسب', () => {
+    // بس البطارية محصورة: اللوح يبقى JINKO (أرخص بسعر الواط: 403 د/واط مقابل 436)
+    const d = draftFor({ battery: 'Deye' });
+    expect(catOf(d, 'battery')).toEqual(['Deye']);
+    expect(catOf(d, 'panel')).toEqual(['JINKO']);
+  });
+
+  it('ماركات مختلطة فعلاً — منظومة من ثلاث ماركات مو ماركة وحدة', () => {
+    const mixed = draftFor({ panel: 'JINKO', battery: 'Deye', inverter: 'JINKO' });
+    const one = draftFor({ panel: 'Deye', battery: 'Deye', inverter: 'Deye' });
+    expect(mixed.total).not.toBe(one.total);
   });
 
   it('المواد الثانوية والأجور ما تنحذف مع الفلتر', () => {
-    const d = draftFor('JINKO');
+    const d = draftFor({ panel: 'JINKO', battery: 'JINKO', inverter: 'JINKO' });
     expect(d.items.some((i) => i.material_id === 20), 'الهيكل لازم يبقى').toBe(true);
     expect(d.items.some((i) => /أجور/.test(i.description)), 'أجور العمل تبقى').toBe(true);
   });
 
-  it('بلا اختيار: البرنامج حر يخلط الماركات ويختار الأنسب', () => {
-    const d = draftFor('');
+  it('بلا أي اختيار: البرنامج حر يخلط الماركات', () => {
+    const d = draftFor({});
     expect(d.items.length).toBeGreaterThan(0);
     expect(d.errors).toEqual({});
   });
 
-  it('المطابقة ما تتأثر بحالة الأحرف', () => {
-    expect(brandsOf(draftFor('jinko'), BY)).toEqual(['JINKO']);
+  it('المطابقة ما تتأثر بحالة الأحرف ولا بالفراغات', () => {
+    expect(catOf(draftFor({ battery: ' deye ' }), 'battery')).toEqual(['Deye']);
   });
 
   it('البراند يغيّر المجموع فعلاً — مو مجرد شكل', () => {
-    expect(draftFor('JINKO').total).not.toBe(draftFor('Deye').total);
+    expect(draftFor({ inverter: 'JINKO' }).total).not.toBe(draftFor({ inverter: 'Deye' }).total);
+  });
+});
+
+describe('أقسام البراند تتبع نوع المنظومة', () => {
+  it('الكاملة: لوح وبطارية وانفيرتر', () => {
+    expect(brandSectionsFor('full')).toEqual(['panel', 'battery', 'inverter']);
+  });
+  it('النهارية بلا بطاريات: لوح وانفيرتر بس', () => {
+    expect(brandSectionsFor('day')).toEqual(['panel', 'inverter']);
+  });
+  it('الأوف جرد بلا ألواح: بطارية وانفيرتر بس', () => {
+    expect(brandSectionsFor('offgrid')).toEqual(['battery', 'inverter']);
+  });
+  it('المتكامل: لوح وكابينة', () => {
+    expect(brandSectionsFor('integrated')).toEqual(['panel', 'integrated']);
+  });
+  it('نوع غير معروف يرجع للكاملة', () => {
+    expect(brandSectionsFor(null)).toEqual(['panel', 'battery', 'inverter']);
+  });
+
+  it('ماركة قسم طالع من العرض تنشال — ما يبقى فلتر مخفي', () => {
+    const pick = { panel: 'JINKO', battery: 'Deye', inverter: 'Deye', integrated: '' };
+    expect(pruneBrandPick(pick, 'offgrid')).toEqual({ panel: '', battery: 'Deye', inverter: 'Deye', integrated: '' });
+    expect(pruneBrandPick(pick, 'day')).toEqual({ panel: 'JINKO', battery: '', inverter: 'Deye', integrated: '' });
+  });
+
+  it('القص ما يمس تحجيم المنظومة — بس يشيل الفلتر', () => {
+    // أوف جرد: ماركة اللوح المختارة ما لازم تأثر على شي (ماكو ألواح أصلاً)
+    const picked = pruneBrandPick({ panel: 'Deye', battery: 'JINKO', inverter: 'JINKO' }, 'offgrid');
+    const withPanelBrand = filterMaterialsByBrands(ALL, { ...emptyBrandPick(), panel: 'Deye', battery: 'JINKO', inverter: 'JINKO' });
+    const pruned = filterMaterialsByBrands(ALL, picked);
+    expect(pruned.filter((m) => m.category === 'panel').length).toBe(2);
+    expect(withPanelBrand.filter((m) => m.category === 'panel').length).toBe(1);
+  });
+});
+
+describe('قراءة الاختيار المحفوظ', () => {
+  it('العروض الجديدة تنقرأ من `brands`', () => {
+    expect(normalizeBrandPick({ brands: { panel: 'JINKO', battery: 'Deye' } }))
+      .toEqual({ panel: 'JINKO', battery: 'Deye', inverter: '', integrated: '' });
+  });
+
+  it('العروض القديمة (`brand` واحد) تنقرأ بنفس معناها: انفيرتر وبطارية بس', () => {
+    // القديم كان يحصر الانفيرتر والبطارية ويترك اللوح حر — لازم يبقى بالضبط هيج
+    expect(normalizeBrandPick({ brand: 'Deye' }))
+      .toEqual({ panel: '', battery: 'Deye', inverter: 'Deye', integrated: '' });
+    const d = draftFor(normalizeBrandPick({ brand: 'Deye' }));
+    expect(catOf(d, 'battery')).toEqual(['Deye']);
+    expect(catOf(d, 'inverter')).toEqual(['Deye']);
+    expect(catOf(d, 'panel'), 'اللوح يبقى حر بالعروض القديمة').toEqual(['JINKO']);
+  });
+
+  it('`brands` يتقدم على `brand` القديم إذا الاثنان موجودان', () => {
+    expect(normalizeBrandPick({ brand: 'Deye', brands: { panel: 'JINKO' } }).battery).toBe('');
+  });
+
+  it('بلا أي اختيار يرجع فارغاً وما ينفلتر شي', () => {
+    expect(hasBrandPick(normalizeBrandPick({}))).toBe(false);
+    expect(filterMaterialsByBrands(ALL, emptyBrandPick())).toBe(ALL);
+  });
+
+  it('الفئات الأربع كلها مغطّاة', () => {
+    expect(BRAND_CATEGORIES).toEqual(['panel', 'battery', 'inverter', 'integrated']);
+    expect(Object.keys(emptyBrandPick()).sort()).toEqual([...BRAND_CATEGORIES].sort());
   });
 });
 
 describe('البراند موصول بكل المسارات', () => {
   it('الفلتر بطبقة البيانات ويحمي الثانوية', () => {
-    expect(dataApi).toContain("const MAIN = ['battery', 'inverter']");
-    expect(dataApi).toContain('input.brand');
+    expect(dataApi).toContain('filterMaterialsByBrands(active, picked)');
     expect(dataApi).toContain('async brands()');
   });
   it('ينحفظ مع العرض ويرجع عند فتحه', () => {
-    expect(dataApi).toContain('brand: input.brand || null');
-    expect(dataApi).toContain('|| !!input.brand');   // العرض ينحفظ حتى لو ماكو زيادة/خصم
-    expect(prefill).toContain("brand: adjustments?.brand || ''");
+    expect(dataApi).toContain('brands: picked,');
+    expect(dataApi).toContain('|| hasBrandPick(picked)');   // العرض ينحفظ حتى لو ماكو زيادة/خصم
+    expect(prefill).toContain('brands: pruneBrandPick(normalizeBrandPick(adjustments || {}), systemType)');
   });
   it('بذاكرة المسودة وبـBLANK وبنداء المعاينة', () => {
-    expect(builder).toContain("brand: ''");
-    expect(builder).toContain('brand: debouncedInputs.brand');
-    expect(builder).toContain('setBrand(s.brand)');
+    expect(builder).toContain('brands: emptyBrandPick()');
+    expect(builder).toContain('brands: debouncedInputs.brands');
+    expect(builder).toContain('setBrands({ ...emptyBrandPick(), ...(s.brands || {}) });');
+  });
+  it('تبديل نوع المنظومة يقصّ الماركات', () => {
+    expect(builder).toContain('setBrands((prev) => pruneBrandPick(prev, next));');
   });
 });
 
@@ -121,11 +187,9 @@ describe('شعارات الماركات', () => {
     expect(c.every((x) => x.startsWith('/app/brands/deye.'))).toBe(true);
   });
   it('ماركة بلا ملف تاخذ علامة مولّدة ثابتة', () => {
-    // القاعدة: أول حرف من أول كلمتين، وللاسم المفرد أول حرفين
     expect(brandInitials('JA Solar')).toBe('JS');
     expect(brandInitials('Canadian Solar')).toBe('CS');
     expect(brandInitials('JINKO')).toBe('JI');
-    // نفس الاسم = نفس اللون دائماً
     expect(brandColor('Deye')).toEqual(brandColor('Deye'));
     expect(brandColor('Deye')).not.toEqual(brandColor('JINKO'));
   });
@@ -152,11 +216,13 @@ describe('منو يشوف مبدّل البراند', () => {
 
   it('الشاشة تفحص الصلاحية قبل ما تجيب الماركات أصلاً', () => {
     expect(builder).toContain('if (!canPickBrand(n)) return;');
-    expect(builder).toContain('{mayPickBrand && brands.length > 0 && (');
+    expect(builder).toContain('{mayPickBrand && brandOptions && brandSections.length > 0 && (');
   });
 
-  it('الماركات تنجمع من الانفيرتر والبطارية بس', () => {
+  it('الماركات ترجع مقسّمة على الفئات الأربع', () => {
     const b = dataApi.slice(dataApi.indexOf('async brands()'));
-    expect(b.slice(0, b.indexOf('},'))).toContain("const MAIN = ['battery', 'inverter']");
+    const body = b.slice(0, b.indexOf('\n    },'));
+    expect(body).toContain('for (const c of BRAND_CATEGORIES)');
+    expect(body).toContain('m.active === false');
   });
 });

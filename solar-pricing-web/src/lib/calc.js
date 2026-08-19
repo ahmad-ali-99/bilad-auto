@@ -160,18 +160,36 @@ function fewestUnitsGroup(combos) {
   return combos.filter((c) => c.units === minUnits);
 }
 
+// الاقتصادي: أرخص كلفة فعلية، مو أقل عدد وحدات. قرار الشركة صراحةً — إذا
+// وحدتين أصغر أرخص من وحدة كبيرة تنتخب الوحدتين. السقف وحدة زيادة على أقل عدد
+// ممكن (١ ← ٢ قطع، ٣ ← ٤) حتى ما تنبني منظومة من ست قطع صغيرة صيانتها وجع راس.
+const ECONOMY_EXTRA_UNITS = 1;
+function economyPool(combos) {
+  const minUnits = Math.min(...combos.map((c) => c.units));
+  const cap = minUnits + ECONOMY_EXTRA_UNITS;
+  const within = combos.filter((c) => c.units <= cap);
+  return within.length ? within : combos;
+}
+
+// الأرخص داخل سقف الاقتصادي، وعند تساوي السعر أقل عدد وحدات
+function pickCheapestWithinEconomyCap(combos) {
+  return [...economyPool(combos)].sort((a, b) => (a.totalPrice - b.totalPrice) || (a.units - b.units))[0];
+}
+
 function pickFewestThenCheapest(combos) {
   return fewestUnitsGroup(combos).sort((a, b) => a.totalPrice - b.totalPrice)[0];
 }
 
-// الاقتصادي (انفيرترات): أقل عدد ← أدنى فئة IP متوفرة ← الأرخص داخل الفئة.
+// الاقتصادي (انفيرترات): أدنى فئة IP ← الأرخص ← أقل عدد وحدات.
+// الـIP يبقى قبل السعر (قاعدة الشركة) — الجديد إن المرشحين ما عادوا محصورين بأقل
+// عدد وحدات: انفيرترين أصغر من نفس الفئة يفوزون إذا طلعوا أرخص من جهاز كبير واحد.
 // غير المذكور IP بوصفه يُعد IP21 (الفئة الأساسية الداخلية)، وما فوق 65 يُسقّف بـ65
 // حتى ما يسحب جهاز IP66 أرخص قليلاً العرضَ الاقتصادي (مثل هويمايلز مقابل المحلي).
-function pickFewestThenLowestIp(combos) {
-  const group = fewestUnitsGroup(combos);
+function pickLowestIpThenCheapest(combos) {
   const effIp = (c) => Math.min(ipRatingOf(c.material) || 21, STANDARD_IP_CAP);
-  const minIp = Math.min(...group.map(effIp));
-  return group.filter((c) => effIp(c) === minIp).sort((a, b) => a.totalPrice - b.totalPrice)[0];
+  return [...economyPool(combos)].sort(
+    (a, b) => (effIp(a) - effIp(b)) || (a.totalPrice - b.totalPrice) || (a.units - b.units)
+  )[0];
 }
 
 function pickFewestThenMid(combos) {
@@ -277,7 +295,7 @@ function selectBatteryTiers(batteryMaterials, ampNight, nightSupplyHours, settin
     return within.length ? within : combos;
   };
   return {
-    economy: pickFewestThenCheapest(autoPool(allByTier.economy, f.economy)),
+    economy: pickCheapestWithinEconomyCap(autoPool(allByTier.economy, f.economy)),
     standard: pickFewestThenMid(autoPool(allByTier.standard, f.standard)),
     premium: pickBatteryPremium(premiumPool(autoPool(allByTier.premium, f.premium), systemAmps), neededKwhFor(f.premium)),
     singleOption: allByTier.standard.length === 1,
@@ -322,7 +340,7 @@ function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, pane
   }
 
   // المتوسط بالـIP الأعلى قبل السعر، والاقتصادي بأدنى فئة IP (يبدأ من IP21) ثم الأرخص
-  return assignTiers(combos, pickInverterPremium, pickFewestThenIp, pickFewestThenLowestIp);
+  return assignTiers(combos, pickInverterPremium, pickFewestThenIp, pickLowestIpThenCheapest);
 }
 
 // القدرة الفعلية للتوليفة: ساعات تجهيز الليل من بنك البطاريات، وأمبير النهار اللي

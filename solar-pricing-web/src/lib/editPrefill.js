@@ -1,5 +1,6 @@
 // بناء كائن التعبئة الكاملة لفتح عرض محفوظ بوضع التعديل — مشترك بين صفحة العروض
 // وتنبيه التكرار بصفحة إنشاء العرض. المواد المبدلة يدوياً والثانوية تُستنتج من البنود.
+import { normalizeBrandPick, pruneBrandPick } from './brandPick.js';
 export async function buildEditPrefill(quoteId) {
   const [full, materials, adjustments] = await Promise.all([
     window.api.quotes.get(quoteId),
@@ -39,8 +40,10 @@ export async function buildEditPrefill(quoteId) {
       clientName: full.quote.client_name || '',
     },
     systemType,
-    // البراند المحفوظ — بدونه يرجع العرض بكل الماركات ويتبدل اختيار المواد
-    brand: adjustments?.brand || '',
+    // ماركات الأقسام المحفوظة — بدونها يرجع العرض بكل الماركات ويتبدل اختيار
+    // المواد. العروض القديمة محفوظة بحقل `brand` واحد كان يعني الانفيرتر
+    // والبطارية، وnormalizeBrandPick يقرأها بنفس معناها بالضبط.
+    brands: pruneBrandPick(normalizeBrandPick(adjustments || {}), systemType),
     // الأعداد المثبتة يدوياً ترجع كما حُفظت
     unitCounts: adjustments?.unitCounts || null,
     createdBy: full.quote.created_by || '',
