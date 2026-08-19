@@ -8,6 +8,7 @@ const PumpShowcase = lazy(() => import('../components/PumpShowcase.jsx'));
 import { buildEditPrefill } from '../lib/editPrefill.js';
 import { detectSceneType } from '../lib/sceneType.js';
 import { getIsAdmin, getCurrentUsername, ADMIN_USERS } from '../lib/agent.js';
+import { canPickBrand } from '../lib/permissions.js';
 import { computeSecondaryDefaults, isPanelSideMaterial } from '../lib/secondaryDefaults.js';
 import { normName } from '../lib/quotesFilter.js';
 import BrandLogo from '../components/BrandLogo.jsx';
@@ -169,6 +170,8 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   // البراند: يحصر اللوح والبطارية والانفيرتر بماركة وحدة. فارغ = كل الماركات.
   const [brand, setBrand] = useState(savedDraft?.brand ?? '');
   const [brands, setBrands] = useState([]);
+  // المبدّل معروض لحسابات محددة حالياً (بكر وأحمد)
+  const [mayPickBrand, setMayPickBrand] = useState(false);
   // نسبة الزيادة: علنية (سطر بالعرض) أو موزعة (تنضرب على أسعار البنود نفسها) + نسبة الخصم
   const [markupPercent, setMarkupPercent] = useState(savedDraft?.markupPercent ?? '');
   const [markupMode, setMarkupMode] = useState(savedDraft?.markupMode ?? 'visible');
@@ -246,7 +249,11 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
     // الملاحظات الافتراضية فقط إذا ماكو ملاحظات قائمة (مسودة محفوظة أو عرض مفتوح للتعديل) —
     // حتى ما تنداس ملاحظات البياع كل ما يرجع للصفحة أو يوصل الرد متأخر وهو يكتب
     window.api.company.get().then((c) => setNotes((prev) => (prev == null ? c.notes_default || [] : prev)));
-    window.api.materials.brands().then(setBrands).catch(() => {});
+    getCurrentUsername().then((n) => {
+      if (!canPickBrand(n)) return;
+      setMayPickBrand(true);
+      window.api.materials.brands().then(setBrands).catch(() => {});
+    }).catch(() => {});
     // ساعات التجهيز الليلي بدون قيمة افتراضية — البياع يحددها بكل عرض
     // الافتراضي: القائمة الدائمة المشتركة من قاعدة البيانات (يحفظها الفريق من نافذة الثانوية)،
     // وإذا ما محفوظة بعد: الأساسيات حسب الألواح (هيكل + صبات) + بوردة الحماية DC
@@ -936,7 +943,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
 
         {/* البراند: يحصر اللوح والبطارية والانفيرتر بماركة وحدة — والمواد الثانوية
             والأجور تبقى مثل ما هي. الأسماء تجي من المخزون نفسه. */}
-        {brands.length > 0 && (
+        {mayPickBrand && brands.length > 0 && (
           <div className="brand-pick">
             <div className="brand-pick-head">
               <b>البراند</b>

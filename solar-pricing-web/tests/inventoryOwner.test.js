@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  canEditInventory, canAddMaterial, canEditMaterial,
-  isInventoryContributor, canImportInventory, canEditLabor, isRestrictedUser,
+  canEditInventory, canAddMaterial, canEditMaterial, isInventoryContributor,
+  canImportInventory, canImportUpdates, canEditLabor, isRestrictedUser,
 } from '../src/lib/permissions.js';
 
 // حساب «بكر»: يضيف مواد جديدة ويملك اللي يضيفه، والمخزون القديم للقراءة عنده.
@@ -27,10 +27,15 @@ describe('حساب الإضافة (بكر)', () => {
     expect(canEditInventory('بكر')).toBe(false);
   });
 
-  it('الأجور والاستيراد يبقون ممنوعين', () => {
+  it('يستورد من إكسل — بس الجديد فقط', () => {
+    expect(canImportInventory('بكر')).toBe(true);
+    // التحديث ممنوع: الاستيراد يطابق المواد الموجودة، ولو انفتح صار باباً
+    // خلفياً يعدّل بيه المخزون القديم
+    expect(canImportUpdates('بكر')).toBe(false);
+  });
+
+  it('أجور العمل تبقى ممنوعة — أسعار مشتركة تمس عروض الفريق', () => {
     expect(canEditLabor('بكر')).toBe(false);
-    // الاستيراد يحدّث مواد موجودة بالمطابقة — لو انفتح صار باباً خلفياً للمخزون القديم
-    expect(canImportInventory('بكر')).toBe(false);
   });
 
   it('فروقات الهمزة والمسافات ما تفتح الحساب بالغلط', () => {
@@ -45,6 +50,7 @@ describe('المشرف أحمد', () => {
     expect(canEditMaterial('أحمد', null)).toBe(true);
     expect(canEditInventory('أحمد')).toBe(true);
     expect(canImportInventory('أحمد')).toBe(true);
+    expect(canImportUpdates('أحمد'), 'المشرف يحدّث بالاستيراد').toBe(true);
   });
   it('الهمزة بالاسم ما تكسر المطابقة', () => {
     expect(canEditMaterial('احمد', 'بكر')).toBe(true);
@@ -55,6 +61,7 @@ describe('بقية الحسابات المقيّدة ما تتأثر', () => {
   it('علي سبتي وليث كرادة: ما يضيفون ولا يعدّلون', () => {
     for (const u of ['علي سبتي', 'ليث كرادة']) {
       expect(canAddMaterial(u), `${u} ما يضيف`).toBe(false);
+      expect(canImportInventory(u), `${u} ما يستورد`).toBe(false);
       expect(canEditMaterial(u, u), `${u} ما يعدّل حتى لو مالك`).toBe(false);
       expect(isInventoryContributor(u)).toBe(false);
     }
@@ -91,8 +98,21 @@ describe('المنع بطبقة البيانات', () => {
     expect(guarded, 'update + remove + setActive + setImage').toBe(4);
   });
 
-  it('الاستيراد من إكسل ممنوع على حساب الإضافة — باب خلفي للمخزون القديم', () => {
-    expect(dataApi).toContain('canImportInventory(await currentUsername())');
+  it('الاستيراد يرفض تحديث الموجود لحساب الإضافة، ويسجّل مالك الجديد', () => {
+    expect(dataApi).toContain('const mayUpdate = canImportUpdates(me)');
+    expect(dataApi).toContain('حسابك يضيف مواد جديدة بس');
+    // المادة المستوردة تنسجّل باسم مستورِدها فيقدر يعدّلها بعدين
+    expect(dataApi).toContain("insert(m).select('id').single()");
+    expect((dataApi.match(/upsert\(\{ key: ownerKey\(/g) || []).length).toBe(2);
+    // أجور العمل بالاستيراد للحسابات الكاملة بس
+    expect(dataApi).toContain('if (labor.length && mayLabor)');
+  });
+
+  it('نافذة المعاينة تشيل تأشير صفوف التحديث من البداية', () => {
+    const modal = read('src/components/ImportPreviewModal.jsx');
+    expect(modal).toContain('if (!up) setRows');
+    expect(modal).toContain("if (field === 'include' && value && !mayUpdate && rows[idx]?.matchTarget) return;");
+    expect(modal).toContain('موجودة — تنتخطى');
   });
 
   it('رسالة المنع تشرح السبب بدل خطأ غامض', () => {
@@ -119,5 +139,9 @@ describe('واجهة المخزون', () => {
   it('الأجور والاستيراد يتبعون صلاحيتهم الخاصة', () => {
     expect(inventory).toContain('canEditLabor(me)');
     expect(inventory).toContain('canImportInventory(me)');
+  });
+
+  it('بكر يشوف زر الاستيراد وقالب الإكسل', () => {
+    expect(canImportInventory('بكر')).toBe(true);
   });
 });

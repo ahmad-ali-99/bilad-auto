@@ -64,12 +64,30 @@ export function canEditMaterial(username, owner) {
   return !!owner && norm(owner) === norm(username);
 }
 
-// أجور العمل والاستيراد من إكسل يبقون للحسابات الكاملة:
-// الاستيراد *يحدّث* مواد موجودة بالمطابقة، فلو انفتح لحساب الإضافة صار طريقاً
-// جانبياً يعدّل بيه المخزون القديم.
+// مبدّل «البراند» بشاشة العرض — محصور بهذين الحسابين حالياً.
+// التوسعة لاحقاً: زيد الاسم بالقائمة وخلص.
+const BRAND_PICKERS = ['بكر', 'أحمد'];
+
+export function canPickBrand(username) {
+  const u = norm(username);
+  return BRAND_PICKERS.some((r) => norm(r) === u);
+}
+
+// الاستيراد من إكسل: مفتوح لحساب الإضافة هم — بس بحدود.
+// الاستيراد *يحدّث* مواد موجودة بالمطابقة (فئة+موديل+سعة)، فلو انفتح على
+// وسعه صار طريقاً جانبياً يعدّل بيه المخزون القديم. لذلك:
+//   الحساب الكامل  → يضيف ويحدّث
+//   حساب الإضافة   → يضيف الجديد فقط، وصفوف «تحديث» تنرفض
 export function canImportInventory(username) {
+  return canEditInventory(username) || isInventoryContributor(username);
+}
+
+/** هل يقدر الاستيراد يحدّث مواد موجودة؟ (لا لحساب الإضافة) */
+export function canImportUpdates(username) {
   return canEditInventory(username);
 }
+
+// أجور العمل تبقى للحسابات الكاملة — أسعار مشتركة تمس عروض الفريق كله
 export function canEditLabor(username) {
   return canEditInventory(username);
 }

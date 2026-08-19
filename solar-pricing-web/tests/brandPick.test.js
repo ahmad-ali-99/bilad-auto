@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildOptions, buildQuoteDraft } from '../src/lib/quoteService.js';
 import { brandSlug, brandInitials, brandColor, brandLogoCandidates } from '../src/lib/brandLogos.js';
+import { canPickBrand } from '../src/lib/permissions.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const read = (p) => fs.readFileSync(path.join(HERE, '..', p), 'utf8');
@@ -28,8 +29,8 @@ const ALL = [
 ];
 const LABOR = [{ id: 1, system_amps: 10, price: 400000 }, { id: 2, system_amps: 20, price: 700000 }];
 
-// نفس فلتر البراند اللي بـdataApi._options
-const MAIN = ['panel', 'battery', 'inverter', 'integrated'];
+// نفس فلتر البراند اللي بـdataApi._options — الانفيرتر والبطارية بس
+const MAIN = ['battery', 'inverter'];
 const filterBrand = (mats, brand) => (brand
   ? mats.filter((m) => !MAIN.includes(m.category) || String(m.brand || '').toLowerCase() === brand.toLowerCase())
   : mats);
@@ -45,9 +46,26 @@ const brandsOf = (d, byId) => [...new Set(d.items.map((i) => byId.get(i.material
 const BY = new Map(ALL.map((m) => [m.id, m]));
 
 describe('اختيار البراند', () => {
-  it('بماركة واحدة: كل المواد الأساسية منها فقط', () => {
-    expect(brandsOf(draftFor('JINKO'), BY)).toEqual(['JINKO']);
-    expect(brandsOf(draftFor('Deye'), BY)).toEqual(['Deye']);
+  const catOf = (d, cat) => d.items
+    .map((i) => BY.get(i.material_id))
+    .filter((m) => m && m.category === cat)
+    .map((m) => m.brand);
+
+  it('الانفيرتر والبطارية من الماركة المختارة فقط', () => {
+    for (const b of ['JINKO', 'Deye']) {
+      expect(catOf(draftFor(b), 'inverter'), `انفيرتر ${b}`).toEqual([b]);
+      expect(catOf(draftFor(b), 'battery'), `بطارية ${b}`).toEqual([b]);
+    }
+  });
+
+  it('اللوح ما ينفلتر — البرنامج يبقى حر يختار الأنسب', () => {
+    // المحرك يختار اللوح بسعر الواط (JINKO 620و/250ألف = 403 د/واط أرخص من
+    // Deye 550و/240ألف = 436 د/واط)، فيبقى JINKO حتى لو الماركة المختارة Deye.
+    const panels = catOf(draftFor('Deye'), 'panel');
+    expect(panels.length).toBe(1);
+    expect(panels[0], 'اللوح ما يتبع الماركة المختارة').toBe('JINKO');
+    // وبنفس الوقت الانفيرتر والبطارية انحصروا بـDeye
+    expect(catOf(draftFor('Deye'), 'inverter')).toEqual(['Deye']);
   });
 
   it('المواد الثانوية والأجور ما تنحذف مع الفلتر', () => {
@@ -73,7 +91,7 @@ describe('اختيار البراند', () => {
 
 describe('البراند موصول بكل المسارات', () => {
   it('الفلتر بطبقة البيانات ويحمي الثانوية', () => {
-    expect(dataApi).toContain("const MAIN = ['panel', 'battery', 'inverter', 'integrated']");
+    expect(dataApi).toContain("const MAIN = ['battery', 'inverter']");
     expect(dataApi).toContain('input.brand');
     expect(dataApi).toContain('async brands()');
   });
@@ -114,5 +132,31 @@ describe('شعارات الماركات', () => {
   it('اسم فارغ ما يكسر شي', () => {
     expect(brandLogoCandidates('', '/')).toEqual([]);
     expect(brandInitials('')).toBe('؟');
+  });
+});
+
+// المبدّل محصور بحسابين حالياً
+describe('منو يشوف مبدّل البراند', () => {
+  it('بكر وأحمد فقط', () => {
+    expect(canPickBrand('بكر')).toBe(true);
+    expect(canPickBrand('أحمد')).toBe(true);
+    expect(canPickBrand('احمد'), 'بلا همزة').toBe(true);
+    expect(canPickBrand(' بكر ')).toBe(true);
+  });
+
+  it('بقية الحسابات ما تشوفه', () => {
+    for (const u of ['حوراء', 'حيدر', 'علي سبتي', 'ليث كرادة', '']) {
+      expect(canPickBrand(u), u || '(فارغ)').toBe(false);
+    }
+  });
+
+  it('الشاشة تفحص الصلاحية قبل ما تجيب الماركات أصلاً', () => {
+    expect(builder).toContain('if (!canPickBrand(n)) return;');
+    expect(builder).toContain('{mayPickBrand && brands.length > 0 && (');
+  });
+
+  it('الماركات تنجمع من الانفيرتر والبطارية بس', () => {
+    const b = dataApi.slice(dataApi.indexOf('async brands()'));
+    expect(b.slice(0, b.indexOf('},'))).toContain("const MAIN = ['battery', 'inverter']");
   });
 });

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import ModalPortal from './ModalPortal.jsx';
 import { humanizeSaveError } from '../lib/saveErrors.js';
+import { canImportUpdates, canEditLabor } from '../lib/permissions.js';
+import { getCurrentUsername } from '../lib/agent.js';
 
 const CATEGORY_OPTIONS = [
   { value: 'panel', label: 'لوح' },
@@ -21,6 +23,21 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState(null);
   const [importError, setImportError] = useState('');
+  // حساب الإضافة (بكر) يستورد الجديد بس — صفوف «تحديث» تنشال من التأشير من
+  // البداية بدل ما تفشل وحدة وحدة عند الحفظ
+  const [mayUpdate, setMayUpdate] = useState(true);
+  const [mayLabor, setMayLabor] = useState(true);
+
+  useEffect(() => {
+    getCurrentUsername().then((n) => {
+      const up = canImportUpdates(n);
+      const lab = canEditLabor(n);
+      setMayUpdate(up);
+      setMayLabor(lab);
+      if (!up) setRows((rs) => rs.map((r) => (r.matchTarget ? { ...r, include: false } : r)));
+      if (!lab) setLaborRows((ls) => ls.map((l) => ({ ...l, include: false })));
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (parsed.labor.length === 0) return;
@@ -31,6 +48,8 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
   }, [parsed.labor.length]);
 
   function setRow(idx, field, value) {
+    // ما ننطي حساب الإضافة يأشّر على صف يحدّث مادة موجودة
+    if (field === 'include' && value && !mayUpdate && rows[idx]?.matchTarget) return;
     setRows((rs) => rs.map((r, i) => (i === idx ? { ...r, [field]: value } : r)));
   }
 
@@ -122,6 +141,12 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
           راجع الصفوف وصحّح أي خطأ قبل الحفظ. المواد المعلّمة "تحديث" ستُحدّث سعر وكمية مادة موجودة
           (نفس الفئة والموديل والسعة)، والمعلّمة "جديد" تُضاف كمادة جديدة.
         </p>
+        {!mayUpdate && (
+          <div className="alert alert-info" style={{ marginTop: 10 }}>
+            حسابك يضيف <b>مواد جديدة</b> بس — الصفوف اللي موجودة بالمخزون أصلاً تنتخطى
+            ولا تنعدّل. المواد اللي تضيفها تقدر تعدّلها بعدين من المخزون.
+          </div>
+        )}
 
         {parsed.warnings.length > 0 && (
           <div className="alert alert-warning">
@@ -153,7 +178,12 @@ export default function ImportPreviewModal({ parsed, onClose, onDone }) {
                   </td>
                   <td>
                     {row.matchStatus === 'update' ? (
-                      <span className="tag tag-update" title={`سيُحدّث: ${row.matchTarget}`}>تحديث</span>
+                      <span
+                        className="tag tag-update"
+                        title={mayUpdate ? `سيُحدّث: ${row.matchTarget}` : `موجودة بالمخزون (${row.matchTarget}) — حسابك يضيف الجديد بس`}
+                      >
+                        {mayUpdate ? 'تحديث' : 'موجودة — تنتخطى'}
+                      </span>
                     ) : (
                       <span className="tag tag-new">جديد</span>
                     )}

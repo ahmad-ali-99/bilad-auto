@@ -7,7 +7,7 @@ import * as excelImport from './excelImport.js';
 import { exportInvoicePdf, quoteFileName } from './pdfExport.js';
 import { logActivity } from './activityLog.js';
 import { UNDO, DRAFT } from './activityUndo.js';
-import { isRestrictedUser, canEditSettings, canViewQuotes, canAddMaterial, canEditMaterial, canImportInventory, canEditLabor } from './permissions.js';
+import { isRestrictedUser, canEditSettings, canViewQuotes, canAddMaterial, canEditMaterial, canImportInventory, canImportUpdates, canEditLabor } from './permissions.js';
 import { installmentPlanLabel } from './installment.js';
 import { imageKey, isImageKey } from './materialImages.js';
 
@@ -229,8 +229,7 @@ export const api = {
     async brands() {
       const { data, error } = await supabase.from('materials').select('brand,category').order('brand');
       throwIf(error);
-      const disabled = (await api.config.get('materials_disabled')) || [];
-      const MAIN = ['panel', 'battery', 'inverter', 'integrated'];
+      const MAIN = ['battery', 'inverter'];
       const seen = new Map();
       for (const m of data || []) {
         if (!MAIN.includes(m.category)) continue;
@@ -356,7 +355,14 @@ export const api = {
       };
     },
     async importRows({ materials = [], labor = [] }) {
-      await assertCanEdit('المخزون');
+      const me = await currentUsername();
+      if (!canImportInventory(me)) {
+        throw new Error('الاستيراد من إكسل محصور بحسابات الإدارة');
+      }
+      // حساب الإضافة: يضيف الجديد بس. أي صف يطابق مادة موجودة ينرفض بسبب واضح
+      // بدل ما يحدّثها — وإلا صار الاستيراد باباً خلفياً للمخزون القديم.
+      const mayUpdate = canImportUpdates(me);
+      const mayLabor = canEditLabor(me);
       const existing = await allMaterials();
       let added = 0;
       let updated = 0;
@@ -368,12 +374,21 @@ export const api = {
         const match = excelImport.findExistingMaterial(existing, m);
         try {
           if (match) {
+            if (!mayUpdate) {
+              throw new Error('موجودة بالمخزون — حسابك يضيف مواد جديدة بس، والتحديث محصور بالإدارة');
+            }
             const { error } = await supabase.from('materials').update({ ...m, updated_at: new Date().toISOString() }).eq('id', match.id);
             throwIf(error);
             updated++;
           } else {
-            const { error } = await supabase.from('materials').insert(m);
+            const { data: row, error } = await supabase.from('materials').insert(m).select('id').single();
             throwIf(error);
+            // نفس قاعدة الإضافة اليدوية: المستورِد يملك مادته فيقدر يعدّلها بعدين
+            if (me && row?.id) {
+              try {
+                await supabase.from('app_config').upsert({ key: ownerKey(row.id), value: JSON.stringify(me) });
+              } catch { /* تسجيل المالك اختياري */ }
+            }
             added++;
           }
         } catch (err) {
@@ -382,7 +397,7 @@ export const api = {
       }
       let laborAdded = 0;
       let laborUpdated = 0;
-      if (labor.length) {
+      if (labor.length && mayLabor) {
         const { data: existingLabor } = await supabase.from('labor_tiers').select('*');
         for (const l of labor) {
           const match = (existingLabor || []).find((x) => x.system_amps === l.system_amps);
@@ -517,10 +532,10 @@ export const api = {
         // معاملات أمان البطاريات لكل مستوى — من الإعدادات المشتركة (وإلا الافتراضي بالمحرك)
         api.config.get('battery_factors'),
       ]);
-      // فلتر البراند: يحصر *المواد الأساسية* (لوح/بطارية/انفيرتر/كابينة) بماركة
-      // واحدة، وتبقى المواد الثانوية والأجور مثل ما هي — أغلب الثانوية بلا ماركة
-      // أصلاً، وحذفها يكسر العرض (هيكل وصبّات وأسلاك).
-      const MAIN = ['panel', 'battery', 'inverter', 'integrated'];
+      // فلتر البراند: يحصر **الانفيرتر والبطارية** بماركة واحدة (قرار المستخدم).
+      // الألواح والكابينات والمواد الثانوية والأجور تبقى مثل ما هي — فالبرنامج
+      // يبقى حر يختار أنسب لوح، والثانوية أغلبها بلا ماركة وحذفها يكسر العرض.
+      const MAIN = ['battery', 'inverter'];
       const wanted = String(input.brand || '').trim();
       const brandOf = (m) => String(m.brand || '').trim().toLowerCase();
       const active = materials.filter((m) => m.active !== false);
