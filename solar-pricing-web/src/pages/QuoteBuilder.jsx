@@ -8,7 +8,7 @@ const PumpShowcase = lazy(() => import('../components/PumpShowcase.jsx'));
 import { buildEditPrefill } from '../lib/editPrefill.js';
 import { detectSceneType } from '../lib/sceneType.js';
 import { getIsAdmin, getCurrentUsername, ADMIN_USERS } from '../lib/agent.js';
-import { canPickBrand, canDiscount } from '../lib/permissions.js';
+import { canPickBrand, canPriceAdjust } from '../lib/permissions.js';
 import {
   brandSectionsFor, emptyBrandPick, pruneBrandPick, BRAND_SECTION_LABELS,
 } from '../lib/brandPick.js';
@@ -208,15 +208,15 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   // العرض التفاعلي 3D (يفتح ملء الشاشة للزبون)
   const [showcaseOpen, setShowcaseOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  // الخصم: مفتوح للمشرفين ولبكر. الزيادة تبقى للمشرفين بس.
-  const [mayDiscount, setMayDiscount] = useState(false);
+  // الزيادة والخصم: مفتوحان للمشرفين ولبكر
+  const [mayPriceAdjust, setMayPriceAdjust] = useState(false);
   // «العرض من طرف»: المشرف يسند العرض لموظف آخر — '' تعني حساب المشرف نفسه (أو إبقاء المنشئ عند التعديل)
   const [createdBy, setCreatedBy] = useState(savedDraft?.createdBy ?? '');
   const [myName, setMyName] = useState('');
   const [pastCreators, setPastCreators] = useState([]);
   useEffect(() => {
-    // صلاحية الخصم تنفحص بالاسم (مشرف أو بكر) — منفصلة عن صلاحية الإشراف
-    getCurrentUsername().then((n) => setMayDiscount(canDiscount(n))).catch(() => {});
+    // صلاحية الزيادة والخصم تنفحص بالاسم (مشرف أو بكر) — منفصلة عن صلاحية الإشراف
+    getCurrentUsername().then((n) => setMayPriceAdjust(canPriceAdjust(n))).catch(() => {});
     getIsAdmin()
       .then((admin) => {
         setIsAdmin(admin);
@@ -669,9 +669,9 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
         overrides: debouncedInputs.overrides,
         secondarySelections: debouncedInputs.secondarySel,
         adjustments: {
-          markupPercent: isAdmin ? Number(debouncedInputs.markupPercent) || 0 : 0,
+          markupPercent: mayPriceAdjust ? Number(debouncedInputs.markupPercent) || 0 : 0,
           markupMode: debouncedInputs.markupMode,
-          discountPercent: mayDiscount ? Number(debouncedInputs.discountPercent) || 0 : 0,
+          discountPercent: mayPriceAdjust ? Number(debouncedInputs.discountPercent) || 0 : 0,
         },
         installment: debouncedInputs.installment,
         installmentPlan: debouncedInputs.installmentPlan,
@@ -691,7 +691,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
         if (inst && !debouncedInputs.installmentMonths) setInstallmentMonths(String(inst.months));
       })
       .finally(() => setCalculating(false));
-  }, [debouncedInputs, validInputs, isAdmin, mayDiscount]);
+  }, [debouncedInputs, validInputs, mayPriceAdjust]);
 
   // تبديل المصرف يفكّ التثبيت — وإلا بقيت نسبة المصرف القديم مثبّتة على الجديد
   function changeInstallmentPlan(next) {
@@ -721,9 +721,9 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
       secondarySelections: secondarySel,
       adjustments: {
         // الزيادة والخصم صلاحية مشرفين — أي قيمة بمسودة حساب غير مشرف ما تنطبق
-        markupPercent: isAdmin ? Number(markupPercent) || 0 : 0,
+        markupPercent: mayPriceAdjust ? Number(markupPercent) || 0 : 0,
         markupMode,
-        discountPercent: mayDiscount ? Number(discountPercent) || 0 : 0,
+        discountPercent: mayPriceAdjust ? Number(discountPercent) || 0 : 0,
       },
       installment,
       installmentPlan,
@@ -1022,16 +1022,16 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
               onClick={() => setPricingOpen((o) => !o)}
               style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: 700, color: 'var(--navy)', fontSize: '1rem' }}
             >
-              💹 {isAdmin ? 'زيادة / خصم / تقسيط' : mayDiscount ? 'خصم / تقسيط' : 'التقسيط'} {pricingOpen ? '▲' : '▼'}
+              💹 {mayPriceAdjust ? 'زيادة / خصم / تقسيط' : 'التقسيط'} {pricingOpen ? '▲' : '▼'}
             </button>
-            {!pricingOpen && ((isAdmin && Number(markupPercent) > 0) || (mayDiscount && Number(discountPercent) > 0) || installment) && (
+            {!pricingOpen && (mayPriceAdjust && (Number(markupPercent) > 0 || Number(discountPercent) > 0) || installment) && (
               <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
-                {isAdmin && Number(markupPercent) > 0 && (
+                {mayPriceAdjust && Number(markupPercent) > 0 && (
                   <span style={{ background: '#fdf0d5', color: '#8a5b00', borderRadius: 12, padding: '2px 10px', fontSize: '0.8rem', fontWeight: 700 }}>
                     زيادة {markupPercent}% {markupMode === 'distributed' ? 'موزعة' : 'علنية'}
                   </span>
                 )}
-                {mayDiscount && Number(discountPercent) > 0 && (
+                {mayPriceAdjust && Number(discountPercent) > 0 && (
                   <span style={{ background: '#e3f2e6', color: '#1c6b2e', borderRadius: 12, padding: '2px 10px', fontSize: '0.8rem', fontWeight: 700 }}>
                     خصم {discountPercent}%
                   </span>
@@ -1046,14 +1046,11 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
           </div>
           {pricingOpen && (
           <>
-          {/* الزيادة: صلاحية المشرفين — أداة تسعير إدارية.
-              الخصم: للمشرفين ولبكر — أداة بيع.
-              البياع الاعتيادي يشوف التقسيط فقط. */}
-          {(isAdmin || mayDiscount) && (
+          {/* الزيادة والخصم: للمشرفين ولبكر — البياع الاعتيادي يشوف التقسيط فقط */}
+          {mayPriceAdjust && (
           <div className="opt-group">
-          <div className="opt-group-title">{isAdmin ? 'الزيادة والخصم' : 'الخصم'}</div>
-          <div className={isAdmin ? 'grid-3' : 'grid-1'}>
-            {isAdmin && (
+          <div className="opt-group-title">الزيادة والخصم</div>
+          <div className="grid-3">
             <div className={fieldClass('markupPercent')}>
               <label>نسبة الزيادة %</label>
               <input
@@ -1065,8 +1062,6 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
                 placeholder="بدون زيادة"
               />
             </div>
-            )}
-            {isAdmin && (
             <div className="field">
               <label>طريقة الزيادة</label>
               <div className="tier-toggle" style={{ margin: 0, opacity: Number(markupPercent) > 0 ? 1 : 0.45 }}>
@@ -1088,8 +1083,6 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
                 </button>
               </div>
             </div>
-            )}
-            {mayDiscount && (
             <div className={fieldClass('discountPercent')}>
               <label>نسبة الخصم %</label>
               <input
@@ -1101,7 +1094,6 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
                 placeholder="بدون خصم"
               />
             </div>
-            )}
           </div>
           </div>
           )}

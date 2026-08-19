@@ -6,7 +6,7 @@ import * as calc from '../src/lib/calc.js';
 import {
   parseIp, formatIp, ipOf, hasIp, ipKey, isIpKey, materialIdFromIpKey, IP_MIN, IP_MAX,
 } from '../src/lib/materialSpecs.js';
-import { canDiscount } from '../src/lib/permissions.js';
+import { canPriceAdjust } from '../src/lib/permissions.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const read = (p) => fs.readFileSync(path.join(HERE, '..', p), 'utf8');
@@ -175,28 +175,33 @@ describe('الـIP موصول بكل المسارات', () => {
   });
 });
 
-describe('الخصم لحساب بكر', () => {
+describe('الزيادة والخصم لحساب بكر', () => {
   it('بكر والمشرفون', () => {
-    expect(canDiscount('بكر')).toBe(true);
-    expect(canDiscount(' بكر ')).toBe(true);
-    expect(canDiscount('أحمد')).toBe(true);
-    expect(canDiscount('احمد')).toBe(true);
+    expect(canPriceAdjust('بكر')).toBe(true);
+    expect(canPriceAdjust(' بكر ')).toBe(true);
+    expect(canPriceAdjust('أحمد')).toBe(true);
+    expect(canPriceAdjust('احمد')).toBe(true);
   });
   it('المشرفات الأخريات عندهن الصلاحية أصلاً', () => {
     // حوراء وحيدر مشرفان (ADMIN_USERS) — الخصم عندهم من الأول
-    for (const u of ['حوراء', 'حيدر']) expect(canDiscount(u), u).toBe(true);
+    for (const u of ['حوراء', 'حيدر']) expect(canPriceAdjust(u), u).toBe(true);
   });
   it('الحسابات المقيّدة لا', () => {
     for (const u of ['علي سبتي', 'ليث كرادة', '']) {
-      expect(canDiscount(u), u || '(فارغ)').toBe(false);
+      expect(canPriceAdjust(u), u || '(فارغ)').toBe(false);
     }
   });
   it('الشاشة تعتمد الصلاحية مو الإشراف', () => {
-    expect(builder).toContain('setMayDiscount(canDiscount(n))');
-    expect(builder).toContain('discountPercent: mayDiscount ? Number(discountPercent) || 0 : 0,');
-    expect(builder).toContain('{(isAdmin || mayDiscount) && (');
+    expect(builder).toContain('setMayPriceAdjust(canPriceAdjust(n))');
+    expect(builder).toContain('discountPercent: mayPriceAdjust ? Number(discountPercent) || 0 : 0,');
+    expect(builder).toContain('{mayPriceAdjust && (');
   });
-  it('الزيادة تبقى للمشرفين', () => {
-    expect(builder).toContain('markupPercent: isAdmin ? Number(markupPercent) || 0 : 0,');
+  it('الزيادة هي هم بنفس الصلاحية مو بالإشراف', () => {
+    expect(builder).toContain('markupPercent: mayPriceAdjust ? Number(markupPercent) || 0 : 0,');
+    expect(builder).not.toContain('markupPercent: isAdmin ?');
+  });
+  it('طريقة الزيادة (علنية/موزعة) متاحة إله هم', () => {
+    const block = builder.slice(builder.indexOf('{mayPriceAdjust && ('));
+    expect(block.slice(0, block.indexOf('opt-group-title">التقسيط'))).toContain('موزعة على الأسعار');
   });
 });
