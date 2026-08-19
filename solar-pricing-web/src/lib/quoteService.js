@@ -22,6 +22,8 @@ function mapSettings(row) {
     currency: row.currency,
     quoteNumberStart: row.quote_number_start,
     chargePanelsPerBattery: row.charge_panels_per_battery,
+    // معامل أمان الألواح: 1.25 ثابت بالمحرك — العمود اختياري إذا انضاف للإعدادات
+    panelSafetyFactor: row.panel_safety_factor,
   };
 }
 
@@ -269,7 +271,7 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
         integratedPick ? integratedPick.kwh * integratedPick.units : 0,
         settings,
       )
-    : calc.selectPanelTiers(panelMaterials, ampDay, batteryCount, settings);
+    : calc.selectPanelTiers(panelMaterials, ampDay, batteryCount, settings, tier);
   const panelComboBase = pickCombo(panelTiers, tier, overrides, 'panel', errors);
   const panelCombo = applyUnitCount(panelComboBase, unitCounts?.panel, extra.panel);
 

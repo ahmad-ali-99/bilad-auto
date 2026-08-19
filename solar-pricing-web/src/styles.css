@@ -1524,54 +1524,66 @@ h2.page-title::before {
 
 /* ═══ مبدّل البراند بشاشة العرض ═══════════════════════════════════════
    قسم مستقل لكل فئة (لوح · بطارية · انفيرتر · كابينة) — المنظومة تنبني من
-   الماركات المختارة. الأسماء تجي من المخزون. */
+   الماركات المختارة. الأسماء تجي من المخزون.
+   التصميم مضغوط عمداً: كل قسم سطر واحد (عنوان + صف ماركات يتمرّر أفقياً)
+   بدل كتلة طويلة — الشاشة كانت تنملي بالبراند قبل ما يوصل البياع للمستوى. */
 .brand-pick {
-  margin-bottom: 14px;
-  padding: 12px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: #fbfcfe;
 }
 .brand-pick-head {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
   color: var(--navy);
+  font-size: 0.9rem;
 }
-.brand-pick-head .muted { font-size: 0.78rem; font-weight: 600; }
-/* قسم لكل فئة — عنوان صغير فوق صف الماركات، وفاصل خفيف بين الأقسام */
+.brand-pick-head .muted { font-size: 0.72rem; font-weight: 600; }
+/* سطر واحد لكل فئة: العنوان ثابت على اليمين والصف يتمرّر لحاله */
+.brand-section {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
 .brand-section + .brand-section {
-  margin-top: 10px;
-  padding-top: 10px;
+  margin-top: 5px;
+  padding-top: 5px;
   border-top: 1px dashed var(--border);
 }
 .brand-section-title {
-  font-size: 0.78rem;
+  font-size: 0.73rem;
   font-weight: 800;
   color: var(--navy);
-  margin-bottom: 6px;
+  line-height: 1.25;
 }
-.brand-empty { font-size: 0.76rem; margin: 0; }
+.brand-empty { font-size: 0.72rem; margin: 0; }
 /* صف أفقي يتمرّر بالتلفون بدل ما يكسر الشاشة */
 .brand-row {
   display: flex;
-  gap: 8px;
+  gap: 5px;
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding-bottom: 2px;
   scrollbar-width: thin;
 }
+/* شريط تمرير رفيع حتى ما ياخذ ارتفاعاً من الصف */
+.brand-row::-webkit-scrollbar { height: 5px; }
+.brand-row::-webkit-scrollbar-thumb { background: #cfd9e4; border-radius: 3px; }
+/* الماركة: أفقية ومضغوطة — شعار صغير جنبه الاسم */
 .brand-chip {
   flex: 0 0 auto;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   gap: 5px;
-  min-width: 92px;
-  padding: 10px 12px;
-  border: 2px solid var(--border);
-  border-radius: 12px;
+  padding: 4px 8px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
   background: #fff;
   font-family: inherit;
   cursor: pointer;
@@ -1584,31 +1596,28 @@ h2.page-title::before {
   background: var(--navy-light);
 }
 .brand-chip .brand-name {
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   font-weight: 700;
   color: var(--navy);
   white-space: nowrap;
-  max-width: 104px;
+  max-width: 110px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.brand-all {
-  width: 34px; height: 34px;
-  display: grid; place-items: center;
-  border-radius: 9px;
-  background: var(--navy-light);
-  color: var(--navy);
-  border: 1px solid var(--border);
-  font-size: 0.74rem;
-  font-weight: 800;
+/* «كل الماركات» چيب نصّي بلا شعار — أول واحد بالصف ويبقى ظاهر عند التمرير */
+.brand-chip:first-child { position: sticky; inset-inline-start: 0; background: #fff; }
+.brand-chip:first-child.active { background: var(--navy-light); }
+/* بالتلفون: العنوان فوق الصف حتى ما ينضغط الاثنان */
+@media (max-width: 560px) {
+  .brand-section { grid-template-columns: 1fr; gap: 2px; }
 }
 /* شعار الماركة — صورة رسمية أو علامة مولّدة من الاسم */
 .brand-mark {
   display: grid; place-items: center;
-  border-radius: 9px;
+  border-radius: 6px;
   border: 1px solid;
   font-weight: 800;
-  font-size: 0.82rem;
+  font-size: 0.62rem;
   letter-spacing: 0.02em;
 }
 .brand-mark-img {

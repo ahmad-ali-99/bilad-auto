@@ -66,3 +66,25 @@ describe('حقول متطلبات المنظومة ما تتكرر', () => {
     expect(src).not.toContain('{isDayOnly && (\n            <div className={fieldClass(\'ampDay\')}>');
   });
 });
+
+// واجهة البراند كانت تاخذ ثلث الشاشة (چيبات عمودية بارتفاع كبير × ثلاثة أقسام).
+// التصميم المضغوط: كل قسم سطر واحد — عنوان جنبه صف يتمرّر أفقياً.
+describe('كتلة البراند مضغوطة', () => {
+  it('القسم شبكة سطر واحد: عنوان + صف', () => {
+    const sec = blockOf('.brand-section');
+    expect(sec).toMatch(/display:\s*grid/);
+    expect(sec).toMatch(/grid-template-columns:\s*88px/);
+    expect(sec).toMatch(/align-items:\s*center/);
+  });
+  it('الچيب أفقي مو عمودي', () => {
+    const chip = blockOf('.brand-chip');
+    expect(chip).toMatch(/flex-direction:\s*row/);
+    expect(chip).not.toMatch(/min-width:\s*92px/);
+  });
+  it('بالتلفون العنوان يطلع فوق الصف بدل ما ينضغط', () => {
+    expect(styles).toMatch(/@media \(max-width: 560px\) \{\s*\.brand-section \{ grid-template-columns: 1fr;/);
+  });
+  it('الصف يتمرّر أفقياً — ما يكسر الشاشة', () => {
+    expect(blockOf('.brand-row')).toMatch(/overflow-x:\s*auto/);
+  });
+});

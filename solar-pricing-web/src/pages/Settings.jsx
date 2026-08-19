@@ -33,7 +33,7 @@ export default function Settings() {
   const [cbiMonths, setCbiMonths] = useState('84');
   const [cbiMsg, setCbiMsg] = useState('');
   // معاملات أمان البطاريات لكل مستوى — تضرب حاجة الليل قبل حساب عدد البطاريات
-  const [battFactors, setBattFactors] = useState({ economy: '0.9', standard: '0.85', premium: '0.8' });
+  const [battFactors, setBattFactors] = useState({ economy: '0.9', standard: '0.85', premium: '1.25' });
   const [battMsg, setBattMsg] = useState('');
   function reload() {
     window.api.settings.get().then(setSettings);
@@ -52,7 +52,7 @@ export default function Settings() {
         setBattFactors({
           economy: String(cfg.economy > 0 ? cfg.economy : 0.9),
           standard: String(cfg.standard > 0 ? cfg.standard : 0.85),
-          premium: String(cfg.premium > 0 ? cfg.premium : 0.8),
+          premium: String(cfg.premium > 0 ? cfg.premium : 1.25),
         });
       }
     }).catch(() => {});
@@ -66,8 +66,8 @@ export default function Settings() {
       premium: Number(battFactors.premium),
     };
     for (const k of ['economy', 'standard', 'premium']) {
-      if (!(vals[k] > 0.3 && vals[k] <= 1)) {
-        setBattMsg('يجب أن يكون كل معامل بين 0.3 و1 — مثلاً 0.9 يعني احتساب 90% من حاجة الليل');
+      if (!(vals[k] >= 0.3 && vals[k] <= 2)) {
+        setBattMsg('يجب أن يكون كل معامل بين 0.3 و2 — أقل من 1 تسامح (0.9 = 90% من حاجة الليل)، وأكثر من 1 هامش أمان (1.25 = بنك أكبر بالربع)');
         return;
       }
     }
@@ -194,8 +194,10 @@ export default function Settings() {
       <form className="card" onSubmit={saveBattFactors}>
         <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>🔋 معاملات أمان البطاريات (لكل مستوى)</h3>
         <p className="muted" style={{ marginTop: 0 }}>
-          تُضرب حاجة الليل بالمعامل <b>قبل</b> حساب عدد البطاريات — معامل 0.9 يعني أن بطارية 16kWh واحدة
-          تغطي حاجة 17.7kWh بدل فرض بطاريتين. لكل مستوى معامله الخاص، والتغيير يشمل جميع الموظفين.
+          تُضرب حاجة الليل بالمعامل <b>قبل</b> حساب عدد البطاريات. أقل من 1 = <b>تسامح</b>: معامل 0.9 يعني
+          أن بطارية 16kWh واحدة تغطي حاجة 17.7kWh بدل فرض بطاريتين. أكثر من 1 = <b>هامش أمان</b>: معامل
+          1.25 يعطي بنكاً أكبر من الحاجة بالربع — وهو الافتراضي للمستوى الممتاز حتى تطلع منظومته أكبر فعلاً.
+          لكل مستوى معامله الخاص، والتغيير يشمل جميع الموظفين.
         </p>
         <div className="grid-3">
           {[
@@ -209,7 +211,7 @@ export default function Settings() {
                 type="number"
                 step="0.01"
                 min="0.3"
-                max="1"
+                max="2"
                 value={battFactors[t.key]}
                 onChange={(e) => setBattFactors((v) => ({ ...v, [t.key]: e.target.value }))}
               />

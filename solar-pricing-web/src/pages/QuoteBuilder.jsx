@@ -971,7 +971,6 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
                       className={`brand-chip${!brands[cat] ? ' active' : ''}`}
                       onClick={() => pickBrand(cat, '')}
                     >
-                      <span className="brand-all">الكل</span>
                       <span className="brand-name">كل الماركات</span>
                     </button>
                     {(brandOptions[cat] || []).map((b) => (
@@ -982,7 +981,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
                         onClick={() => pickBrand(cat, brands[cat] === b ? '' : b)}
                         title={b}
                       >
-                        <BrandLogo name={b} />
+                        <BrandLogo name={b} size={22} />
                         <span className="brand-name">{b}</span>
                       </button>
                     ))}

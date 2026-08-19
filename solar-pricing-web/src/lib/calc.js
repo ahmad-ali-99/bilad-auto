@@ -27,10 +27,20 @@ function batteriesRequired(ampNight, nightSupplyHours, { systemVoltage, dod }, b
   return Math.max(1, Math.ceil((nightEnergyKwh * factor) / dod / batteryKwh));
 }
 
-// عدد الألواح النهائي = تغذية النهار + شحن البطاريات — العدد حر (يُسمح بالفردي)
-function panelsRequired(ampDay, batteryCount, settings, panelWatt) {
-  const feedPanels = ampDay > 0 ? Math.ceil(ampDay / panelAmpsFor(panelWatt)) : 0;
-  const chargePanels = Math.ceil(batteryCount * settings.chargePanelsPerBattery);
+// معامل أمان الألواح: أمبير النهار ينضرب بـ1.25 قبل ما ينقسم على أمبير اللوح.
+// قرار الشركة — اللوح ما ينتج قدرته الاسمية طول النهار (غيم وغبار وزاوية وحرارة)،
+// ولازم يفضل فائض يشحن البطاريات مو بس يغطي الحمل اللحظي.
+// مثال: 10 أمبير نهاراً بلوح 650 واط (2.18 أمبير) ← 10×1.25 ÷ 2.18 = 5.7 ← 6 ألواح
+// تغذية، وبطارية وحدة تنطي لوحين شحن ← 8 ألواح (كانت 7 قبل المعامل).
+const PANEL_SAFETY_FACTOR = 1.25;
+// الممتاز يزيد ألواح الشحن ربعاً إضافياً — شحن أسرع وهامش أوسع
+const PREMIUM_CHARGE_PANEL_FACTOR = 1.25;
+
+// عدد الألواح النهائي = تغذية النهار (بمعامل الأمان) + شحن البطاريات — العدد حر
+function panelsRequired(ampDay, batteryCount, settings, panelWatt, chargeFactor = 1) {
+  const safety = settings.panelSafetyFactor > 0 ? settings.panelSafetyFactor : PANEL_SAFETY_FACTOR;
+  const feedPanels = ampDay > 0 ? Math.ceil((ampDay * safety) / panelAmpsFor(panelWatt)) : 0;
+  const chargePanels = Math.ceil(batteryCount * settings.chargePanelsPerBattery * chargeFactor);
   return { feedPanels, chargePanels, total: feedPanels + chargePanels };
 }
 
@@ -126,8 +136,12 @@ function classifyTiers(combos) {
 // الحد الأعلى لحصر الممتاز بأجهزة هويمايلز — فوقه نرجع للقاعدة العامة
 const HOYMILES_MAX_AMPS = 120;
 
-// معاملات أمان البطاريات الافتراضية لكل مستوى (تتغير من الإعدادات — app_config)
-const DEFAULT_BATTERY_FACTORS = { economy: 0.9, standard: 0.85, premium: 0.8 };
+// معاملات أمان البطاريات الافتراضية لكل مستوى (تتغير من الإعدادات — app_config).
+// الاقتصادي والمتوسط أقل من 1 = **تسامح**: يسمحون لبطارية 16kWh تغطي حاجة 17.6kWh
+// بدل ما نجبر ثنتين. الممتاز فوق 1 = **هامش أمان**: بنك أكبر من الحاجة بالربع،
+// حتى المنظومة الممتازة تطلع فعلاً أكبر مو أصغر (كانت 0.8 وتنطي بطاريات أقل من
+// الاقتصادي — عكس المقصود).
+const DEFAULT_BATTERY_FACTORS = { economy: 0.9, standard: 0.85, premium: 1.25 };
 
 function materialText(material) {
   return `${material.brand || ''} ${material.model || ''} ${material.full_description || ''}`;
@@ -239,6 +253,8 @@ function premiumPool(combos, systemAmps) {
 // سقف التكبير: السعة الكلية ما تتجاوز 3× الحاجة — حتى كابينة 215kWh ما تنخطف
 // لعرض بيت صغير؛ إذا كل الخيارات فوق السقف ناخذ الأقرب للحاجة (الأصغر سعة كلية).
 const PREMIUM_OVERSIZE_CAP = 3;
+// سقف تكبير الانفيرتر بالممتاز: القدرة الكلية ما تتجاوز الطلب ×2
+const PREMIUM_INVERTER_CAP = 2;
 function pickBatteryPremium(combos, neededKwh = 0) {
   let group = fewestUnitsGroup(combos);
   if (neededKwh > 0) {
@@ -308,11 +324,13 @@ function selectBatteryTiers(batteryMaterials, ampNight, nightSupplyHours, settin
 // توليفات الألواح: العدد يعتمد على أمبير النهار + عدد بطاريات التوليفة المرافقة.
 // بلا أمبير نهاري => بلا ألواح إطلاقاً حتى ألواح الشحن (انفيرتر + بطارية فقط —
 // الشحن من الشبكة/المولدة، مثل تجهيز الوحدات العسكرية).
-function selectPanelTiers(panelMaterials, ampDay, batteryCount, settings) {
+function selectPanelTiers(panelMaterials, ampDay, batteryCount, settings, tier = null) {
   if (!(ampDay > 0)) return noneResult();
+  // الممتاز يزيد ألواح الشحن — طلب صريح: منظومة ممتازة تشحن أسرع وبهامش أوسع
+  const chargeFactor = tier === 'premium' ? PREMIUM_CHARGE_PANEL_FACTOR : 1;
   const combos = [];
   for (const material of panelMaterials) {
-    const { feedPanels, chargePanels, total } = panelsRequired(ampDay, batteryCount, settings, material.watt_or_capacity);
+    const { feedPanels, chargePanels, total } = panelsRequired(ampDay, batteryCount, settings, material.watt_or_capacity, chargeFactor);
     if (total <= 0) continue;
     combos.push({ material, units: total, feedPanels, chargePanels, totalPrice: total * material.price });
   }
@@ -329,14 +347,24 @@ function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, pane
   }
 
   // premium: هويمايلز حصراً ≤120 أمبير (وإلا كل الماركات)، والقدرة الكلية ≥ الطلب ×1.3 —
-  // تتحقق بتكبير حجم الجهاز أولاً (أقل عدد وحدات)، والتعديد يصير طبيعياً بالأحجام الكبيرة فقط
+  // تتحقق بتكبير حجم الجهاز أولاً (أقل عدد وحدات)، والتعديد يصير طبيعياً بالأحجام الكبيرة فقط.
+  // وضمن أقل عدد وحدات ناخذ **الأكبر قدرة** مو الأرخص — بدونها كان الممتاز يطلع
+  // نفس الاقتصادي بالضبط لما تنحصر المواد بماركة وحدة (كل الأجهزة توصل بوحدة وحدة
+  // فيفوز الأرخص). سقف التكبير: القدرة الكلية ما تتجاوز الطلب ×2 حتى ما ينخطف
+  // انفيرتر 50kW لبيت 10 أمبير؛ إذا كل الخيارات فوق السقف ناخذ الأقرب للطلب.
   function pickInverterPremium(all) {
     const candidates = premiumPool(all, systemAmps).map((c) => {
       const units = Math.max(1, Math.ceil((requiredW * 1.3) / c.material.watt_or_capacity));
       return { material: c.material, units, totalPrice: units * c.material.price };
     });
     const minUnits = Math.min(...candidates.map((c) => c.units));
-    return candidates.filter((c) => c.units === minUnits).sort((a, b) => a.totalPrice - b.totalPrice)[0];
+    let group = candidates.filter((c) => c.units === minUnits);
+    const totalW = (c) => c.units * c.material.watt_or_capacity;
+    if (requiredW > 0) {
+      const withinCap = group.filter((c) => totalW(c) <= requiredW * PREMIUM_INVERTER_CAP);
+      group = withinCap.length ? withinCap : [...group].sort((a, b) => totalW(a) - totalW(b)).slice(0, 1);
+    }
+    return group.sort((a, b) => (totalW(b) - totalW(a)) || (a.totalPrice - b.totalPrice))[0];
   }
 
   // المتوسط بالـIP الأعلى قبل السعر، والاقتصادي بأدنى فئة IP (يبدأ من IP21) ثم الأرخص

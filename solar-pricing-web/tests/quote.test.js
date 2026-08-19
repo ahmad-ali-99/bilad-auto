@@ -31,19 +31,40 @@ const LABOR = [
   { id: 3, system_amps: 20, price: 700000 },
 ];
 
+// مجموع المثال المرجعي بعد معامل أمان الألواح 1.25: الفاتورة القديمة كانت
+// 9,686,000 بعشرة ألواح، وصار 12 لوحاً — الفرق لوحان بكلفتهما الكاملة
+// (لوح + هيكل + صبات).
+const REF_TOTAL = 9686000 + 2 * (185000 + 65000 + 5000);
+
 function optionsFor(input) {
   return buildOptions({ materials: MATERIALS, laborTiers: LABOR, settingsRow: SETTINGS_ROW, ...input });
 }
 
-describe('المثال المرجعي بعد إلغاء المخزون (15 أمبير، 8 ساعات، سطح 28م²)', () => {
-  it('يطابق الفاتورة: 10 ألواح، 2 بطارية، انفيرتر، مجموع 9,686,000', () => {
-    const options = optionsFor({ roofAreaM2: 28, ampDay: 15, ampNight: 15, nightSupplyHours: 8 });
+// ⚠ المثال المرجعي انتغيّر بمعامل أمان الألواح 1.25 (قرار المستخدم):
+// ألواح التغذية كانت ceil(15 ÷ 2.18) = 7، وصارت ceil(15×1.25 ÷ 2.18) = 9،
+// فالمجموع 12 لوحاً بدل 10 — والفاتورة الأصلية كانت 10. المساحة المطلوبة
+// ارتفعت من 27 م² إلى 32.4 م²، فالمساحة بالاختبار انزادت حتى ما يحجب الخطأ.
+describe('المثال المرجعي (15 أمبير، 8 ساعات) بعد معامل أمان الألواح 1.25', () => {
+  it('12 لوحاً (9 تغذية + 3 شحن)، 2 بطارية، انفيرتر واحد', () => {
+    const options = optionsFor({ roofAreaM2: 35, ampDay: 15, ampNight: 15, nightSupplyHours: 8 });
     const draft = buildQuoteDraft(options, { tier: 'economy', cableMeters: { 6: 143 } });
     expect(draft.errors).toEqual({});
-    expect(draft.panelBreakdown).toEqual({ feedPanels: 7, chargePanels: 3, extraPanels: 0 });
-    expect(draft.items.find((i) => i.description.includes('ألواح شمسية')).quantity).toBe(10);
+    expect(draft.panelBreakdown).toEqual({ feedPanels: 9, chargePanels: 3, extraPanels: 0 });
+    expect(draft.items.find((i) => i.description.includes('ألواح شمسية')).quantity).toBe(12);
     expect(draft.items.find((i) => i.description.includes('بطاريات ليثيوم')).quantity).toBe(2);
     expect(draft.items.find((i) => i.description.includes('انفيرتر')).quantity).toBe(1);
+    // الفرق عن الفاتورة القديمة (9,686,000) = لوحان × (لوح 185,000 + هيكل 65,000 + صبات 5,000)
+    expect(draft.total).toBe(9686000 + 2 * (185000 + 65000 + 5000));
+  });
+
+  it('بلا معامل الأمان كان يطلع 7 ألواح تغذية — المعامل هو اللي رفعها', () => {
+    const noFactor = buildOptions({
+      materials: MATERIALS, laborTiers: LABOR,
+      settingsRow: { ...SETTINGS_ROW, panel_safety_factor: 1 },
+      roofAreaM2: 35, ampDay: 15, ampNight: 15, nightSupplyHours: 8,
+    });
+    const draft = buildQuoteDraft(noFactor, { tier: 'economy', cableMeters: { 6: 143 } });
+    expect(draft.panelBreakdown.feedPanels).toBe(7);
     expect(draft.total).toBe(9686000);
   });
 });
@@ -61,10 +82,10 @@ describe('إلغاء المخزون: المواد تُختار دائماً بل
 });
 
 describe('فحص المساحة الحاجب باقٍ', () => {
-  it('سطح 20م² مع 10 ألواح مطلوبة → خطأ مساحة', () => {
+  it('سطح 20م² مع 12 لوحاً مطلوباً → خطأ مساحة', () => {
     const options = optionsFor({ roofAreaM2: 20, ampDay: 15, ampNight: 15, nightSupplyHours: 8 });
     const draft = buildQuoteDraft(options, { tier: 'economy', cableMeters: {} });
-    expect(draft.errors.roofArea).toContain('27');
+    expect(draft.errors.roofArea).toContain('32');
   });
 });
 
@@ -73,7 +94,7 @@ describe('نسبة الزيادة والخصم على العرض', () => {
 
   it('بدون adjustments: لا سطر زيادة/خصم والمجموع كما هو', () => {
     const draft = buildQuoteDraft(base(), { tier: 'economy', cableMeters: { 6: 143 } });
-    expect(draft.total).toBe(9686000);
+    expect(draft.total).toBe(REF_TOTAL);
     expect(draft.items.some((i) => /زيادة|خصم/.test(i.description))).toBe(false);
     expect(draft.adjustments.markupAmount).toBe(0);
     expect(draft.adjustments.discountAmount).toBe(0);
@@ -87,9 +108,10 @@ describe('نسبة الزيادة والخصم على العرض', () => {
     });
     const row = draft.items.find((i) => i.description === 'نسبة زيادة 10%');
     expect(row).toBeTruthy();
-    expect(row.subtotal).toBe(968600);
-    expect(draft.total).toBe(9686000 + 968600);
-    expect(draft.adjustments.subtotal).toBe(9686000);
+    const markup = Math.round(REF_TOTAL * 0.1);
+    expect(row.subtotal).toBe(markup);
+    expect(draft.total).toBe(REF_TOTAL + markup);
+    expect(draft.adjustments.subtotal).toBe(REF_TOTAL);
   });
 
   it('زيادة موزعة 10%: بلا سطر إضافي، الأسعار نفسها ترتفع والمجموع يقارب +10%', () => {
@@ -119,8 +141,9 @@ describe('نسبة الزيادة والخصم على العرض', () => {
     });
     const row = draft.items.find((i) => i.description === 'خصم 5%');
     expect(row).toBeTruthy();
-    expect(row.subtotal).toBe(-484300);
-    expect(draft.total).toBe(9686000 - 484300);
+    const disc = Math.round(REF_TOTAL * 0.05);
+    expect(row.subtotal).toBe(-disc);
+    expect(draft.total).toBe(REF_TOTAL - disc);
   });
 
   it('زيادة علنية + خصم معاً: الخصم ينحسب على المجموع بعد الزيادة', () => {
@@ -129,10 +152,11 @@ describe('نسبة الزيادة والخصم على العرض', () => {
       cableMeters: { 6: 143 },
       adjustments: { markupPercent: 10, markupMode: 'visible', discountPercent: 5 },
     });
-    const afterMarkup = 9686000 + 968600;
+    const markup = Math.round(REF_TOTAL * 0.1);
+    const afterMarkup = REF_TOTAL + markup;
     const discount = Math.round(afterMarkup * 0.05);
     expect(draft.total).toBe(afterMarkup - discount);
-    expect(draft.adjustments.markupAmount).toBe(968600);
+    expect(draft.adjustments.markupAmount).toBe(markup);
     expect(draft.adjustments.discountAmount).toBe(discount);
   });
 });
@@ -150,10 +174,10 @@ describe('التقسيط المصرفي: النسبة على المجموع بس
     // ولا سعر بند يتغيّر عن العرض الكاش
     expect(draft.items.map((i) => i.unit_price)).toEqual(plain.items.map((i) => i.unit_price));
     expect(draft.total).toBe(draft.items.reduce((s, i) => s + i.subtotal, 0));
-    expect(draft.total).toBe(9686000);
-    expect(draft.installment.cashTotal).toBe(9686000);
-    expect(draft.installment.totalWithInterest).toBe(Math.round(9686000 * 1.3));
-    expect(draft.installment.monthly).toBe(Math.round(Math.round(9686000 * 1.3) / 60));
+    expect(draft.total).toBe(REF_TOTAL);
+    expect(draft.installment.cashTotal).toBe(REF_TOTAL);
+    expect(draft.installment.totalWithInterest).toBe(Math.round(REF_TOTAL * 1.3));
+    expect(draft.installment.monthly).toBe(Math.round(Math.round(REF_TOTAL * 1.3) / 60));
     // ما ينضاف أي سطر للجدول — التقسيط سطر بالفاتورة مو بنداً بالعرض
     expect(draft.items.some((i) => /تقسيط|فائدة/.test(i.description))).toBe(false);
   });
@@ -164,7 +188,7 @@ describe('التقسيط المصرفي: النسبة على المجموع بس
       cableMeters: { 6: 143 },
       adjustments: { markupPercent: 10, markupMode: 'visible', installment: { enabled: true, rate: 1.35, months: 60 } },
     });
-    const cash = 9686000 + 968600;
+    const cash = REF_TOTAL + Math.round(REF_TOTAL * 0.1);
     expect(draft.installment.cashTotal).toBe(cash);
     expect(draft.total).toBe(cash);
     expect(draft.installment.totalWithInterest).toBe(Math.round(cash * 1.35));
@@ -188,14 +212,20 @@ describe('الزيادة/النقصان اليدوي بالوحدات (لوح/ب
     expect(draft.panelBreakdown.extraPanels).toBe(2);
     const panelItem = draft.items.find((i) => i.description.includes('ألواح'));
     expect(panelItem.quantity).toBe(plain.counts.panel + 2);
-    expect(draft.total).toBe(plain.total + 2 * 185000 + 2 * 65000 + 2 * 5000); // لوحان + هيكلان + صبتان
+    // لوحان + هيكلان + صبتان. وزيادة الألواح تكبّر المصفوفة، وقاعدة تحميل الانفيرتر
+    // (المصفوفة ÷1.3) ممكن تفرض انفيرتراً إضافياً — فنحسب فرقه صراحةً بدل ما نتجاهله.
+    const panelCost = 2 * (185000 + 65000 + 5000);
+    const invCost = (draft.counts.inverter - plain.counts.inverter) * 650000;
+    expect(draft.total).toBe(plain.total + panelCost + invCost);
   });
 
   it('بطارية +1 وانفيرتر +1: الأعداد والقدرة الفعلية تتحدث', () => {
     const plain = buildQuoteDraft(base(), { tier: 'economy', cableMeters: {} });
     const draft = buildQuoteDraft(base(), { tier: 'economy', cableMeters: {}, extraUnits: { battery: 1, inverter: 1 } });
     expect(draft.counts.battery).toBe(plain.counts.battery + 1);
-    expect(draft.counts.inverter).toBe(plain.counts.inverter + 1);
+    // البطارية الإضافية تجيب ألواح شحن إضافية، والمصفوفة الأكبر ممكن تفرض انفيرتراً
+    // ثانياً فوق الـ+1 اليدوي — فالمطلوب «واحد على الأقل» مو «واحد بالضبط»
+    expect(draft.counts.inverter).toBeGreaterThanOrEqual(plain.counts.inverter + 1);
     // ساعات الليل ترتفع بنفس نسبة زيادة البنك، وأمبير النهار بنسبة الانفيرترات
     expect(draft.capability.nightHours).toBeGreaterThan(plain.capability.nightHours);
     expect(draft.capability.dayAmps).toBeGreaterThan(plain.capability.dayAmps);
@@ -273,12 +303,18 @@ describe('دستور المستويات الجديد: IP قبل السعر + ه�
     expect(strict.batteryTiers.economy.units).toBe(2);
   });
 
+  // القاعدة تُفحص مباشرة على selectInverterTiers بمصفوفة ألواح صفر — عبر
+  // buildQuoteDraft كان حجم المصفوفة (اللي كبر بمعامل أمان الألواح) يرفع القدرة
+  // المطلوبة فيصير 6kW وحدتين و12kW وحدة، فيفوز الـ12kW بأقل عدد وحدات
+  // ويخفي القاعدة اللي نريد نفحصها.
   it('المتوسط يختار أعلى IP ثم الأرخص: Growatt IP65 (650) قبل Felicity IP21 (600) وقبل Gospower IP65 (700)', () => {
-    const options = opts2(borderline);
-    const draft = buildQuoteDraft(options, { tier: 'standard', cableMeters: {} });
-    expect(draft.inverterTiers.standard.material.model).toBe('Growatt 6kW');
+    const inverters = MATERIALS2.filter((m) => m.category === 'inverter');
+    const tiers = calcModule.selectInverterTiers(
+      inverters, 18, 18, { systemVoltage: 220, inverterSafetyFactor: 1.25 }, 0, 18,
+    );
+    expect(tiers.standard.material.model).toBe('Growatt 6kW');
     // والاقتصادي يبقى الأرخص (Felicity IP21)
-    expect(draft.inverterTiers.economy.material.model).toBe('Felicity 6kW');
+    expect(tiers.economy.material.model).toBe('Felicity 6kW');
   });
 
   it('الممتاز ≤120 أمبير: هويمايلز بتكبير الحجم لا التعديد — هامش ≥30% وبلا بطارية احتياط', () => {
@@ -289,10 +325,14 @@ describe('دستور المستويات الجديد: IP قبل السعر + ه�
     expect(draft.inverterTiers.premium.units).toBe(1);
     expect(draft.inverterTiers.premium.units * draft.inverterTiers.premium.material.watt_or_capacity)
       .toBeGreaterThanOrEqual(6000 * 1.3);
-    // البطارية: الأكبر سعة (هويمايلز 16kWh) بوحدة وحدة — بلا احتياط إضافي
+    // البطارية: الأكبر سعة (هويمايلز 16kWh). العدد وحدتان بمعامل الممتاز 1.25 —
+    // الحاجة 15.84kWh ×1.25 ÷0.9 = 22kWh، و16kWh وحدة ما تكفيها.
     expect(options.batteryTiers.premium.material.model).toBe('LB16D-G3');
-    expect(options.batteryTiers.premium.units).toBe(1);
+    expect(options.batteryTiers.premium.units).toBe(2);
     expect(options.batteryTiers.premium.extraUnit).toBeUndefined();
+    // والممتاز أكبر فعلاً من الاقتصادي — هذا كل المقصود من المستوى
+    expect(options.batteryTiers.premium.units * options.batteryTiers.premium.material.watt_or_capacity)
+      .toBeGreaterThan(options.batteryTiers.economy.units * options.batteryTiers.economy.material.watt_or_capacity);
   });
 
   it('الممتاز فوق 120 أمبير يرجع للقاعدة العامة (مو مجبور هويمايلز)', () => {
@@ -309,7 +349,7 @@ describe('دستور المستويات الجديد: IP قبل السعر + ه�
     expect(draft.errors).toEqual({});
     expect(draft.inverterTiers.premium).toBeTruthy();
     expect(options.batteryTiers.premium.extraUnit).toBeUndefined();
-    expect(options.batteryTiers.premium.units).toBe(1);
+    expect(options.batteryTiers.premium.units).toBe(2);
   });
 });
 
@@ -416,14 +456,17 @@ describe('كابينة HoyUltra 215kWh: سقف التكبير بالممتاز (
   const bigLabor = [...LABOR, { id: 9, system_amps: 150, price: 3000000 }];
   const materialsWith = (extra) => [...MATERIALS.filter((m) => m.category !== 'battery'), LB16D, ...extra];
 
-  it('منظومة صغيرة (18A×4h): الممتاز يبقى 1×16kWh — الكابينة ما تنخطف', () => {
+  it('منظومة صغيرة (18A×4h): الممتاز يبقى بطاريات 16kWh — الكابينة ما تنخطف', () => {
     const options = buildOptions({
       materials: materialsWith([CABINET]), laborTiers: bigLabor, settingsRow: SETTINGS_ROW,
       roofAreaM2: 100, ampDay: 18, ampNight: 18, nightSupplyHours: 4,
     });
     const premium = options.batteryTiers.premium;
     expect(premium.material.id).toBe(61);
-    expect(premium.units).toBe(1);
+    // وحدتان بمعامل الممتاز 1.25 (الحاجة 22kWh) — والمهم إن الكابينة 215kWh
+    // ما انخطفت: سقف التكبير 3× الحاجة = 66kWh يمنعها
+    expect(premium.units).toBe(2);
+    expect(premium.units * premium.material.watt_or_capacity).toBeLessThan(215);
   });
 
   it('حمل ليلي كبير (150A×8h): الممتاز يختار الكابينة بأقل عدد وحدات', () => {
@@ -450,6 +493,115 @@ describe('كابينة HoyUltra 215kWh: سقف التكبير بالممتاز (
 
 // قرار الشركة: الاقتصادي ما عاد مجبوراً بأقل عدد وحدات — إذا قطعتين أصغر أرخص
 // من قطعة كبيرة ياخذ القطعتين، بسقف وحدة زيادة على أقل عدد ممكن.
+// طلب المستخدم: معامل أمان 1.25 على ألواح التغذية — اللوح ما ينتج قدرته
+// الاسمية طول النهار ولازم يفضل فائض يشحن البطاريات.
+describe('معامل أمان الألواح 1.25', () => {
+  const { selectPanelTiers } = calcModule;
+  const S = { chargePanelsPerBattery: 1.5 };
+
+  it('10 أمبير بلوح 650 واط وبطارية وحدة ← 6 تغذية + 2 شحن = 8 ألواح', () => {
+    const panels = [{ id: 1, category: 'panel', model: 'J650', watt_or_capacity: 650, price: 185000 }];
+    const t = selectPanelTiers(panels, 10, 1, S, 'economy');
+    // بلا معامل: ceil(10 ÷ 2.18) = 5 تغذية. بالمعامل: ceil(12.5 ÷ 2.18) = 6
+    expect(t.economy.feedPanels).toBe(6);
+    expect(t.economy.chargePanels).toBe(2);
+    expect(t.economy.units).toBe(8);
+  });
+
+  it('المعامل ينطبق على التغذية بس — ألواح الشحن تبقى على عدد البطاريات', () => {
+    const panels = [{ id: 1, category: 'panel', model: 'J650', watt_or_capacity: 650, price: 185000 }];
+    const a = selectPanelTiers(panels, 10, 1, S, 'economy');
+    const b = selectPanelTiers(panels, 10, 4, S, 'economy');
+    expect(a.economy.feedPanels).toBe(b.economy.feedPanels);
+    expect(b.economy.chargePanels).toBe(6);
+  });
+
+  it('ينلغى بمعامل 1 من الإعدادات — القاعدة القديمة ترجع بالضبط', () => {
+    const panels = [{ id: 1, category: 'panel', model: 'J650', watt_or_capacity: 650, price: 185000 }];
+    const t = selectPanelTiers(panels, 10, 1, { ...S, panelSafetyFactor: 1 }, 'economy');
+    expect(t.economy.feedPanels).toBe(5);
+  });
+
+  it('بلا أمبير نهاري ماكو ألواح إطلاقاً — المعامل ما يخترع لوحاً', () => {
+    const panels = [{ id: 1, category: 'panel', model: 'J650', watt_or_capacity: 650, price: 185000 }];
+    expect(selectPanelTiers(panels, 0, 2, S, 'economy').none).toBe(true);
+  });
+});
+
+// طلب المستخدم: الممتاز كان يطلع نفس الاقتصادي لما تنحصر المواد بماركة وحدة.
+// لازم يطلع انفيرتر أكبر وبطاريات أكبر وألواح شحن أكثر.
+describe('الممتاز أكبر فعلاً — مو الأرخص', () => {
+  const { selectInverterTiers, selectBatteryTiers, selectPanelTiers } = calcModule;
+  const S = { systemVoltage: 220, inverterSafetyFactor: 1.25, dod: 0.9, chargePanelsPerBattery: 1.5 };
+
+  it('انفيرتر: بنفس الماركة ياخذ الأكبر قدرة مو الأرخص اللي يمرّ', () => {
+    const inv = [
+      { id: 1, category: 'inverter', brand: 'Deye', model: 'D 6kW', full_description: 'IP65', watt_or_capacity: 6000, price: 900000 },
+      { id: 2, category: 'inverter', brand: 'Deye', model: 'D 8kW', full_description: 'IP65', watt_or_capacity: 8000, price: 1100000 },
+    ];
+    // 20 أمبير ← 5500W مطلوب ← ×1.3 = 7150: الاثنان يوصلون بوحدة وحدة (6kW لا،
+    // 6000 < 7150 فيحتاج وحدتين) — فالممتاز ياخذ 8kW وحدة وحدة
+    const t = selectInverterTiers(inv, 20, 20, S, 0, 20);
+    expect(t.premium.material.model).toBe('D 8kW');
+    expect(t.premium.units).toBe(1);
+    // والاقتصادي ياخذ الأرخص
+    expect(t.economy.material.model).toBe('D 6kW');
+  });
+
+  it('انفيرتر: الممتاز ما يقفز لجهاز ضخم — سقف ضعف الطلب', () => {
+    const inv = [
+      { id: 1, category: 'inverter', brand: 'Deye', model: 'D 8kW',  full_description: 'IP65', watt_or_capacity: 8000,  price: 1100000 },
+      { id: 2, category: 'inverter', brand: 'Deye', model: 'D 50kW', full_description: 'IP65', watt_or_capacity: 50000, price: 6300000 },
+    ];
+    const t = selectInverterTiers(inv, 20, 20, S, 0, 20);
+    expect(t.premium.material.model, '50kW = 9× الطلب — فوق السقف').toBe('D 8kW');
+  });
+
+  it('بطاريات: الممتاز أكبر من الاقتصادي بنفس الماركة', () => {
+    const bat = [
+      { id: 1, category: 'battery', brand: 'Deye', model: 'D 16', watt_or_capacity: 16, price: 3000000 },
+      { id: 2, category: 'battery', brand: 'Deye', model: 'D 8',  watt_or_capacity: 8,  price: 1200000 },
+    ];
+    const t = selectBatteryTiers(bat, 10, 8, S, { factors: { economy: 0.9, standard: 0.85, premium: 1.25 } });
+    const bank = (c) => c.units * c.material.watt_or_capacity;
+    expect(bank(t.premium)).toBeGreaterThan(bank(t.economy));
+  });
+
+  it('ألواح: الممتاز يزيد ألواح الشحن ربعاً', () => {
+    const panels = [{ id: 1, category: 'panel', model: 'J650', watt_or_capacity: 650, price: 185000 }];
+    const eco = selectPanelTiers(panels, 15, 4, S, 'economy');
+    const pre = selectPanelTiers(panels, 15, 4, S, 'premium');
+    expect(eco.economy.chargePanels).toBe(6);      // ceil(4 × 1.5)
+    expect(pre.premium.chargePanels).toBe(8);      // ceil(4 × 1.5 × 1.25)
+    // وألواح التغذية ما تتأثر بالمستوى
+    expect(pre.premium.feedPanels).toBe(eco.economy.feedPanels);
+  });
+
+  it('العرض الكامل: الممتاز أكبر من الاقتصادي بالثلاثة سوية', () => {
+    const mats = [
+      { id: 1, category: 'panel', brand: 'Deye', model: 'D 650', full_description: 'لوح', unit: 'عدد', watt_or_capacity: 650, price: 185000 },
+      { id: 2, category: 'inverter', brand: 'Deye', model: 'D 6kW', full_description: 'انفيرتر IP65', unit: 'عدد', watt_or_capacity: 6000, price: 900000 },
+      { id: 3, category: 'inverter', brand: 'Deye', model: 'D 12kW', full_description: 'انفيرتر IP65', unit: 'عدد', watt_or_capacity: 12000, price: 1700000 },
+      { id: 4, category: 'battery', brand: 'Deye', model: 'D 8', full_description: 'بطارية', unit: 'عدد', watt_or_capacity: 8, price: 1500000 },
+      { id: 5, category: 'battery', brand: 'Deye', model: 'D 16', full_description: 'بطارية', unit: 'عدد', watt_or_capacity: 16, price: 2900000 },
+    ];
+    const opts = buildOptions({
+      materials: mats, laborTiers: LABOR, settingsRow: SETTINGS_ROW,
+      roofAreaM2: 300, ampDay: 15, ampNight: 15, nightSupplyHours: 8,
+    });
+    const eco = buildQuoteDraft(opts, { tier: 'economy', cableMeters: {} });
+    const pre = buildQuoteDraft(opts, { tier: 'premium', cableMeters: {} });
+    expect(pre.counts.panel, 'ألواح الممتاز أكثر').toBeGreaterThan(eco.counts.panel);
+    expect(pre.total, 'الممتاز أغلى — مو نفس الاقتصادي').toBeGreaterThan(eco.total);
+    // سعة البنك وقدرة الانفيرتر بالكيلوواط — مو مجرد عدد وحدات
+    const bankKwh = (o, tier) => o.batteryTiers[tier].units * o.batteryTiers[tier].material.watt_or_capacity;
+    expect(bankKwh(opts, 'premium'), 'بنك الممتاز أكبر').toBeGreaterThan(bankKwh(opts, 'economy'));
+    const invW = (d) => d.inverterTiers.premium.units * d.inverterTiers.premium.material.watt_or_capacity;
+    const invEcoW = (d) => d.inverterTiers.economy.units * d.inverterTiers.economy.material.watt_or_capacity;
+    expect(invW(pre), 'قدرة انفيرتر الممتاز أكبر').toBeGreaterThan(invEcoW(eco));
+  });
+});
+
 describe('الاقتصادي: قطعتين أصغر إذا أرخص', () => {
   const { selectInverterTiers, selectBatteryTiers } = calcModule;
   const S = { systemVoltage: 220, inverterSafetyFactor: 1.25, dod: 0.9, nightCoverageHours: 8 };
