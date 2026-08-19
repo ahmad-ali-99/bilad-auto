@@ -216,6 +216,7 @@ describe('خانة إخفاء المجموع الكلي', () => {
   it('الخانة داخل مجموعة «التقسيط» المعنونة — مو مرمية بالهوسة', () => {
     expect(builder).toContain('opt-group-title');
     expect(builder).toMatch(/opt-group-title">التقسيط/);
-    expect(builder).toMatch(/opt-group-title">الزيادة والخصم/);
+    // عنوان كتلة التسعير صار يتبع الصلاحية: «الزيادة والخصم» للمشرف، و«الخصم» لبكر
+    expect(builder).toMatch(/opt-group-title">\{isAdmin \? 'الزيادة والخصم' : 'الخصم'\}/);
   });
 });

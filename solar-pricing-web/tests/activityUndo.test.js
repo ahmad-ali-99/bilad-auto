@@ -116,8 +116,8 @@ describe('المواد المخفية ما تدخل أي مسار استخدام
 
   it('قوائم المخزون والاستيراد ترجع كل المواد مع وسم active', () => {
     // الاستيراد يطابق على الكل وإلا يكرّر المواد المخفية، والعروض المحفوظة تحتاجها
-    expect(dataApiSrc).toContain('return withActive(await withIntegratedKw(data || []))');
-    expect(dataApiSrc).toContain('withActive(await withIntegratedKw(data || []))');
+    // درجة الحماية تنلحق هي هم من app_config مع الوسم والقدرة
+    expect(dataApiSrc).toContain('withActive(await withIpRating(await withIntegratedKw(data || [])))');
   });
 
   it('مفتاح المواد المخفية داخلي — ما ينسجل كتعديل إعداد مشترك', () => {

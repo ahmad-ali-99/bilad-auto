@@ -55,11 +55,13 @@ describe('اختيار البراند لكل قسم على حدة', () => {
     expect(catOf(d, 'inverter')).toEqual(['Deye']);
   });
 
-  it('قسم بلا اختيار يبقى مفتوح — البرنامج يختار الأنسب', () => {
-    // بس البطارية محصورة: اللوح يبقى JINKO (أرخص بسعر الواط: 403 د/واط مقابل 436)
+  it('قسم بلا اختيار يبقى مفتوح — الماركتان تبقيان مرشحتين', () => {
+    // البطارية محصورة بـDeye، واللوح بلا حصر: المحرك ينتخبه بسلّم الواطية
+    // (الاقتصادي = أدنى واطية) مو بالماركة — فالمهم إنه ما انفلتر، مو أي ماركة طلع.
     const d = draftFor({ battery: 'Deye' });
     expect(catOf(d, 'battery')).toEqual(['Deye']);
-    expect(catOf(d, 'panel')).toEqual(['JINKO']);
+    const both = new Set(['JINKO', 'Deye']);
+    expect(catOf(d, 'panel').every((b) => both.has(b)), 'اللوح ينتخب من الماركتين').toBe(true);
   });
 
   it('ماركات مختلطة فعلاً — منظومة من ثلاث ماركات مو ماركة وحدة', () => {
@@ -135,7 +137,9 @@ describe('قراءة الاختيار المحفوظ', () => {
     const d = draftFor(normalizeBrandPick({ brand: 'Deye' }));
     expect(catOf(d, 'battery')).toEqual(['Deye']);
     expect(catOf(d, 'inverter')).toEqual(['Deye']);
-    expect(catOf(d, 'panel'), 'اللوح يبقى حر بالعروض القديمة').toEqual(['JINKO']);
+    // اللوح ما ينحصر بالماركة القديمة — ينتخب بسلّم الواطية من كل المتوفر
+    const withPanelBrand = draftFor({ panel: 'JINKO', battery: 'Deye', inverter: 'Deye' });
+    expect(catOf(withPanelBrand, 'panel'), 'حصر اللوح يشتغل لما ينختار').toEqual(['JINKO']);
   });
 
   it('`brands` يتقدم على `brand` القديم إذا الاثنان موجودان', () => {

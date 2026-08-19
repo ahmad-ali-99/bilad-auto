@@ -94,6 +94,16 @@ export function canEditLabor(username) {
 
 // تعديل إعدادات الحساب وملف الشركة والملاحظات الافتراضية — للمشرفين حصراً
 // (ثوابت المعادلات وأسعار التقسيط وملف الشركة تمس كل عروض الفريق)
+// الخصم: صلاحية المشرفين + حسابات مسمّاة. التقسيط مفتوح للكل أصلاً، والخصم
+// كان محصوراً بالمشرفين — انفتح لبكر بطلب صريح.
+// الزيادة (markup) تبقى للمشرفين: هي أداة تسعير إدارية مو أداة بيع.
+const DISCOUNT_USERS = ['بكر'];
+
+export function canDiscount(username) {
+  if (isAdminName(username)) return true;
+  return DISCOUNT_USERS.some((u) => norm(u) === norm(username));
+}
+
 export function canEditSettings(username) {
   return isAdminName(username);
 }

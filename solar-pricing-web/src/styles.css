@@ -184,6 +184,8 @@ textarea { resize: vertical; min-height: 70px; }
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+/* عمود واحد — كتلة «الخصم» لحساب بلا صلاحية زيادة */
+.grid-1 { display: grid; grid-template-columns: 1fr; gap: 14px; }
 
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.4);
@@ -1610,6 +1612,17 @@ h2.page-title::before {
 /* بالتلفون: العنوان فوق الصف حتى ما ينضغط الاثنان */
 @media (max-width: 560px) {
   .brand-section { grid-template-columns: 1fr; gap: 2px; }
+}
+/* «حماية ناقصة»: مادة بلا درجة IP — تنحسب بأدنى درجة بسلّم المستويات */
+.ip-missing {
+  color: #8a5a12;
+  background: #fff4e0;
+  border: 1px solid #f0c98a;
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
 }
 /* وسم «عرض قديم»: ينبّه إن هذا العرض محفوظ قبل قاعدة معامل أمان الألواح */
 .pill-old-rule {

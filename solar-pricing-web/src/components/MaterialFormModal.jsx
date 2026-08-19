@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { parseIp, IP_RANGE_ERROR } from '../lib/materialSpecs.js';
 import ModalPortal from './ModalPortal.jsx';
 import { humanizeSaveError } from '../lib/saveErrors.js';
 import { compressImageFile } from '../lib/materialImages.js';
@@ -16,6 +17,7 @@ function emptyForm(category) {
     warranty_note: '',
     qty_per_panel: category === 'secondary' ? 1 : '',
     integrated_kw: '',
+    ip_rating: '',
   };
 }
 
@@ -30,6 +32,7 @@ export default function MaterialFormModal({ category, initial, onClose, onSave }
           warranty_note: initial.warranty_note ?? '',
           qty_per_panel: initial.qty_per_panel ?? '',
           integrated_kw: initial.integrated_kw ?? '',
+          ip_rating: initial.ip_rating ?? '',
         }
       : emptyForm(category)
   );
@@ -75,6 +78,11 @@ export default function MaterialFormModal({ category, initial, onClose, onSave }
   async function handleSubmit(e) {
     e.preventDefault();
     if (saving) return;
+    // درجة الحماية: نفحصها قبل الحفظ حتى الرسالة تطلع بالنافذة مو بعد رحلة للقاعدة
+    if (String(form.ip_rating).trim() !== '' && parseIp(form.ip_rating) == null) {
+      setSaveError(IP_RANGE_ERROR);
+      return;
+    }
     setSaving(true);
     setSaveError('');
     try {
@@ -90,6 +98,7 @@ export default function MaterialFormModal({ category, initial, onClose, onSave }
       warranty_note: form.warranty_note || null,
       qty_per_panel: form.qty_per_panel === '' ? null : Number(form.qty_per_panel),
       // قدرة انفيرتر الكابينة (kW) — تنخزن بـapp_config لأن الجدول ما بيه عمود إلها
+        ip_rating: form.ip_rating === '' ? null : form.ip_rating,
         ...(isIntegrated ? { integrated_kw: form.integrated_kw === '' ? null : Number(form.integrated_kw) } : {}),
         // الصورة تنمرّر بس إذا تغيّرت فعلاً — بلا هيك كل حفظة تكتب أو تمسح صورة بلا داعي
         ...(image === loadedImage.current ? {} : { product_image: image }),
@@ -155,6 +164,24 @@ export default function MaterialFormModal({ category, initial, onClose, onSave }
                 <input type="number" step="any" value={form.integrated_kw} onChange={(e) => set('integrated_kw', e.target.value)} placeholder="مثال: 125" />
               </div>
             )}
+            {/* درجة الحماية: حقل مستقل مثل القدرة — عليه ينبني مستوى الانفيرتر
+                (اقتصادي/متوسط/ممتاز)، فمادة بلاه تطيح بأدنى درجة */}
+            <div className="field">
+              <label>درجة الحماية IP</label>
+              {/* بلا min/max بالـHTML: المتصفح يوقف الإرسال برسالته الإنكليزية
+                  ويخفي رسالتنا العربية — الفحص عدنا بـparseIp قبل الحفظ */}
+              <input
+                type="number"
+                value={form.ip_rating}
+                onChange={(e) => set('ip_rating', e.target.value)}
+                placeholder="مثال: 21 أو 65"
+              />
+              <small className="muted">
+                {category === 'inverter'
+                  ? 'عليها ينبني مستوى الانفيرتر — بلاها تنحسب بأدنى درجة'
+                  : 'اكتبها إذا مذكورة بالداتا شيت'}
+              </small>
+            </div>
             <div className="field">
               <label>السعر (دينار عراقي)</label>
               <input type="number" step="any" value={form.price} onChange={(e) => set('price', e.target.value)} required />

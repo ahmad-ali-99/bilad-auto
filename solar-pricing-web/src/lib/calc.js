@@ -11,6 +11,8 @@
 
 // قاعدة الشركة الثابتة: لوح 650 واط يعطي 2.18 أمبير — النسبة مدمجة بالكود وليست خياراً بالإعدادات
 // واطية اللوح تؤخذ من مادة اللوح نفسها بالمخزون، والأمبير يشتق منها تلقائياً
+import { ipOf } from './materialSpecs.js';
+
 const PANEL_AMPS_PER_WATT = 2.18 / 650;
 
 // أمبير اللوح الواحد بحسب واطيته (لوح 650 = 2.18، لوح 720 = 2.41...)
@@ -150,14 +152,10 @@ function materialText(material) {
   return `${material.brand || ''} ${material.model || ''} ${material.full_description || ''}`;
 }
 
-// درجة الحماية IP من نصوص المادة (أعلى رقم مذكور) — 0 إذا غير مذكورة
+// درجة الحماية IP للمادة: الحقل المُدخل بالمخزون أولاً، وإلا المستنتج من نص
+// الوصف (فولباك للمواد القديمة)، وإلا 0 = ماكو IP مكتوب.
 function ipRatingOf(material) {
-  const re = /IP\s*-?\s*(\d{2})/gi;
-  const text = materialText(material);
-  let best = 0;
-  let match;
-  while ((match = re.exec(text))) best = Math.max(best, Number(match[1]));
-  return best;
+  return ipOf(material) ?? 0;
 }
 
 // هل المادة هويمايلز؟ بالاسم الصريح أو ببادئات موديلاتها (HIS/HYS/HIT/LB16D...)
@@ -170,6 +168,80 @@ function isHoymiles(material) {
 function midByPrice(group) {
   const sorted = [...group].sort((a, b) => a.totalPrice - b.totalPrice);
   return sorted[Math.floor((sorted.length - 1) / 2)];
+}
+
+// ═══ سلّم المواصفة: هو اللي يقرر المستوى، مو السعر ═══════════════════════
+// قرار المستخدم صراحةً: «لتقيس ع سعر، قيس المواصفات» — لأن السعر يُدخل بالإيد
+// وممكن يبقى قديماً بالمخزون، فالترتيب عليه يطلع مستويات غلط.
+//
+// الطريقة: ناخذ قيم المواصفة الموجودة **فعلاً** بالمخزون (مو أرقاماً مثبتة
+// بالكود)، نرتّبها، ونقسمها ثلاث درجات — الأدنى اقتصادي، والأعلى ممتاز،
+// والوسط متوسط. فإذا يوم انضاف IP68 يصير هو الممتاز تلقائياً بلا تعديل كود.
+//
+// المواصفة تختلف حسب الفئة:
+//   الانفيرتر → درجة الحماية IP (عنده تنوّع حقيقي: 21 · 51 · 65 · 66)
+//   البطارية  → الـIP إذا مختلف، وإلا سعة الوحدة (أغلب البطاريات IP65 أو بلا IP)
+//   اللوح     → الواطية (ماكو مصنّع يميّز ألواحه بالـIP)
+// والسعر ما يدخل إلا **داخل الدرجة الواحدة** كفاصل أخير بين موادّ متطابقة
+// المواصفة — مو لاختيار الدرجة نفسها.
+// السلّم ينبني من التوليفات **الصالحة** بس: مادة تحتاج تسع وحدات بالتوازي ما
+// تصلح درجة لأي مستوى مهما كانت مواصفتها عالية. السقف وحدة زيادة على أقل عدد
+// ممكن — بدونه انفيرتر IP66 صغير كان يخطف الممتاز بمنظومة 150 أمبير بتسع أجهزة.
+function viableCombos(combos) {
+  if (!combos.length) return combos;
+  const minUnits = Math.min(...combos.map((c) => c.units));
+  const within = combos.filter((c) => c.units <= minUnits + ECONOMY_EXTRA_UNITS);
+  return within.length ? within : combos;
+}
+
+// `capUnits` = هل نحصر السلّم بالتوليفات القليلة الوحدات؟ نعم للانفيرتر والبطارية
+// (أجهزة تتوازى، وتسعة منها بالتوازي مو خياراً)، ولا للألواح — اللوح مصفوفة
+// أصلاً وعدده يتغير كثيراً بالواطية، فالسقف كان يمسح كل الواطيات عدا الأعلى
+// ويخلي السلّم درجة وحدة.
+function specGradesOf(combos, specOf, capUnits = true) {
+  const pool = capUnits ? viableCombos(combos) : combos;
+  return [...new Set(pool.map((c) => specOf(c.material)))].sort((a, b) => a - b);
+}
+
+// درجة هذا المستوى من السلّم. بدرجتين بس: الاقتصادي ياخذ الأدنى، والمتوسط
+// والممتاز ياخذون الأعلى — المتوسط ينحاز للأحسن لأن الممتاز يبقى متميزاً
+// بهامش الحجم (1.3× للانفيرتر و1.25× للبطارية) حتى لو نفس الدرجة.
+function gradeForTier(grades, tier) {
+  if (grades.length === 0) return null;
+  if (tier === 'economy') return grades[0];
+  if (tier === 'premium') return grades[grades.length - 1];
+  return grades[Math.ceil((grades.length - 1) / 2)];
+}
+
+// يحصر التوليفات بدرجة هذا المستوى. إذا الدرجة فارغة (ماكو مرشح) نرجّع الكل.
+function atGrade(combos, specOf, tier, capUnits = true) {
+  if (!specOf) return combos;   // ماكو سلّم مواصفة لهذه الفئة — كل المرشحين
+  const grades = specGradesOf(combos, specOf, capUnits);
+  const want = gradeForTier(grades, tier);
+  if (want == null) return combos;
+  const at = combos.filter((c) => specOf(c.material) === want);
+  return at.length ? at : combos;
+}
+
+const capacityOf = (m) => Number(m.watt_or_capacity) || 0;
+
+// ملاحظة مقصودة: ماكو «حارس» يمنع أن يطلع الاقتصادي أغلى من المتوسط.
+// جرّبناه وانشال — لأنه يخلي السعر يتقدم على المواصفة، وهذا عكس القاعدة
+// المعتمدة. معنى «اقتصادي» هنا **أدنى مواصفة**، مو أرخص سعر: جهاز IP21 صغير
+// ممكن يحتاج وحدتين فيطلع مجموعه أعلى من جهاز IP65 واحد. هذا جواب صحيح
+// بالمواصفة، ويتصحّح سعرياً لما تنضبط أسعار المخزون.
+
+// مواصفة البطارية: درجة الحماية — بس إذا كانت **مختلفة فعلاً** بين الموديلات.
+// إذا كلهن بنفس الـIP (أو بلا IP مكتوب، وهاي حالة أغلب البطاريات) ماكو سلّم
+// مواصفة، فنرجّع null ويشتغل كل مستوى بقاعدته على كل المرشحين.
+//
+// ليش ما نستعمل السعة كسلّم: السعة مو درجة جودة — هي تحجيم. لو خلّينا الاقتصادي
+// ياخذ أصغر بطارية دائماً، يطلع ببطاريات كثيرة بالتوازي وسعر أعلى من الممتاز
+// (مثال حقيقي: 2×8kWh بـ2.4 مليون مقابل 1×16kWh بـ2.0 مليون). حجم البنك أصلاً
+// يفرّق بين المستويات عن طريق معامل الأمان (الممتاز 1.25).
+function batterySpecOf(combos) {
+  const ips = new Set(viableCombos(combos).map((c) => ipRatingOf(c.material)));
+  return ips.size > 1 ? (m) => ipRatingOf(m) : null;
 }
 
 function fewestUnitsGroup(combos) {
@@ -197,31 +269,18 @@ function pickFewestThenCheapest(combos) {
   return fewestUnitsGroup(combos).sort((a, b) => a.totalPrice - b.totalPrice)[0];
 }
 
-// الاقتصادي (انفيرترات): أدنى فئة IP ← الأرخص ← أقل عدد وحدات.
-// الـIP يبقى قبل السعر (قاعدة الشركة) — الجديد إن المرشحين ما عادوا محصورين بأقل
-// عدد وحدات: انفيرترين أصغر من نفس الفئة يفوزون إذا طلعوا أرخص من جهاز كبير واحد.
-// غير المذكور IP بوصفه يُعد IP21 (الفئة الأساسية الداخلية)، وما فوق 65 يُسقّف بـ65
-// حتى ما يسحب جهاز IP66 أرخص قليلاً العرضَ الاقتصادي (مثل هويمايلز مقابل المحلي).
-function pickLowestIpThenCheapest(combos) {
-  const effIp = (c) => Math.min(ipRatingOf(c.material) || 21, STANDARD_IP_CAP);
-  return [...economyPool(combos)].sort(
-    (a, b) => (effIp(a) - effIp(b)) || (a.totalPrice - b.totalPrice) || (a.units - b.units)
-  )[0];
-}
-
 function pickFewestThenMid(combos) {
   return midByPrice(fewestUnitsGroup(combos));
 }
 
-// المتوسط للانفيرترات: أقل عدد ← أعلى حماية IP ← الأرخص عند تساوي الـIP.
-// الـIP يُسقّف بـ65 للمقارنة: IP65 وIP66 كلاهما تصنيف خارجي كامل، فما نخلي جهازاً
-// أغلى بكثير (مثل هويمايلز IP66 المحجوزة للممتاز) يسحب المتوسط — السعر يفصل بعدها.
-const STANDARD_IP_CAP = 65;
-function pickFewestThenIp(combos) {
-  const group = fewestUnitsGroup(combos);
-  const effIp = (c) => Math.min(ipRatingOf(c.material), STANDARD_IP_CAP);
-  const maxIp = Math.max(...group.map(effIp));
-  return group.filter((c) => effIp(c) === maxIp).sort((a, b) => a.totalPrice - b.totalPrice)[0];
+// المتوسط (داخل درجته): أقل عدد وحدات ← **أصغر جهاز يكفي** ← الأرخص.
+// هويته درجة الحماية مو الحجم — التكبير شغل الممتاز. بلا هذا كان المتوسط ياخذ
+// انفيرتر 50kW لبيت 18 أمبير لمجرد إنه أكبر جهاز بنفس الدرجة.
+// وما عاد بيه سقف IP: كان محطوطاً لسبب سعري («ما نخلي جهازاً أغلى يسحب المتوسط»)
+// وهذا بالضبط اللي القاعدة الجديدة تمنعه.
+function pickFewestThenSmallest(combos) {
+  return fewestUnitsGroup(combos)
+    .sort((a, b) => (capacityOf(a.material) - capacityOf(b.material)) || (a.totalPrice - b.totalPrice))[0];
 }
 
 function assignTiers(combos, premiumPick, standardPick = pickFewestThenMid, economyPick = pickFewestThenCheapest) {
@@ -313,10 +372,18 @@ function selectBatteryTiers(batteryMaterials, ampNight, nightSupplyHours, settin
     const within = combos.filter((c) => c.units * c.material.watt_or_capacity <= needed * PREMIUM_OVERSIZE_CAP);
     return within.length ? within : combos;
   };
+  // الدرجة أولاً (مواصفة مو سعر)، وداخل الدرجة قواعد المستوى
+  const ecoPool = autoPool(allByTier.economy, f.economy);
+  const stdPool = autoPool(allByTier.standard, f.standard);
+  const prePool = autoPool(allByTier.premium, f.premium);
+  const specOf = batterySpecOf(stdPool);
   return {
-    economy: pickCheapestWithinEconomyCap(autoPool(allByTier.economy, f.economy)),
-    standard: pickFewestThenMid(autoPool(allByTier.standard, f.standard)),
-    premium: pickBatteryPremium(premiumPool(autoPool(allByTier.premium, f.premium), systemAmps), neededKwhFor(f.premium)),
+    economy: pickCheapestWithinEconomyCap(atGrade(ecoPool, specOf, 'economy')),
+    standard: pickFewestThenSmallest(atGrade(stdPool, specOf, 'standard')),
+    premium: pickBatteryPremium(
+      premiumPool(atGrade(prePool, specOf, 'premium'), systemAmps),
+      neededKwhFor(f.premium),
+    ),
     singleOption: allByTier.standard.length === 1,
     insufficient: false,
     all: allByTier.standard,
@@ -337,7 +404,25 @@ function selectPanelTiers(panelMaterials, ampDay, batteryCount, settings, tier =
     if (total <= 0) continue;
     combos.push({ material, units: total, feedPanels, chargePanels, totalPrice: total * material.price });
   }
-  return classifyTiers(combos);
+  // مواصفة اللوح: الواطية. ماكو مصنّع يميّز ألواحه بالـIP، والواطية الأعلى
+  // تعني ألواحاً أقل وهيكلاً أقل وسطحاً أقل — مواصفة حقيقية للزبون.
+  const wattSpec = (m) => capacityOf(m);
+  const forTier = (t) => {
+    const at = atGrade(combos, wattSpec, t, false);
+    return [...at].sort((a, b) => a.totalPrice - b.totalPrice)[0];
+  };
+  if (combos.length === 0) {
+    return { economy: null, standard: null, premium: null, singleOption: false, insufficient: true, all: [] };
+  }
+  const sorted = [...combos].sort((a, b) => a.totalPrice - b.totalPrice);
+  return {
+    economy: forTier('economy'),
+    standard: forTier('standard'),
+    premium: forTier('premium'),
+    singleOption: combos.length === 1,
+    insufficient: false,
+    all: sorted,
+  };
 }
 
 function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, panelArrayW = 0, systemAmps = 0) {
@@ -370,8 +455,16 @@ function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, pane
     return group.sort((a, b) => (totalW(b) - totalW(a)) || (a.totalPrice - b.totalPrice))[0];
   }
 
-  // المتوسط بالـIP الأعلى قبل السعر، والاقتصادي بأدنى فئة IP (يبدأ من IP21) ثم الأرخص
-  return assignTiers(combos, pickInverterPremium, pickFewestThenIp, pickLowestIpThenCheapest);
+  // ═══ الدرجة أولاً: درجة الحماية IP ═══════════════════════════════════════
+  // الاقتصادي ياخذ أدنى IP موجود بالمخزون، والممتاز أعلاه، والمتوسط الوسط.
+  // والسعر ما يدخل إلا داخل الدرجة الواحدة كفاصل أخير.
+  const ipSpec = (m) => ipRatingOf(m);
+  return assignTiers(
+    combos,
+    (all) => pickInverterPremium(atGrade(all, ipSpec, 'premium')),
+    (all) => pickFewestThenSmallest(atGrade(all, ipSpec, 'standard')),
+    (all) => pickCheapestWithinEconomyCap(atGrade(all, ipSpec, 'economy')),
+  );
 }
 
 // القدرة الفعلية للتوليفة: ساعات تجهيز الليل من بنك البطاريات، وأمبير النهار اللي

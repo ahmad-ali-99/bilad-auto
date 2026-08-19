@@ -5,6 +5,7 @@ import ImportPreviewModal from '../components/ImportPreviewModal.jsx';
 import { getCurrentUsername } from '../lib/agent.js';
 import { canEditInventory, canAddMaterial, canEditMaterial, canImportInventory, canEditLabor } from '../lib/permissions.js';
 import { useMediaQuery, PHONE } from '../lib/useMediaQuery.js';
+import { formatIp } from '../lib/materialSpecs.js';
 
 const TABS = [
   { key: 'panel', label: 'الألواح' },
@@ -47,6 +48,7 @@ function MaterialCard({ m, capacityLabel, canEdit, owner, onToggle, onEdit, onDe
         <span>{m.unit}</span>
         <span>{capacityLabel} <b>{m.watt_or_capacity ?? '-'}</b></span>
         <span>ضمان <b>{m.warranty_months ?? '-'}</b> شهر</span>
+        <span>{formatIp(m.ip_rating) || <span className="ip-missing">حماية ناقصة</span>}</span>
       </div>
       <div className="inv-card-actions">
         <div className="inv-card-price">
@@ -256,6 +258,7 @@ export default function Inventory({ initialSearch }) {
                 <th>الماركة / الموديل</th>
                 <th>الوحدة</th>
                 <th>{capacityLabel(tab)}</th>
+                <th title="عليها ينبني مستوى الانفيرتر — الناقصة تنحسب بأدنى درجة">الحماية</th>
                 <th>السعر (دينار)</th>
                 <th>الضمان (شهر)</th>
                 {canAdd && <th>إجراءات</th>}
@@ -280,7 +283,13 @@ export default function Inventory({ initialSearch }) {
                     {m.active === false && <span className="muted" style={{ fontSize: '0.78em' }}> — مخفية</span>}
                   </td>
                   <td>{m.unit}</td>
-                  <td>{m.watt_or_capacity ?? '-'}</td>
+                  <td>
+                    {formatIp(m.ip_rating) || (
+                      <span className="ip-missing" title="ماكتوبة درجة الحماية — المادة تنحسب بأدنى درجة بالمستويات">
+                        ناقصة
+                      </span>
+                    )}
+                  </td>
                   <td>{Number(m.price).toLocaleString('en-US')}</td>
                   <td>{m.warranty_months ?? '-'}</td>
                   {canAdd && (

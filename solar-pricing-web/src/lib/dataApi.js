@@ -10,6 +10,7 @@ import { UNDO, DRAFT } from './activityUndo.js';
 import { isRestrictedUser, canEditSettings, canViewQuotes, canAddMaterial, canEditMaterial, canImportInventory, canImportUpdates, canEditLabor } from './permissions.js';
 import { installmentPlanLabel } from './installment.js';
 import { imageKey, isImageKey } from './materialImages.js';
+import { ipKey, isIpKey, materialIdFromIpKey, parseIp, IP_RANGE_ERROR } from './materialSpecs.js';
 import {
   BRAND_CATEGORIES, normalizeBrandPick, pruneBrandPick, filterMaterialsByBrands, hasBrandPick,
 } from './brandPick.js';
@@ -85,6 +86,42 @@ async function saveIntegratedKw(materialId, data) {
   }
 }
 
+// درجة الحماية IP: حقل يُدخل بالمخزون مثل القدرة — ماكو عمود إله بالجدول فينخزن
+// بـapp_config بمفتاح material_ip_<id>. فارغ = يمسح المفتاح (المادة بلا IP).
+async function saveIpRating(materialId, data) {
+  if (!('ip_rating' in (data || {}))) return;
+  const raw = data.ip_rating;
+  const empty = raw == null || String(raw).trim() === '';
+  const n = empty ? null : parseIp(raw);
+  if (!empty && n == null) throw new Error(IP_RANGE_ERROR);
+  try {
+    await api.config.set(ipKey(materialId), n == null ? null : { ip: n });
+  } catch {
+    /* app_config اختياري — المادة انحفظت على أي حال */
+  }
+}
+
+// يلحق درجة الحماية بكل المواد بنداء واحد
+async function withIpRating(rows) {
+  if (!rows.length) return rows;
+  try {
+    const { data } = await supabase.from('app_config').select('key,value').like('key', `${'material_ip_'}%`);
+    const parse = (v) => {
+      if (v == null) return null;
+      return typeof v === 'string' ? JSON.parse(v) : v; // عمود text أو jsonb
+    };
+    const byId = new Map();
+    for (const r of data || []) {
+      const id = materialIdFromIpKey(r.key);
+      const val = parse(r.value);
+      if (id != null && val && val.ip != null) byId.set(id, Number(val.ip));
+    }
+    return rows.map((m) => ({ ...m, ip_rating: byId.has(Number(m.id)) ? byId.get(Number(m.id)) : null }));
+  } catch {
+    return rows.map((m) => ({ ...m, ip_rating: null }));
+  }
+}
+
 async function withIntegratedKw(rows) {
   const ids = rows.filter((m) => m.category === 'integrated').map((m) => m.id);
   if (!ids.length) return rows;
@@ -120,14 +157,15 @@ async function withActive(rows) {
 
 // المفاتيح الداخلية ما تنسجل كـ«تعديل إعداد مشترك» — إلها تسجيلها الخاص بمكان الاستدعاء
 const isInternalConfigKey = (key) =>
-  key.startsWith('quote_') || key.startsWith('integrated_specs_') || isImageKey(key) || key === MATERIALS_DISABLED_KEY;
+  key.startsWith('quote_') || key.startsWith('integrated_specs_') || isImageKey(key) || isIpKey(key)
+  || key === MATERIALS_DISABLED_KEY;
 
 async function allMaterials() {
   const { data, error } = await supabase.from('materials').select('*').order('category').order('id');
   throwIf(error);
   // قدرة الكابينات المتكاملة (kW) لازمة للتحجيم التلقائي — تنلحق من app_config
   // والصفوف ترجع كلها (حتى المخفية) لأن الاستيراد والعروض المحفوظة تحتاجها
-  return withActive(await withIntegratedKw(data || []));
+  return withActive(await withIpRating(await withIntegratedKw(data || [])));
 }
 
 async function nextQuoteNumber() {
@@ -216,7 +254,7 @@ export const api = {
       if (category) q = q.eq('category', category);
       const { data, error } = await q;
       throwIf(error);
-      return withActive(await withIntegratedKw(data || []));
+      return withActive(await withIpRating(await withIntegratedKw(data || [])));
     },
     // صورة المنتج لكل مادة — تُستعمل بمنشور الباقات. تنخزن بـapp_config
     // (نفس منفذ التوسعة اللي يمشي بلا تعديل بنية القاعدة).
@@ -309,6 +347,7 @@ export const api = {
       const { data: row, error } = await supabase.from('materials').insert(materialPayload(data)).select().single();
       throwIf(error);
       await saveIntegratedKw(row.id, data);
+      await saveIpRating(row.id, data);
       // نسجّل صاحب المادة — عليه تعتمد صلاحية تعديلها لاحقاً
       const me = await currentUsername();
       if (me) {
@@ -331,6 +370,7 @@ export const api = {
       const { data: row, error } = await supabase.from('materials').update(materialPayload(data)).eq('id', id).select().single();
       throwIf(error);
       await saveIntegratedKw(id, data);
+      await saveIpRating(id, data);
       logActivity('تعديل مادة', 'المخزون', {
         'المادة': row.full_description,
         ...(old && old.price !== row.price ? { 'السعر القديم': old.price, 'السعر الجديد': row.price } : { 'السعر': row.price }),
@@ -385,7 +425,10 @@ export const api = {
       // والنافذة تبلع الخطأ فما يظهر شي أصلاً. هسه نجمع أسباب الفشل ونرجّعها للعرض.
       const failed = [];
       for (const raw of materials) {
-        const m = excelImport.normalizeImportedMaterial(raw);
+        const normalized = excelImport.normalizeImportedMaterial(raw);
+        // درجة الحماية ماكو إلها عمود بالجدول — تنفصل عن حمولة القاعدة وتنخزن
+        // بـapp_config، وإلا الإدخال يفشل بـ«column ip_rating does not exist»
+        const { ip_rating: importedIp, ...m } = normalized;
         const match = excelImport.findExistingMaterial(existing, m);
         try {
           if (match) {
@@ -394,10 +437,12 @@ export const api = {
             }
             const { error } = await supabase.from('materials').update({ ...m, updated_at: new Date().toISOString() }).eq('id', match.id);
             throwIf(error);
+            if (importedIp != null) await saveIpRating(match.id, { ip_rating: importedIp });
             updated++;
           } else {
             const { data: row, error } = await supabase.from('materials').insert(m).select('id').single();
             throwIf(error);
+            if (importedIp != null && row?.id) await saveIpRating(row.id, { ip_rating: importedIp });
             // نفس قاعدة الإضافة اليدوية: المستورِد يملك مادته فيقدر يعدّلها بعدين
             if (me && row?.id) {
               try {

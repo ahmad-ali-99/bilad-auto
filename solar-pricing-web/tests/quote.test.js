@@ -320,9 +320,11 @@ describe('دستور المستويات الجديد: IP قبل السعر + ه�
   it('الممتاز ≤120 أمبير: هويمايلز بتكبير الحجم لا التعديد — هامش ≥30% وبلا بطارية احتياط', () => {
     const options = opts2(borderline);
     const draft = buildQuoteDraft(options, { tier: 'premium', cableMeters: {} });
-    // المطلوب ~6000W ← ×1.3 = 7800 ← هويمايلز 12kW وحدة وحدة (مو 6kW ×2)
-    expect(draft.inverterTiers.premium.material.model).toBe('HYS-12.0LV-EUG2');
-    expect(draft.inverterTiers.premium.units).toBe(1);
+    // الدرجة أولاً: أعلى IP بالمخزون هو 66 (HIS6L)، فالممتاز ياخذه — والمطلوب
+    // ~6000W ×1.3 = 7800 يحتاج منه وحدتين. (قبل قاعدة المواصفة كان ياخذ
+    // HYS-12kW IP65 بوحدة وحدة لأن الترتيب كان بالحجم والسعر.)
+    expect(draft.inverterTiers.premium.material.model).toBe('HIS6L-G3S');
+    expect(draft.inverterTiers.premium.units).toBe(2);
     expect(draft.inverterTiers.premium.units * draft.inverterTiers.premium.material.watt_or_capacity)
       .toBeGreaterThanOrEqual(6000 * 1.3);
     // البطارية: الأكبر سعة (هويمايلز 16kWh). العدد وحدتان بمعامل الممتاز 1.25 —
@@ -695,13 +697,16 @@ describe('الاقتصادي انفيرترات: أدنى فئة IP (تبدأ م
     expect(tiers.economy.material.id).toBe(2);
   });
 
-  it('الحجم ما بيه إلا IP65 وIP66 → الأرخص بينهما (الفئتان وحدة بالسقف 65)', () => {
+  it('IP65 وIP66 درجتان مختلفتان: الاقتصادي ياخذ 65 حتى لو 66 أرخص', () => {
+    // قبل قاعدة المواصفة كان اكو سقف يعتبر IP66 = IP65 فيفصل السعر — انشال،
+    // لأن المستخدم قرر إن الترتيب بالمواصفة مو بالسعر.
     const inverters = [
       { id: 1, category: 'inverter', model: 'A 6kW', full_description: 'انفيرتر IP65', watt_or_capacity: 6000, price: 1600000 },
       { id: 2, category: 'inverter', model: 'B 6kW', full_description: 'انفيرتر IP66', watt_or_capacity: 6000, price: 1265000 },
     ];
     const tiers = selectInverterTiers(inverters, 15, 15, S, 0, 15);
-    expect(tiers.economy.material.id).toBe(2);
+    expect(tiers.economy.material.id, 'IP65 = الدرجة الأدنى').toBe(1);
+    expect(tiers.premium.material.id, 'IP66 = الدرجة الأعلى').toBe(2);
   });
 });
 

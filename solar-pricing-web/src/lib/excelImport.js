@@ -5,6 +5,7 @@
 // قاعدة التحديث/الإضافة (مهمة): المادة تعتبر "نفسها" فقط إذا تطابقت الفئة + الموديل + السعة/القدرة —
 // بطارية COSPOWER 16kWh وبطارية COSPOWER 6kWh مادتان مختلفتان حتى لو نفس الموديل.
 import * as XLSX from 'xlsx';
+import { parseIp } from './materialSpecs.js';
 
 const COLUMN_ALIASES = {
   category: ['الفئة', 'الفئه', 'النوع', 'التصنيف', 'الصنف', 'category', 'type'],
@@ -15,6 +16,7 @@ const COLUMN_ALIASES = {
   watt_or_capacity: ['القدرة او السعة', 'القدرة أو السعة', 'القدرة', 'القدره', 'السعة', 'السعه', 'الواطية', 'الواطيه', 'واط', 'capacity', 'watt', 'kwh', 'power'],
   price: ['سعر الوحدة', 'سعر المفرد', 'السعر', 'سعر البيع', 'سعر', 'price', 'cost'],
   warranty_months: ['الضمان (شهر)', 'الضمان بالشهور', 'الضمان', 'ضمان', 'warranty'],
+  ip_rating: ['درجة الحماية', 'درجه الحمايه', 'الحماية', 'الحمايه', 'ايبي', 'آي بي', 'ip', 'ip rating', 'protection'],
   warranty_note: ['ملاحظة الضمان', 'ملاحظه الضمان', 'نص الضمان'],
   qty_per_panel: ['الكمية لكل لوح', 'الكميه لكل لوح', 'لكل لوح'],
   quantity_stock: ['الكمية بالمخزون', 'الكمية المتوفرة', 'الكمية المتوفره', 'المخزون', 'الكمية', 'الكميه', 'العدد المتوفر', 'stock', 'qty', 'quantity'],
@@ -208,6 +210,9 @@ function parseInventoryWorkbook(buffer) {
         watt_or_capacity: capacity,
         price,
         warranty_months: parseNumber(get('warranty_months')),
+        // درجة الحماية: تنقبل بأي شكل (65 · IP65 · ايبي 65)، والغلط ينذكر كملاحظة
+        // بالصف بدل ما يفشّل الاستيراد كله
+        ip_rating: parseIp(get('ip_rating')),
         warranty_note: normalizeCell(get('warranty_note')) || null,
         qty_per_panel: parseNumber(get('qty_per_panel')),
         sourceRow: `${sheetName} - سطر ${rowNum}`,
@@ -295,14 +300,16 @@ function annotateMatches(existingMaterials, rows) {
 function buildTemplateWorkbook() {
   const materialsHeader = [
     'الفئة', 'الماركة', 'الموديل', 'الوصف التفصيلي', 'الوحدة',
-    'القدرة او السعة', 'السعر', 'الضمان (شهر)', 'الكمية لكل لوح',
+    'القدرة او السعة', 'درجة الحماية', 'السعر', 'الضمان (شهر)', 'الكمية لكل لوح',
   ];
+  // «درجة الحماية» عمود أساسي للانفيرترات: عليه ينبني المستوى (اقتصادي/متوسط/ممتاز)
   const exampleRows = [
-    ['لوح', 'JINKO', 'JINKO 650W', 'تجهيز وتركيب ألواح شمسية 650 واط ... (الوصف الكامل كما يطبع بالفاتورة مع الضمان)', 'عدد', 650, 185000, 120, ''],
-    ['بطارية', 'COSPOWER', 'COSPOWER 16kWh', 'بطارية ليثيوم 16kWh ... ضمان 5 سنوات', 'عدد', 16, 2750000, 60, ''],
-    ['انفيرتر', 'COSPOWER', 'COSPOWER 6kW', 'انفيرتر هجين 6 كيلو واط ... ضمان 5 سنوات', 'عدد', 6000, 650000, 60, ''],
-    ['ثانوية', '', 'هيكل مغلون', 'هيكل الألواح مغلون مقاوم للرياح', 'عدد', '', 65000, '', 1],
-    ['ثانوية', '', 'كيبل 6مم', 'كيبلات ناقلة من الألواح إلى الانفيرتر 6 ملم', 'متر', '', 2000, '', ''],
+    ['لوح', 'JINKO', 'JINKO 650W', 'تجهيز وتركيب ألواح شمسية 650 واط ... (الوصف الكامل كما يطبع بالفاتورة مع الضمان)', 'عدد', 650, '', 185000, 120, ''],
+    ['بطارية', 'COSPOWER', 'COSPOWER 16kWh', 'بطارية ليثيوم 16kWh ... ضمان 5 سنوات', 'عدد', 16, 65, 2750000, 60, ''],
+    ['انفيرتر', 'COSPOWER', 'COSPOWER 6kW', 'انفيرتر هجين 6 كيلو واط ... ضمان 5 سنوات', 'عدد', 6000, 21, 650000, 60, ''],
+    ['انفيرتر', 'Deye', 'Deye 8kW', 'انفيرتر هجين 8 كيلو واط خارجي ... ضمان 5 سنوات', 'عدد', 8000, 65, 1250000, 60, ''],
+    ['ثانوية', '', 'هيكل مغلون', 'هيكل الألواح مغلون مقاوم للرياح', 'عدد', '', '', 65000, '', 1],
+    ['ثانوية', '', 'كيبل 6مم', 'كيبلات ناقلة من الألواح إلى الانفيرتر 6 ملم', 'متر', '', '', 2000, '', ''],
   ];
   const laborHeader = ['الحجم بالأمبير', 'السعر', 'ملاحظة'];
   const laborRows = [
@@ -313,7 +320,7 @@ function buildTemplateWorkbook() {
 
   const wb = XLSX.utils.book_new();
   const wsMaterials = XLSX.utils.aoa_to_sheet([materialsHeader, ...exampleRows]);
-  wsMaterials['!cols'] = [{ wch: 10 }, { wch: 12 }, { wch: 18 }, { wch: 60 }, { wch: 8 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
+  wsMaterials['!cols'] = [{ wch: 10 }, { wch: 12 }, { wch: 18 }, { wch: 60 }, { wch: 8 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
   XLSX.utils.book_append_sheet(wb, wsMaterials, 'المواد');
   const wsLabor = XLSX.utils.aoa_to_sheet([laborHeader, ...laborRows]);
   wsLabor['!cols'] = [{ wch: 14 }, { wch: 12 }, { wch: 20 }];
@@ -331,6 +338,7 @@ function normalizeImportedMaterial(m) {
     watt_or_capacity: m.watt_or_capacity ?? null,
     price: Number(m.price) || 0,
     warranty_months: m.warranty_months ?? null,
+    ip_rating: m.ip_rating ?? null,
     warranty_note: m.warranty_note || null,
     qty_per_panel: m.qty_per_panel ?? null,
   };
