@@ -32,7 +32,10 @@ function batteriesRequired(ampNight, nightSupplyHours, { systemVoltage, dod }, b
 // ولازم يفضل فائض يشحن البطاريات مو بس يغطي الحمل اللحظي.
 // مثال: 10 أمبير نهاراً بلوح 650 واط (2.18 أمبير) ← 10×1.25 ÷ 2.18 = 5.7 ← 6 ألواح
 // تغذية، وبطارية وحدة تنطي لوحين شحن ← 8 ألواح (كانت 7 قبل المعامل).
+// العروض المحفوظة قبل هذا المعامل تنحسب بـ1 (بلا معامل) حتى تبقى مثل ما هي —
+// القيمة تنحفظ مع كل عرض، والعرض بلا قيمة محفوظة = عرض قديم = 1.
 const PANEL_SAFETY_FACTOR = 1.25;
+const LEGACY_PANEL_SAFETY_FACTOR = 1;
 // الممتاز يزيد ألواح الشحن ربعاً إضافياً — شحن أسرع وهامش أوسع
 const PREMIUM_CHARGE_PANEL_FACTOR = 1.25;
 
@@ -482,6 +485,9 @@ function capabilityOf({
 
 export {
   PANEL_AMPS_PER_WATT,
+  PANEL_SAFETY_FACTOR,
+  LEGACY_PANEL_SAFETY_FACTOR,
+  PREMIUM_CHARGE_PANEL_FACTOR,
   PV_OVERSIZE_RATIO,
   IRAQ_SUN_HOURS,
   HOYMILES_MAX_AMPS,

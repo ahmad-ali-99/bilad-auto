@@ -13,6 +13,14 @@ import { imageKey, isImageKey } from './materialImages.js';
 import {
   BRAND_CATEGORIES, normalizeBrandPick, pruneBrandPick, filterMaterialsByBrands, hasBrandPick,
 } from './brandPick.js';
+import { PANEL_SAFETY_FACTOR } from './calc.js';
+
+// معامل أمان الألواح الخاص بهذا العرض. العروض المحفوظة تمرّره صراحةً (والقديمة
+// تمرّر 1)، وأي حساب جديد بلا قيمة ياخذ المعامل الحالي.
+function panelSafetyFactorOf(input) {
+  const v = Number(input?.panelSafetyFactor);
+  return v > 0 ? v : PANEL_SAFETY_FACTOR;
+}
 
 function throwIf(error) {
   if (error) throw new Error(error.message || 'خطأ بالاتصال بقاعدة البيانات');
@@ -559,6 +567,8 @@ export const api = {
         ampNight: input.ampNight,
         nightSupplyHours: input.nightSupplyHours,
         batteryFactors: batteryFactors || null,
+        // معامل أمان الألواح يجي مع العرض: الجديد 1.25، والمحفوظ قبل القاعدة 1
+        panelSafetyFactor: panelSafetyFactorOf(input),
       });
     },
     async preview(input) {
@@ -667,16 +677,20 @@ export const api = {
       // ماركات الأقسام المنتخبة (لوح · بطارية · انفيرتر · كابينة) — بدونها يرجع
       // العرض المحفوظ بكل الماركات وتتبدل مواده عند إعادة الفتح
       const picked = pruneBrandPick(normalizeBrandPick(input), systemType);
-      const active =
-        (Number(a.markupPercent) || 0) > 0 || (Number(a.discountPercent) || 0) > 0 || a.installment?.enabled ||
-        hasExtra || !!sel || !!systemType || !!counts || hasBrandPick(picked);
+      // اللقطة تنكتب بكل عرض بلا استثناء: معامل أمان الألواح لازم ينحفظ حتى مع
+      // العرض البسيط (بلا زيادة ولا خصم ولا براند) — بدونه العرض يرجع «قديماً»
+      // عند فتحه، ينحسب بمعامل 1، ويتبدّل عدد ألواحه.
       try {
-        await api.config.set(`quote_adj_${quoteId}`, active ? {
+        await api.config.set(`quote_adj_${quoteId}`, {
           // ذاكرة المواد الثانوية كما أدخلها البياع — فتح التعديل يرجعها حرفياً
           secondarySelections: sel,
           markupPercent: Number(a.markupPercent) || 0,
           markupMode: a.markupMode === 'distributed' ? 'distributed' : 'visible',
           discountPercent: Number(a.discountPercent) || 0,
+          // معامل أمان الألواح وقت الحفظ — بدونه إعادة فتح العرض تعيد حسابه
+          // بالمعامل الحالي ويتبدّل عدد ألواحه. العروض المحفوظة قبل القاعدة
+          // ماكو عندها هذا المفتاح، فتنقرأ بـ1 (بلا معامل) وتبقى مثل ما هي.
+          panelSafetyFactor: panelSafetyFactorOf(input),
           // ماركة كل قسم لحاله. `brand` القديم ينحفظ هم للتوافق مع أي قارئ قديم
           // (كان يعني الانفيرتر والبطارية بس) — والقراءة تعتمد `brands` أولاً.
           brands: picked,
@@ -707,7 +721,7 @@ export const api = {
           systemType,
           // الأعداد اللي ثبّتها البياع بيده — ترجع كما هي عند فتح العرض للتعديل
           unitCounts: counts,
-        } : null);
+        });
       } catch {
         /* جدول app_config اختياري — فشله لا يمنع حفظ العرض نفسه */
       }

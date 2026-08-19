@@ -1611,6 +1611,18 @@ h2.page-title::before {
 @media (max-width: 560px) {
   .brand-section { grid-template-columns: 1fr; gap: 2px; }
 }
+/* وسم «عرض قديم»: ينبّه إن هذا العرض محفوظ قبل قاعدة معامل أمان الألواح */
+.pill-old-rule {
+  display: inline-block;
+  margin-inline-start: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #fff4e0;
+  border: 1px solid #f0c98a;
+  color: #8a5a12;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
 /* شعار الماركة — صورة رسمية أو علامة مولّدة من الاسم */
 .brand-mark {
   display: grid; place-items: center;

@@ -28,8 +28,11 @@ function mapSettings(row) {
 }
 
 // يبني كائن الخيارات من المصفوفات المجلوبة — بدل computeOptions القديمة المرتبطة بقاعدة بيانات
-function buildOptions({ materials, laborTiers, settingsRow, roofAreaM2, ampDay, ampNight, nightSupplyHours, batteryFactors = null }) {
+function buildOptions({ materials, laborTiers, settingsRow, roofAreaM2, ampDay, ampNight, nightSupplyHours, batteryFactors = null, panelSafetyFactor = null }) {
   const settings = mapSettings(settingsRow);
+  // معامل أمان الألواح يجي مع العرض نفسه: العروض الجديدة بـ1.25، والمحفوظة قبل
+  // القاعدة بـ1 حتى ترجع بنفس عدد ألواحها بالضبط عند فتحها للتعديل أو إعادة طباعتها
+  if (Number(panelSafetyFactor) > 0) settings.panelSafetyFactor = Number(panelSafetyFactor);
   const supplyHours = nightSupplyHours != null && nightSupplyHours !== '' ? Number(nightSupplyHours) : settings.nightCoverageHours;
 
   const byPrice = (a, b) => a.price - b.price;

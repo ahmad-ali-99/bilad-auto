@@ -12,6 +12,7 @@ import { canPickBrand } from '../lib/permissions.js';
 import {
   brandSectionsFor, emptyBrandPick, pruneBrandPick, BRAND_SECTION_LABELS,
 } from '../lib/brandPick.js';
+import { PANEL_SAFETY_FACTOR } from '../lib/calc.js';
 import { computeSecondaryDefaults, isPanelSideMaterial } from '../lib/secondaryDefaults.js';
 import { normName } from '../lib/quotesFilter.js';
 import BrandLogo from '../components/BrandLogo.jsx';
@@ -69,6 +70,8 @@ const BLANK = {
   clientName: '', clientPhone: '', location: '',
   roofAreaM2: '', ampDay: '', ampNight: '', nightSupplyHours: '',
   systemType: 'full', tier: 'economy', brands: emptyBrandPick(),
+  // العرض الجديد ينبني بالمعامل الحالي — والعرض المفتوح للتعديل يجيب معامله المحفوظ
+  panelSafetyFactor: PANEL_SAFETY_FACTOR,
   overrides: {},
   markupPercent: '', markupMode: 'visible', discountPercent: '',
   installment: false, installmentPlan: 'company',
@@ -173,6 +176,9 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   // البراند: كل قسم بماركته لحاله (لوح · بطارية · انفيرتر · كابينة). فارغ = كل
   // الماركات لهذا القسم — والاختيار ما يغيّر تحجيم المنظومة، بس يحصر المواد.
   const [brands, setBrands] = useState(() => ({ ...emptyBrandPick(), ...(savedDraft?.brands || {}) }));
+  // معامل أمان الألواح: 1.25 للعروض الجديدة، والعرض المحفوظ يرجع بمعامله هو
+  // (والمحفوظ قبل القاعدة يرجع بـ1) حتى ما يتبدّل عدد ألواحه عند فتحه
+  const [panelSafetyFactor, setPanelSafetyFactor] = useState(savedDraft?.panelSafetyFactor ?? PANEL_SAFETY_FACTOR);
   // الماركات المتوفرة بالمخزون مقسّمة على الفئات
   const [brandOptions, setBrandOptions] = useState(null);
   // المبدّل معروض لحسابات محددة حالياً (بكر وأحمد)
@@ -331,7 +337,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   // اللي محله ذاكرة الجلسة). أي حقل جديد يُضاف هنا وبـBLANK سوية.
   const draftState = {
     clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours,
-    systemType, tier, brands, overrides, secondarySel, markupPercent, markupMode, discountPercent,
+    systemType, tier, brands, panelSafetyFactor, overrides, secondarySel, markupPercent, markupMode, discountPercent,
     installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf,
     extraUnits, unitCounts, notes, pricingOpen, createdBy,
   };
@@ -343,7 +349,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   useEffect(() => {
     const t = setTimeout(() => writeSavedDraft(draftStateRef.current), 500);
     return () => clearTimeout(t);
-  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts, notes, pricingOpen, createdBy]);
+  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts, notes, pricingOpen, createdBy]);
 
   // حفظ فوري عند مغادرة الصفحة أو إغلاق النافذة — بدونه آخر نص ثانية من الكتابة
   // تروح: المؤقت ينلغي مع فكّ الصفحة قبل ما يوصل للتخزين.
@@ -370,6 +376,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
     systemTypeRef.current = s.systemType;
     setTier(s.tier);
     setBrands({ ...emptyBrandPick(), ...(s.brands || {}) });
+    setPanelSafetyFactor(s.panelSafetyFactor ?? PANEL_SAFETY_FACTOR);
     setOverrides(s.overrides);
     setMarkupPercent(s.markupPercent);
     setMarkupMode(s.markupMode);
@@ -439,6 +446,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
         installment: !!a.installment?.enabled,
         installmentPlan: a.installment?.plan === 'cbi' ? 'cbi' : 'company',
         brands: { ...emptyBrandPick(), ...(p.brands || {}) },
+        panelSafetyFactor: Number(p.panelSafetyFactor) > 0 ? Number(p.panelSafetyFactor) : PANEL_SAFETY_FACTOR,
         installmentRate: a.installment?.rate ? String(a.installment.rate) : '',
         installmentMonths: a.installment?.months ? String(a.installment.months) : '',
         hideTotalInPdf: a.installment?.hideTotal === true,
@@ -491,6 +499,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
       setInstallment(!!a.installment?.enabled);
       setInstallmentPlan(a.installment?.plan === 'cbi' ? 'cbi' : 'company');
       if (p.brands) setBrands({ ...emptyBrandPick(), ...p.brands });
+      if (Number(p.panelSafetyFactor) > 0) setPanelSafetyFactor(Number(p.panelSafetyFactor));
       setInstallmentRate(a.installment?.rate ? String(a.installment.rate) : '');
       setInstallmentMonths(a.installment?.months ? String(a.installment.months) : '');
       setHideTotalInPdf(a.installment?.hideTotal === true);
@@ -618,8 +627,8 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
 
   // useMemo ضروري: بدونه الكائن يتجدد بكل رندر → المؤقت ينعاد → حلقة إعادة حساب لا نهائية
   const inputs = useMemo(
-    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts }),
-    [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts]
+    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts }),
+    [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts]
   );
   const debouncedInputs = useDebouncedValue(inputs, 300);
 
@@ -652,6 +661,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
         nightSupplyHours: debouncedInputs.nightSupplyHours === '' ? null : Number(debouncedInputs.nightSupplyHours),
         tier: debouncedInputs.tier,
         brands: debouncedInputs.brands,
+        panelSafetyFactor: debouncedInputs.panelSafetyFactor,
         overrides: debouncedInputs.overrides,
         secondarySelections: debouncedInputs.secondarySel,
         adjustments: {
@@ -702,6 +712,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
       nightSupplyHours: nightSupplyHours === '' ? null : Number(nightSupplyHours),
       tier,
       brands,
+      panelSafetyFactor,
       overrides,
       secondarySelections: secondarySel,
       adjustments: {
@@ -1280,6 +1291,13 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
                 الألواح: {draft.panelBreakdown.feedPanels} للتغذية النهارية + {draft.panelBreakdown.chargePanels} لشحن البطاريات
                 {draft.panelBreakdown.extraPanels !== 0 &&
                   ` ${draft.panelBreakdown.extraPanels > 0 ? '+' : '−'} ${Math.abs(draft.panelBreakdown.extraPanels)} يدوياً`}
+                {/* عرض محفوظ قبل قاعدة معامل الأمان — ألواحه أقل من عرض جديد
+                    بنفس الأرقام، فنكول للبياع السبب بدل ما يظن اكو خلل */}
+                {panelSafetyFactor < PANEL_SAFETY_FACTOR && (
+                  <span className="pill-old-rule">
+                    عرض قديم — بلا معامل أمان الألواح ({PANEL_SAFETY_FACTOR}×)، محفوظ مثل ما هو
+                  </span>
+                )}
               </p>
             )}
 

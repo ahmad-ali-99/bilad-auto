@@ -160,7 +160,8 @@ describe('البراند موصول بكل المسارات', () => {
   });
   it('ينحفظ مع العرض ويرجع عند فتحه', () => {
     expect(dataApi).toContain('brands: picked,');
-    expect(dataApi).toContain('|| hasBrandPick(picked)');   // العرض ينحفظ حتى لو ماكو زيادة/خصم
+    // اللقطة تنكتب بكل عرض بلا شرط — معامل أمان الألواح لازم ينحفظ حتى بالعرض البسيط
+    expect(dataApi).toContain('await api.config.set(`quote_adj_${quoteId}`, {');
     expect(prefill).toContain('brands: pruneBrandPick(normalizeBrandPick(adjustments || {}), systemType)');
   });
   it('بذاكرة المسودة وبـBLANK وبنداء المعاينة', () => {
