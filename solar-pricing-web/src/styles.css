@@ -1508,3 +1508,97 @@ h2.page-title::before {
   .mobile-bottomnav button { font-size: 0.54rem; }
   .mobile-bottomnav .nav-icon { font-size: 1rem; }
 }
+
+/* شارة صاحب المادة بالمخزون — تبيّن منو أضافها */
+.inv-card-owner {
+  display: inline-block;
+  margin-inline-start: 6px;
+  background: #eef3f8;
+  color: var(--navy);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+/* ═══ مبدّل البراند بشاشة العرض ═══════════════════════════════════════
+   يحصر اللوح والبطارية والانفيرتر بماركة وحدة. الأسماء تجي من المخزون. */
+.brand-pick {
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fbfcfe;
+}
+.brand-pick-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  color: var(--navy);
+}
+.brand-pick-head .muted { font-size: 0.78rem; font-weight: 600; }
+/* صف أفقي يتمرّر بالتلفون بدل ما يكسر الشاشة */
+.brand-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+.brand-chip {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 92px;
+  padding: 10px 12px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.12s;
+}
+.brand-chip:hover { border-color: #b9c9da; }
+.brand-chip:active { transform: scale(0.97); }
+.brand-chip.active {
+  border-color: var(--navy);
+  background: var(--navy-light);
+}
+.brand-chip .brand-name {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--navy);
+  white-space: nowrap;
+  max-width: 104px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.brand-all {
+  width: 34px; height: 34px;
+  display: grid; place-items: center;
+  border-radius: 9px;
+  background: var(--navy-light);
+  color: var(--navy);
+  border: 1px solid var(--border);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+/* شعار الماركة — صورة رسمية أو علامة مولّدة من الاسم */
+.brand-mark {
+  display: grid; place-items: center;
+  border-radius: 9px;
+  border: 1px solid;
+  font-weight: 800;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+}
+.brand-mark-img {
+  object-fit: contain;
+  border-radius: 9px;
+  background: #fff;
+}

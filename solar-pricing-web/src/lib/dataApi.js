@@ -7,7 +7,7 @@ import * as excelImport from './excelImport.js';
 import { exportInvoicePdf, quoteFileName } from './pdfExport.js';
 import { logActivity } from './activityLog.js';
 import { UNDO, DRAFT } from './activityUndo.js';
-import { isRestrictedUser, canViewQuotes, canEditSettings } from './permissions.js';
+import { isRestrictedUser, canEditSettings, canViewQuotes, canAddMaterial, canEditMaterial, canImportInventory, canEditLabor } from './permissions.js';
 import { installmentPlanLabel } from './installment.js';
 import { imageKey, isImageKey } from './materialImages.js';
 
@@ -146,6 +146,33 @@ async function currentUsername() {
   return user?.user_metadata?.username || '';
 }
 
+// مالك المادة: منو أضافها. ينخزن بـapp_config (بلا تعديل بنية القاعدة) —
+// نفس منفذ التوسعة اللي تمشي بيه الصور و`integrated_specs`.
+const ownerKey = (id) => `material_owner_${id}`;
+
+async function materialOwner(id) {
+  return api.config.get(ownerKey(id));
+}
+
+/** يمنع الكتابة على مادة ما يملكها الحساب — الحارس بطبقة البيانات مو بالواجهة */
+async function assertCanEditMaterial(id, what = 'هذه المادة') {
+  const me = await currentUsername();
+  const owner = await materialOwner(id);
+  if (!canEditMaterial(me, owner)) {
+    throw new Error(
+      owner
+        ? `${what} أضافها حساب «${owner}» — تعديلها محصور بصاحبها أو بحسابات الإدارة`
+        : `${what} من المخزون القديم — حسابك يقدر يعدّل بس المواد اللي يضيفها هو`
+    );
+  }
+}
+
+async function assertCanAddMaterial() {
+  if (!canAddMaterial(await currentUsername())) {
+    throw new Error('إضافة المواد محصورة بحسابات الإدارة');
+  }
+}
+
 async function assertCanEdit(what = 'هذه البيانات') {
   if (isRestrictedUser(await currentUsername())) {
     throw new Error(`حسابك للاطلاع فقط — تعديل ${what} محصور بحسابات الإدارة`);
@@ -183,7 +210,7 @@ export const api = {
     // صورة المنتج لكل مادة — تُستعمل بمنشور الباقات. تنخزن بـapp_config
     // (نفس منفذ التوسعة اللي يمشي بلا تعديل بنية القاعدة).
     async setImage(id, dataUrl) {
-      await assertCanEdit('المخزون');
+      await assertCanEditMaterial(id, 'صورة هذه المادة');
       const { error } = dataUrl
         ? await supabase.from('app_config').upsert({ key: imageKey(id), value: JSON.stringify(dataUrl) })
         : await supabase.from('app_config').delete().eq('key', imageKey(id));
@@ -196,6 +223,38 @@ export const api = {
     },
     async getImage(id) {
       return api.config.get(imageKey(id));
+    },
+    // أسماء الماركات الموجودة فعلاً بالمخزون — تغذّي مبدّل «البراند» بشاشة العرض.
+    // بس ماركات المواد الأساسية، وبس المفعّلة، ومرتبة أبجدياً.
+    async brands() {
+      const { data, error } = await supabase.from('materials').select('brand,category').order('brand');
+      throwIf(error);
+      const disabled = (await api.config.get('materials_disabled')) || [];
+      const MAIN = ['panel', 'battery', 'inverter', 'integrated'];
+      const seen = new Map();
+      for (const m of data || []) {
+        if (!MAIN.includes(m.category)) continue;
+        const b = String(m.brand || '').trim();
+        if (!b) continue;
+        const k = b.toLowerCase();
+        if (!seen.has(k)) seen.set(k, b);
+      }
+      return [...seen.values()].sort((a, b) => a.localeCompare(b, 'ar'));
+    },
+    // مُلّاك كل المواد بنداء واحد — شاشة المخزون تحتاجهم حتى تعرف أي مادة
+    // يقدر الحساب الحالي يعدّلها. { [id]: 'اسم الحساب' }
+    async owners() {
+      const { data, error } = await supabase.from('app_config').select('key,value').like('key', 'material_owner_%');
+      throwIf(error);
+      const map = {};
+      for (const row of data || []) {
+        const id = Number(row.key.slice('material_owner_'.length));
+        if (!id) continue;
+        try {
+          map[id] = JSON.parse(row.value);
+        } catch { /* قيمة تالفة — نتجاهلها فتبقى المادة بلا مالك */ }
+      }
+      return map;
     },
     // كل الصور دفعة وحدة — المنشور يحتاج صور عدة مواد بنداء واحد
     async images(ids = null) {
@@ -213,7 +272,7 @@ export const api = {
     // الجيك بوكس بصفحة المخزون: المادة المفعّلة تنعرض وتنستعمل بالعروض، والمخفية
     // تبقى بالمخزون بس تختفي من كل مسارات الاستخدام. الحركة تنسجل ولها استرجاع.
     async setActive(id, active) {
-      await assertCanEdit('المخزون');
+      await assertCanEditMaterial(id, 'هذه المادة');
       const before = (await api.config.get(MATERIALS_DISABLED_KEY)) || [];
       const off = new Set(before.map(Number));
       if (active) off.delete(Number(id));
@@ -232,10 +291,17 @@ export const api = {
       return { ok: true, active };
     },
     async create(data) {
-      await assertCanEdit('المخزون');
+      await assertCanAddMaterial();
       const { data: row, error } = await supabase.from('materials').insert(materialPayload(data)).select().single();
       throwIf(error);
       await saveIntegratedKw(row.id, data);
+      // نسجّل صاحب المادة — عليه تعتمد صلاحية تعديلها لاحقاً
+      const me = await currentUsername();
+      if (me) {
+        try {
+          await supabase.from('app_config').upsert({ key: ownerKey(row.id), value: JSON.stringify(me) });
+        } catch { /* تسجيل المالك اختياري — فشله ما يمنع إضافة المادة */ }
+      }
       logActivity('إضافة مادة', 'المخزون', {
         'المادة': row.full_description, 'السعر': row.price,
         [UNDO]: { kind: 'rowInsert', table: 'materials', id: row.id, config: { key: `integrated_specs_${row.id}` }, label: 'حذف المادة المضافة', confirm: `حذف المادة «${row.full_description}» اللي انضافت بهذه الحركة` },
@@ -243,7 +309,7 @@ export const api = {
       return row;
     },
     async update(id, data) {
-      await assertCanEdit('المخزون');
+      await assertCanEditMaterial(id, 'هذه المادة');
       // لقطة الصف كامل قبل التعديل — السجل يبيّن شنو تغيّر، والاسترجاع يرجّع كل
       // الأعمدة مثل ما كانت (مو السعر بس)
       const { data: old } = await supabase.from('materials').select('*').eq('id', id).maybeSingle();
@@ -261,7 +327,7 @@ export const api = {
       return row;
     },
     async remove(id) {
-      await assertCanEdit('المخزون');
+      await assertCanEditMaterial(id, 'هذه المادة');
       const { data: old } = await supabase.from('materials').select('*').eq('id', id).maybeSingle();
       const oldKw = old?.category === 'integrated' ? await api.config.get(`integrated_specs_${id}`) : null;
       const { error } = await supabase.from('materials').delete().eq('id', id);
@@ -273,6 +339,9 @@ export const api = {
       return { ok: true };
     },
     async parseExcel() {
+      if (!canImportInventory(await currentUsername())) {
+        throw new Error('الاستيراد من إكسل محصور بحسابات الإدارة');
+      }
       const file = await pickFile('.xlsx,.xls,.csv');
       if (!file) return { canceled: true };
       const buffer = await readArrayBuffer(file);
@@ -448,10 +517,21 @@ export const api = {
         // معاملات أمان البطاريات لكل مستوى — من الإعدادات المشتركة (وإلا الافتراضي بالمحرك)
         api.config.get('battery_factors'),
       ]);
+      // فلتر البراند: يحصر *المواد الأساسية* (لوح/بطارية/انفيرتر/كابينة) بماركة
+      // واحدة، وتبقى المواد الثانوية والأجور مثل ما هي — أغلب الثانوية بلا ماركة
+      // أصلاً، وحذفها يكسر العرض (هيكل وصبّات وأسلاك).
+      const MAIN = ['panel', 'battery', 'inverter', 'integrated'];
+      const wanted = String(input.brand || '').trim();
+      const brandOf = (m) => String(m.brand || '').trim().toLowerCase();
+      const active = materials.filter((m) => m.active !== false);
+      const filtered = wanted
+        ? active.filter((m) => !MAIN.includes(m.category) || brandOf(m) === wanted.toLowerCase())
+        : active;
+
       return quoteService.buildOptions({
         // المواد المخفية (بلا جيك بوكس) ما تدخل محرك التسعير إطلاقاً: لا اختيار
         // تلقائي ولا قوائم تبديل يدوي ولا مواد ثانوية
-        materials: materials.filter((m) => m.active !== false),
+        materials: filtered,
         laborTiers: laborTiers || [],
         settingsRow,
         roofAreaM2: input.roofAreaM2,
@@ -566,7 +646,7 @@ export const api = {
       const systemType = input.systemType || null;
       const active =
         (Number(a.markupPercent) || 0) > 0 || (Number(a.discountPercent) || 0) > 0 || a.installment?.enabled ||
-        hasExtra || !!sel || !!systemType || !!counts;
+        hasExtra || !!sel || !!systemType || !!counts || !!input.brand;
       try {
         await api.config.set(`quote_adj_${quoteId}`, active ? {
           // ذاكرة المواد الثانوية كما أدخلها البياع — فتح التعديل يرجعها حرفياً
@@ -574,6 +654,8 @@ export const api = {
           markupPercent: Number(a.markupPercent) || 0,
           markupMode: a.markupMode === 'distributed' ? 'distributed' : 'visible',
           discountPercent: Number(a.discountPercent) || 0,
+          // البراند المختار — بدونه يرجع العرض المحفوظ بكل الماركات وتتبدل مواده
+          brand: input.brand || null,
           // لقطة نسبة الفائدة والأشهر والخطة وقت الحفظ — تغيير الإعدادات لاحقاً لا يغير العروض المحفوظة.
           // `plan` كان ناقصاً فكل عرض محفوظ يرجع باسم «مصرف النهرين» حتى لو انحفظ بمبادرة البنك المركزي.
           // `distributed` يميّز العروض الجديدة (الفائدة داخل أسعار البنود) عن القديمة (بنود بسعر الكاش) —

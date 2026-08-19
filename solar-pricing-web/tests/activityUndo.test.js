@@ -101,7 +101,12 @@ describe('المواد المخفية ما تدخل أي مسار استخدام
   const read = (p) => fs.readFileSync(path.join(HERE, p), 'utf8');
 
   it('محرك التسعير يستلم المفعّلة فقط', () => {
-    expect(dataApiSrc).toMatch(/materials: materials\.filter\(\(m\) => m\.active !== false\)/);
+    // المفعّلة تنفرز أول، وبعدها ينطبق فلتر البراند على الناتج — فالمخفية
+    // ما توصل المحرك بأي حالة
+    expect(dataApiSrc).toMatch(/const active = materials\.filter\(\(m\) => m\.active !== false\)/);
+    expect(dataApiSrc).toMatch(/\? active\.filter\(/);
+    expect(dataApiSrc).toMatch(/: active;/);
+    expect(dataApiSrc).toMatch(/materials: filtered,/);
   });
 
   it('نافذة المواد الثانوية بشاشتي الموظف والزبون تفلتر المخفية', () => {

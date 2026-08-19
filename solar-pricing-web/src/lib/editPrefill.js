@@ -39,6 +39,8 @@ export async function buildEditPrefill(quoteId) {
       clientName: full.quote.client_name || '',
     },
     systemType,
+    // البراند المحفوظ — بدونه يرجع العرض بكل الماركات ويتبدل اختيار المواد
+    brand: adjustments?.brand || '',
     // الأعداد المثبتة يدوياً ترجع كما حُفظت
     unitCounts: adjustments?.unitCounts || null,
     createdBy: full.quote.created_by || '',

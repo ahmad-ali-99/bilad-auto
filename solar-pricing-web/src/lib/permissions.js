@@ -14,6 +14,12 @@ import { isAdminName } from './agent.js';
 
 const RESTRICTED_USERS = ['بكر', 'علي سبتي', 'ليث كرادة'];
 
+// حسابات «تضيف بس ما تعدّل على القديم»: تكدر تضيف مواد جديدة للمخزون وتعدّل
+// وتحذف اللي أضافته هي فقط. المخزون القديم (اللي ما أضافته) يبقى للقراءة عندها،
+// وباقي صلاحيات الحساب ما تتغير (بلا إعدادات، وتشوف عروضها هي بس).
+// المشرفون يعدّلون كل شي بضمنه اللي يضيفه هؤلاء.
+const INVENTORY_CONTRIBUTORS = ['بكر'];
+
 // توحيد شكل الاسم قبل المقارنة: مسافات الأطراف، والمسافات المتعددة داخل الاسم
 // (الأسماء الثنائية مثل «علي سبتي» تنكتب أحياناً بمسافتين — بدونها تفشل المطابقة
 // وينفتح الحساب بصلاحيات كاملة بلا ما ننتبه)، وتوحيد الهمزة والألف المقصورة.
@@ -28,9 +34,44 @@ export function isRestrictedUser(username) {
   return RESTRICTED_USERS.some((r) => norm(r) === u);
 }
 
-// تعديل المخزون (مواد، أسعار، أجور عمل، استيراد إكسل)
+// تعديل المخزون كاملاً (كل المواد والأجور والاستيراد) — الحسابات غير المقيّدة
 export function canEditInventory(username) {
   return !isRestrictedUser(username);
+}
+
+// حساب يضيف مواد جديدة ويملك اللي يضيفه
+export function isInventoryContributor(username) {
+  const u = norm(username);
+  return INVENTORY_CONTRIBUTORS.some((r) => norm(r) === u);
+}
+
+// هل يقدر يضيف مادة جديدة للمخزون؟
+export function canAddMaterial(username) {
+  return canEditInventory(username) || isInventoryContributor(username);
+}
+
+/**
+ * هل يقدر يعدّل/يحذف *هذه* المادة بالذات؟
+ * @param {string} username الحساب الحالي
+ * @param {string|null} owner الحساب اللي أضاف المادة (من app_config)
+ *
+ * المشرفون والحسابات غير المقيّدة: كل شي.
+ * حساب «الإضافة»: اللي أضافه هو فقط — والمواد القديمة بلا مالك تبقى ممنوعة عليه.
+ */
+export function canEditMaterial(username, owner) {
+  if (canEditInventory(username)) return true;
+  if (!isInventoryContributor(username)) return false;
+  return !!owner && norm(owner) === norm(username);
+}
+
+// أجور العمل والاستيراد من إكسل يبقون للحسابات الكاملة:
+// الاستيراد *يحدّث* مواد موجودة بالمطابقة، فلو انفتح لحساب الإضافة صار طريقاً
+// جانبياً يعدّل بيه المخزون القديم.
+export function canImportInventory(username) {
+  return canEditInventory(username);
+}
+export function canEditLabor(username) {
+  return canEditInventory(username);
 }
 
 // تعديل إعدادات الحساب وملف الشركة والملاحظات الافتراضية — للمشرفين حصراً

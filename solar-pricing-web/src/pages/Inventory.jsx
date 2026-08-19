@@ -3,7 +3,7 @@ import MaterialFormModal from '../components/MaterialFormModal.jsx';
 import LaborTable from '../components/LaborTable.jsx';
 import ImportPreviewModal from '../components/ImportPreviewModal.jsx';
 import { getCurrentUsername } from '../lib/agent.js';
-import { canEditInventory } from '../lib/permissions.js';
+import { canEditInventory, canAddMaterial, canEditMaterial, canImportInventory, canEditLabor } from '../lib/permissions.js';
 import { useMediaQuery, PHONE } from '../lib/useMediaQuery.js';
 
 const TABS = [
@@ -24,7 +24,7 @@ function capacityLabel(category) {
 // بطاقة مادة — شكل الموبايل. الجدول بثمانية أعمدة عرضه الأدنى ٦٤٠ بكسل والتلفون
 // ٤٣٠، فالسعر وأزرار التعديل كانوا يطلعون برّا الشاشة ويحتاجون تمريراً أفقياً
 // داخل صندوق. بالبطاقة كل شي بمتناول الإصبع بلا أي تمرير أفقي.
-function MaterialCard({ m, capacityLabel, canEdit, onToggle, onEdit, onDelete }) {
+function MaterialCard({ m, capacityLabel, canEdit, owner, onToggle, onEdit, onDelete }) {
   const hidden = m.active === false;
   return (
     <div className={`inv-card${hidden ? ' inv-card-off' : ''}`}>
@@ -38,6 +38,7 @@ function MaterialCard({ m, capacityLabel, canEdit, onToggle, onEdit, onDelete })
         <div className="inv-card-title">
           <b>{m.brand}</b> {m.model}
           {hidden && <span className="inv-card-badge">مخفية</span>}
+          {owner && <span className="inv-card-owner">أضافها {owner}</span>}
         </div>
       </div>
       {/* بلا نقطتين بعد القوس اللاتيني — بالعربي تنطّ النقطتان لمحل غلط */}
@@ -67,9 +68,19 @@ export default function Inventory({ initialSearch }) {
   const [tab, setTab] = useState('panel');
   // حسابات مقيّدة: تشوف المخزون والأسعار كاملة بس بلا أي تعديل
   const [canEdit, setCanEdit] = useState(true);
+  // اسم الحساب ومُلّاك المواد — عليهم تعتمد صلاحية التعديل لكل مادة على حدة.
+  // حساب «الإضافة» (بكر) يضيف مواداً جديدة ويعدّل اللي أضافه هو بس.
+  const [me, setMe] = useState('');
+  const [owners, setOwners] = useState({});
   useEffect(() => {
-    getCurrentUsername().then((n) => setCanEdit(canEditInventory(n))).catch(() => {});
+    getCurrentUsername().then((n) => {
+      setMe(n);
+      setCanEdit(canEditInventory(n));
+    }).catch(() => {});
+    window.api.materials.owners().then(setOwners).catch(() => {});
   }, []);
+  const canAdd = canAddMaterial(me);
+  const mayEdit = (m) => canEditMaterial(me, owners[m.id]);
   const [materials, setMaterials] = useState([]);
   const [search, setSearch] = useState('');
 
@@ -153,6 +164,8 @@ export default function Inventory({ initialSearch }) {
       await window.api.materials.setImage(id, image);
     }
     setShowForm(false);
+    // المالك انسجّل توّه — بلا تحديثه تبقى المادة الجديدة بلا أزرار تعديل
+    window.api.materials.owners().then(setOwners).catch(() => {});
     reload();
   }
 
@@ -172,7 +185,7 @@ export default function Inventory({ initialSearch }) {
     <div>
       <div className="toolbar">
         <h2 className="page-title" style={{ margin: 0 }}>المخزون</h2>
-        {canEdit && (
+        {canImportInventory(me) && (
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-secondary" onClick={handleDownloadTemplate}>
               تحميل قالب Excel
@@ -193,7 +206,7 @@ export default function Inventory({ initialSearch }) {
       </div>
 
       {tab === 'labor' ? (
-        <LaborTable canEdit={canEdit} />
+        <LaborTable canEdit={canEditLabor(me)} />
       ) : (
         <>
           <div className="toolbar">
@@ -204,7 +217,7 @@ export default function Inventory({ initialSearch }) {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            {canEdit && (
+            {canAdd && (
               <button className="btn btn-primary" onClick={openAddForm}>
                 + إضافة مادة
               </button>
@@ -220,7 +233,8 @@ export default function Inventory({ initialSearch }) {
                   key={m.id}
                   m={m}
                   capacityLabel={capacityLabel(tab)}
-                  canEdit={canEdit}
+                  canEdit={mayEdit(m)}
+                  owner={owners[m.id]}
                   onToggle={toggleActive}
                   onEdit={openEditForm}
                   onDelete={handleDelete}
@@ -244,7 +258,7 @@ export default function Inventory({ initialSearch }) {
                 <th>{capacityLabel(tab)}</th>
                 <th>السعر (دينار)</th>
                 <th>الضمان (شهر)</th>
-                {canEdit && <th>إجراءات</th>}
+                {canAdd && <th>إجراءات</th>}
               </tr>
             </thead>
             <tbody>
@@ -254,10 +268,10 @@ export default function Inventory({ initialSearch }) {
                     <input
                       type="checkbox"
                       checked={m.active !== false}
-                      disabled={!canEdit}
+                      disabled={!mayEdit(m)}
                       onChange={() => toggleActive(m)}
                       title={m.active === false ? 'مخفية من العروض — أشّر عليها لتستعملها' : 'مفعّلة — شيل التأشير لتخفيها من العروض'}
-                      style={{ width: 18, height: 18, cursor: canEdit ? 'pointer' : 'default' }}
+                      style={{ width: 18, height: 18, cursor: mayEdit(m) ? 'pointer' : 'default' }}
                     />
                   </td>
                   <td className="muted">{m.id}</td>
@@ -269,21 +283,29 @@ export default function Inventory({ initialSearch }) {
                   <td>{m.watt_or_capacity ?? '-'}</td>
                   <td>{Number(m.price).toLocaleString('en-US')}</td>
                   <td>{m.warranty_months ?? '-'}</td>
-                  {canEdit && (
+                  {canAdd && (
                     <td>
-                      <button className="btn btn-secondary btn-sm" onClick={() => openEditForm(m)}>
-                        تعديل
-                      </button>{' '}
-                      <button className="btn btn-danger btn-sm" onClick={() => handleDelete(m.id)}>
-                        حذف
-                      </button>
+                      {mayEdit(m) ? (
+                        <>
+                          <button className="btn btn-secondary btn-sm" onClick={() => openEditForm(m)}>
+                            تعديل
+                          </button>{' '}
+                          <button className="btn btn-danger btn-sm" onClick={() => handleDelete(m.id)}>
+                            حذف
+                          </button>
+                        </>
+                      ) : (
+                        <span className="muted" style={{ fontSize: '0.78rem' }}>
+                          {owners[m.id] ? `أضافها ${owners[m.id]}` : 'مخزون قديم'}
+                        </span>
+                      )}
                     </td>
                   )}
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={canEdit ? 8 : 7} className="muted" style={{ textAlign: 'center', padding: 20 }}>
+                  <td colSpan={canAdd ? 8 : 7} className="muted" style={{ textAlign: 'center', padding: 20 }}>
                     لا توجد مواد بهذه الفئة بعد
                   </td>
                 </tr>
