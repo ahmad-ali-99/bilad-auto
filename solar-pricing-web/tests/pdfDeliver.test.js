@@ -215,3 +215,44 @@ describe('تسليم الملف بسفاري الآيفون', () => {
     expect(body).toContain('a.click()');
   });
 });
+
+// العطل بقي بعد إصلاح المشاركة: الرسالة «التصدير طوّل» تعني إن التعليق **قبل**
+// خطوة التسليم — أي بتوليد الملف. ومسار التوليد فيه انتظارات مفتوحة بلا نهاية،
+// و`try/catch` ما ينفع معها: هو يمسك الأخطاء لا التعليق.
+describe('كل خطوة بتوليد الملف إلها سقف زمني', () => {
+  it('اكو مساعد سقف عام ببديل بدل الرمي', () => {
+    expect(src).toContain('function withLimit');
+    expect(src).toMatch(/const guard = new Promise\(\(resolve\) => \{ timer = setTimeout\(\(\) => resolve\(fallback\)/);
+  });
+
+  it('انتظار جاهزية الخطوط محدود — ممكن ما تنحل بسفاري', () => {
+    expect(src).toContain('withLimit(document.fonts.ready, FONT_READY_LIMIT)');
+    expect(src).not.toMatch(/^\s*await document\.fonts\.ready;$/m);
+  });
+
+  it('تحميل حزمة الثري-دي محدود — `import()` المعلّق ما يمسكه catch', () => {
+    expect(src).toContain('STRUCTURE_LIMIT');
+    const blk = src.slice(src.indexOf("await import('./structure3d.js')") - 400);
+    expect(blk.slice(0, 700)).toContain('withLimit(');
+    // بلا صورة نتخطى صفحة الغلاف بدل ما نمرر قيمة فارغة
+    expect(src).toContain('if (img) {');
+  });
+
+  it('toBlob محدود وله بديل متزامن', () => {
+    expect(src).toContain('TO_BLOB_LIMIT');
+    expect(src).toContain("canvas.toDataURL('image/png').split(',')[1]");
+    expect(src).not.toContain('const blob = await new Promise((res) => canvas.toBlob(res, ');
+  });
+
+  it('السقوف معقولة — تكفي الجهاز البطيء وما تخلي البياع ينتظر', () => {
+    for (const [name, lo, hi] of [['FONT_READY_LIMIT', 4000, 15000],
+                                  ['STRUCTURE_LIMIT', 8000, 30000],
+                                  ['TO_BLOB_LIMIT', 5000, 20000]]) {
+      const m = src.match(new RegExp('const ' + name + ' = (\\d+);'));
+      expect(m, name).toBeTruthy();
+      const v = Number(m[1]);
+      expect(v, name).toBeGreaterThanOrEqual(lo);
+      expect(v, name).toBeLessThanOrEqual(hi);
+    }
+  });
+});

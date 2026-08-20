@@ -66,8 +66,11 @@ describe('انتظار الخط قبل الالتقاط', () => {
   });
 
   it('ما بقت انتظارة fonts.ready وحدها قبل الالتقاط', () => {
-    // fonts.ready تنحل فوراً إذا ماكو طلب معلّق — لازم تجي داخل ensureArabicFont فقط
-    const bare = [...pdfSrc.matchAll(/await document\.fonts\.ready/g)];
-    expect(bare.length, 'انتظارة fonts.ready لازم تكون بمكان واحد داخل ensureArabicFont').toBe(1);
+    // fonts.ready تنحل فوراً إذا ماكو طلب معلّق — لازم تجي داخل ensureArabicFont فقط،
+    // وصارت **محدودة بسقف** لأنها ممكن ما تنحل أبداً بسفاري إذا علق وجه خط
+    // نعد النداء الفعلي بس — التعليقات تذكرها بالاسم فما تنحسب
+    const calls = [...pdfSrc.matchAll(/withLimit\(document\.fonts\.ready,/g)];
+    expect(calls.length, 'النداء لازم يكون بمكان واحد داخل ensureArabicFont').toBe(1);
+    expect(pdfSrc, 'ماكو انتظارة مكشوفة بلا سقف').not.toMatch(/await document\.fonts\.ready\s*;/);
   });
 });

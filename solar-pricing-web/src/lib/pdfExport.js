@@ -35,6 +35,25 @@ export function quoteFileName(clientName, quoteNumber) {
   return num ? `عرض سعر ${num}.pdf` : 'عرض سعر معاينة.pdf';
 }
 
+// حدّ زمني لأي خطوة بمسار التصدير.
+//
+// الدرس اللي جابه: `try/catch` يمسك **الأخطاء** بس، وما ينفع مع **التعليق**.
+// وبمسار التصدير أكثر من انتظار مفتوح بلا نهاية: تحميل حزمة الثري-دي عبر
+// `import()` الديناميكي، و`document.fonts.ready`، و`canvas.toBlob`. أي وحدة منهن
+// تعلّق بتلفون على شبكة ضعيفة أو ذاكرة مضغوطة = التصدير كله يعلّق بلا رسالة.
+// الحل: كل خطوة إلها سقف، وتجاوزه يعني نكمل بالبديل — نخسر صفحة الغلاف مثلاً
+// بس يطلع الملف، وهذا أحسن بكثير من دوامة تحميل.
+function withLimit(promise, ms, fallback = null) {
+  let timer;
+  const guard = new Promise((resolve) => { timer = setTimeout(() => resolve(fallback), ms); });
+  return Promise.race([promise, guard]).finally(() => clearTimeout(timer));
+}
+
+// سقوف الخطوات (مللي ثانية)
+const FONT_READY_LIMIT = 8000;    // انتظار جاهزية الخطوط
+const STRUCTURE_LIMIT = 15000;    // تحميل حزمة الثري-دي ورسم صفحة الغلاف
+const TO_BLOB_LIMIT = 10000;      // تحويل الرسم لملف صورة
+
 // الأوزان المستعملة بصفحات العرض (الفاتورة تستعمل 700، والغلاف 600 و800)
 const SHEET_WEIGHTS = [400, 600, 700, 800];
 
@@ -57,7 +76,8 @@ async function ensureArabicFont(el) {
   } catch {
     /* متصفح قديم بلا Font Loading API — ننتظر fonts.ready لوحدها */
   }
-  await document.fonts.ready;
+  // `document.fonts.ready` ممكن ما تنحل أبداً بسفاري إذا وجه خط علق بالتحميل
+  await withLimit(document.fonts.ready, FONT_READY_LIMIT);
 }
 
 // يرسم HTML لعنصر مخفي → canvas ويضيفه صفحة كاملة بالـPDF (لصفحة التصميم/الغلاف).
@@ -413,11 +433,18 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
           const html = buildStructurePageHtml(panelCount, company, CABINET_IMAGE, capability, cabinet);
           if (html) await addHtmlPage(pdf, html, ensurePage, pageWmm, pageHmm);
         } else if (panelCount > 0) {
-          // three.js يُحمّل ديناميكياً هنا فقط (وقت التصدير) حتى ما يثقل فتح التطبيق
-          const { renderStructurePng } = await import('./structure3d.js');
-          const img = await renderStructurePng(panelCount, { width: 1000, height: 620 });
-          const structHtml = buildStructurePageHtml(panelCount, company, img || '', capability);
-          if (structHtml) await addHtmlPage(pdf, structHtml, ensurePage, pageWmm, pageHmm);
+          // three.js يُحمّل ديناميكياً هنا فقط (وقت التصدير) حتى ما يثقل فتح التطبيق.
+          // بسقف زمني: تحميل الحزمة عبر الشبكة ممكن يعلّق بتلفون على LTE ضعيف،
+          // و`import()` المعلّق ما يرميه catch — يبلع التصدير كله بصمت.
+          const img = await withLimit((async () => {
+            const { renderStructurePng } = await import('./structure3d.js');
+            return renderStructurePng(panelCount, { width: 1000, height: 620 });
+          })(), STRUCTURE_LIMIT, null);
+          // بلا صورة هيكل نتخطى صفحة الغلاف كلياً — الملف يطلع بلاها بدل ما يعلّق
+          if (img) {
+            const structHtml = buildStructurePageHtml(panelCount, company, img, capability);
+            if (structHtml) await addHtmlPage(pdf, structHtml, ensurePage, pageWmm, pageHmm);
+          }
         }
       } catch {
         /* فشل الرندر 3D (WebGL غير متاح) — نتخطى صفحة الهيكل بلا كسر العرض */
@@ -492,7 +519,17 @@ export async function exportPosterPng(innerHtml, fileName, { width = 1300, heigh
     const canvas = await html2canvas(host.firstElementChild || host, {
       scale, useCORS: true, backgroundColor: '#ffffff', width, height,
     });
-    const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
+    // `toBlob` ما يرجّع أبداً ببعض أجهزة iOS لما تكون الرسمة كبيرة أو الذاكرة
+    // مضغوطة — فبسقف، وبديله `toDataURL` المتزامن
+    let blob = await withLimit(new Promise((res) => canvas.toBlob(res, 'image/png')), TO_BLOB_LIMIT, null);
+    if (!blob) {
+      try {
+        const parts = canvas.toDataURL('image/png').split(',')[1];
+        const bin = atob(parts);
+        const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+        blob = new Blob([bytes], { type: 'image/png' });
+      } catch { /* حتى البديل فشل */ }
+    }
     if (!blob) throw new Error('ما انبنت الصورة');
     downloadBlob(blob, fileName);
     return { canceled: false, width: canvas.width, height: canvas.height };
