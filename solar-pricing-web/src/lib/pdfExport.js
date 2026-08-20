@@ -169,6 +169,8 @@ async function shareViaCapacitor(blob, fileName) {
 // فنعرض زر مشاركة بضغطة جديدة (إذن جديد) + زر تنزيل — حتى ما يضيع الملف بصمت أبداً.
 function showDeliverDialog({ pdfFile, blob, fileName, allowShare }) {
   return new Promise((resolve) => {
+    // من هنا وطالع إحنا ننتظر **المستخدم** مو الجهاز
+    stopBusyIndicator();
     const overlay = document.createElement('div');
     overlay.style.cssText =
       'position:fixed;inset:0;background:rgba(12,22,38,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
@@ -221,8 +223,58 @@ function showDeliverDialog({ pdfFile, blob, fileName, allowShare }) {
   });
 }
 
+// `navigator.share` بمتصفح التلفون ممكن **ما يرجّع أبداً**: لا ينجح ولا يرمي خطأ.
+// السبب إن المشاركة تحتاج «لمسة مستخدم حيّة»، وتوليد ملف الـPDF ياخذ ثوانٍ
+// (رسم الجدول وصفحة التصميم وانتظار الخطوط)، فتنتهي صلاحية اللمسة قبل ما نناديها.
+// بعض إصدارات سفاري وكروم بهذي الحالة تخلي الوعد معلّقاً للأبد — والنتيجة اللي
+// يشوفها البياع: شريط تحميل يلف بلا نهاية وبلا ملف وبلا رسالة.
+// العلاج: نسابق المشاركة بمهلة، وإذا ما ردّت نفتح نافذة الخيارات — زر المشاركة
+// بيها يشتغل بلمسة جديدة (إذن جديد) فينجح.
+const SHARE_TIMEOUT_MS = 12000;
+const SHARE_TIMED_OUT = Symbol('share-timeout');
+
+// شريط التحميل العام يتغذى من عدّاد نداءات الـapi (main.jsx). لما ننتظر **المستخدم**
+// — لوحة مشاركة مفتوحة أو نافذة خيارات — نطفيه صراحةً: البرنامج مو مشغول، هو ينتظر.
+function stopBusyIndicator() {
+  try {
+    window.dispatchEvent(new CustomEvent('api-busy', { detail: { busy: false } }));
+  } catch {
+    /* بيئة بلا نافذة (اختبارات) — ما يهم */
+  }
+}
+
+// المهلة تنطبق **فقط** إذا ما انفتحت لوحة المشاركة أصلاً. إذا انفتحت فعلاً
+// الصفحة تفقد التركيز (blur / visibilitychange) — وهنا ننتظر المستخدم بلا مهلة،
+// حتى ما نطلعله نافذتنا فوق لوحة المشاركة وهو يختار واتساب.
+function shareWithTimeout(pdfFile, fileName) {
+  let timer;
+  let sheetOpened = false;
+  const onLeave = () => {
+    sheetOpened = true;
+    clearTimeout(timer);
+    // لوحة المشاركة مفتوحة والدور صار على المستخدم — نطفي شريط التحميل، وإلا
+    // يرجع يظهر وكأن البرنامج معلّق وهو ينتظر اختياره
+    stopBusyIndicator();
+  };
+  window.addEventListener('blur', onLeave, { once: true });
+  document.addEventListener('visibilitychange', onLeave, { once: true });
+  const cleanup = () => {
+    clearTimeout(timer);
+    window.removeEventListener('blur', onLeave);
+    document.removeEventListener('visibilitychange', onLeave);
+  };
+
+  const share = navigator.share({ files: [pdfFile], title: fileName })
+    .then(() => 'shared', (err) => err || new Error('share failed'));
+  const guard = new Promise((resolve) => {
+    timer = setTimeout(() => { if (!sheetOpened) resolve(SHARE_TIMED_OUT); }, SHARE_TIMEOUT_MS);
+  });
+  return Promise.race([share, guard]).finally(cleanup);
+}
+
 // إيصال الملف للمستخدم بالترتيب: مشاركة أصلية (تطبيق أندرويد) ← مشاركة ويب ←
-// نافذة الخيارات عند فشل الإذن ← تنزيل مباشر. مصدَّرة حتى تنفحص بالاختبارات.
+// نافذة الخيارات عند فشل الإذن أو تعليقه ← تنزيل مباشر.
+// مصدَّرة حتى تنفحص بالاختبارات.
 export async function deliverPdf(blob, fileName) {
   const pdfFile = new File([blob], fileName, { type: 'application/pdf' });
 
@@ -230,14 +282,11 @@ export async function deliverPdf(blob, fileName) {
   if (nativeResult) return nativeResult;
 
   if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-    try {
-      await navigator.share({ files: [pdfFile], title: fileName });
-      return { canceled: false, shared: true };
-    } catch (err) {
-      if (err && err.name === 'AbortError') return { canceled: true };
-      // غالباً انتهى إذن المشاركة (NotAllowedError) — نعرض الخيارات بضغطة جديدة
-      return showDeliverDialog({ pdfFile, blob, fileName, allowShare: true });
-    }
+    const outcome = await shareWithTimeout(pdfFile, fileName);
+    if (outcome === 'shared') return { canceled: false, shared: true };
+    if (outcome && outcome.name === 'AbortError') return { canceled: true };
+    // انتهت المهلة (وعد معلّق) أو انرفض الإذن (NotAllowedError) — الخيارات بضغطة جديدة
+    return showDeliverDialog({ pdfFile, blob, fileName, allowShare: true });
   }
 
   downloadBlob(blob, fileName);
