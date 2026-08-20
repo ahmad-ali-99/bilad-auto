@@ -12,12 +12,12 @@ const customer = fs.readFileSync(path.join(HERE, '../src/pages/CustomerView.jsx'
 // لأن «لمسة المستخدم» تنتهي أثناء توليد الملف — فبقى شريط التحميل يلف بلا نهاية.
 describe('التصدير بالتلفون ما يعلّق بلا نهاية', () => {
   it('المشاركة منسابقة بمهلة — ماكو await عارية على navigator.share', () => {
-    expect(src).toContain('function shareWithTimeout');
+    expect(src).toContain('function shareFile');
     expect(src).toContain('SHARE_TIMED_OUT');
     // ماكو نداء مباشر بلا حارس داخل deliverPdf
     const deliver = src.slice(src.indexOf('export async function deliverPdf'));
     const body = deliver.slice(0, deliver.indexOf('\n}'));
-    expect(body).toContain('shareWithTimeout(pdfFile, fileName)');
+    expect(body).toContain('shareFile(pdfFile, fileName)');
     expect(body).not.toMatch(/await navigator\.share\(/);
   });
 
@@ -33,9 +33,9 @@ describe('التصدير بالتلفون ما يعلّق بلا نهاية', ()
 
   it('لوحة المشاركة إذا انفتحت فعلاً ما تنقطع بالمهلة', () => {
     // فقدان تركيز الصفحة = اللوحة مفتوحة والدور على المستخدم
-    expect(src).toContain("window.addEventListener('blur', onLeave");
-    expect(src).toContain("document.addEventListener('visibilitychange', onLeave");
-    expect(src).toContain('if (!sheetOpened) resolve(SHARE_TIMED_OUT)');
+    expect(src).toContain("window.addEventListener('blur', onLeave)");
+    expect(src).toContain("document.addEventListener('visibilitychange', onVisibility)");
+    expect(src).toContain('if (!wentAway) finish(SHARE_TIMED_OUT)');
   });
 
   it('شريط التحميل يطفى وقت انتظار المستخدم — مو وقت انتظار الجهاز', () => {
@@ -138,5 +138,44 @@ describe('الرسالة تبين والشريط يهدأ', () => {
     // التحرير مرة وحدة بس — ما ننقص العدّاد مرتين لو رجع النداء بعد السقف
     expect(main).toContain('if (released) return;');
     expect(main).toContain('pendingCount = Math.max(0, pendingCount - 1)');
+  });
+});
+
+// السلسلة اللي وصفها المستخدم: صدّر ← نافذة الخيارات ← «مشاركة» ← واتساب ←
+// رجع للبرنامج ← وبعدها طلعت «التصدير طوّل أكثر من 60 ثانية» رغم إن الملف
+// انبعث فعلاً. السبب: `navigator.share` ما يرجّع أبداً بعد الرجوع من واتساب.
+describe('الرجوع من واتساب يعني إن المشاركة خلصت', () => {
+  it('ننتظر رجوع الصفحة للمقدمة مو رد المشاركة لحاله', () => {
+    expect(src).toContain('SHARE_RETURNED');
+    expect(src).toContain("window.addEventListener('focus', onReturn)");
+    expect(src).toContain("document.addEventListener('visibilitychange', onVisibility)");
+    // الخروج والرجوع الاثنان مرصودان
+    expect(src).toContain("document.visibilityState === 'hidden'");
+  });
+
+  it('الرجوع يُحسب نجاحاً مو خطأ', () => {
+    const deliver = src.slice(src.indexOf('export async function deliverPdf'));
+    const body = deliver.slice(0, deliver.indexOf('\n}'));
+    expect(body).toContain('if (outcome === SHARE_RETURNED) return { canceled: false, shared: true }');
+  });
+
+  it('زر المشاركة بنافذة الخيارات يمر بنفس القاعدة', () => {
+    const dlg = src.slice(src.indexOf('shareBtn.onclick'));
+    const body = dlg.slice(0, dlg.indexOf('};'));
+    expect(body).toContain('shareFile(pdfFile, fileName)');
+    expect(body).toContain('SHARE_RETURNED');
+    expect(body).not.toMatch(/await navigator\.share\(/);
+  });
+
+  it('مهلة قصيرة بعد الرجوع تنطي فرصة للنتيجة الحقيقية', () => {
+    expect(src).toMatch(/returnTimer = setTimeout\(\(\) => finish\(SHARE_RETURNED\), \d+\)/);
+  });
+
+  it('المهلة الأصلية تنطبق فقط إذا اللوحة ما انفتحت', () => {
+    expect(src).toContain('if (!wentAway) finish(SHARE_TIMED_OUT)');
+  });
+
+  it('الإلغاء الصريح يبقى إلغاءً', () => {
+    expect(src).toContain("outcome.name === 'AbortError'");
   });
 });

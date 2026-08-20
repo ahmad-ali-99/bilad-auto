@@ -197,14 +197,16 @@ function showDeliverDialog({ pdfFile, blob, fileName, allowShare }) {
     if (allowShare) {
       const shareBtn = btn('📤 مشاركة (واتساب وغيره)', true);
       shareBtn.onclick = async () => {
-        try {
-          await navigator.share({ files: [pdfFile], title: fileName });
+        // نفس قاعدة المشاركة بالأعلى: الرجوع من واتساب يعني إنها خلصت، وبدونه
+        // تبقى النافذة مفتوحة للأبد لأن الوعد ما يرد
+        const outcome = await shareFile(pdfFile, fileName);
+        if (outcome === 'shared' || outcome === SHARE_RETURNED) {
           done({ canceled: false, shared: true });
-        } catch (err) {
-          if (err && err.name === 'AbortError') return; // رجع من قائمة المشاركة — النافذة تبقى
-          downloadBlob(blob, fileName);
-          done({ canceled: false, shared: false });
+          return;
         }
+        if (outcome && outcome.name === 'AbortError') return; // ألغى من القائمة — النافذة تبقى
+        downloadBlob(blob, fileName);
+        done({ canceled: false, shared: false });
       };
       box.appendChild(shareBtn);
     }
@@ -232,6 +234,8 @@ function showDeliverDialog({ pdfFile, blob, fileName, allowShare }) {
 // بيها يشتغل بلمسة جديدة (إذن جديد) فينجح.
 const SHARE_TIMEOUT_MS = 12000;
 const SHARE_TIMED_OUT = Symbol('share-timeout');
+// رجعت الصفحة للمقدمة بعد لوحة المشاركة — الرحلة خلصت وما نعرف نتيجتها بالضبط
+const SHARE_RETURNED = Symbol('share-returned');
 
 // شريط التحميل العام يتغذى من عدّاد نداءات الـapi (main.jsx). لما ننتظر **المستخدم**
 // — لوحة مشاركة مفتوحة أو نافذة خيارات — نطفيه صراحةً: البرنامج مو مشغول، هو ينتظر.
@@ -246,30 +250,63 @@ function stopBusyIndicator() {
 // المهلة تنطبق **فقط** إذا ما انفتحت لوحة المشاركة أصلاً. إذا انفتحت فعلاً
 // الصفحة تفقد التركيز (blur / visibilitychange) — وهنا ننتظر المستخدم بلا مهلة،
 // حتى ما نطلعله نافذتنا فوق لوحة المشاركة وهو يختار واتساب.
-function shareWithTimeout(pdfFile, fileName) {
-  let timer;
-  let sheetOpened = false;
-  const onLeave = () => {
-    sheetOpened = true;
-    clearTimeout(timer);
-    // لوحة المشاركة مفتوحة والدور صار على المستخدم — نطفي شريط التحميل، وإلا
-    // يرجع يظهر وكأن البرنامج معلّق وهو ينتظر اختياره
-    stopBusyIndicator();
-  };
-  window.addEventListener('blur', onLeave, { once: true });
-  document.addEventListener('visibilitychange', onLeave, { once: true });
-  const cleanup = () => {
-    clearTimeout(timer);
-    window.removeEventListener('blur', onLeave);
-    document.removeEventListener('visibilitychange', onLeave);
-  };
+// المشاركة بمتصفح التلفون: `navigator.share` **ما يرجّع أبداً** بأغلب الأجهزة
+// لما ينتقل المستخدم لواتساب ويرجع — حتى لو المشاركة نجحت تماماً. فالانتظار
+// عليه لحاله معناه إن البرنامج يضل يحسب العملية شغّالة، وبعد المهلة يطلع
+// «التصدير طوّل» رغم إن الملف انبعث فعلاً (هذا بالضبط اللي صار بعد واتساب).
+//
+// الإشارة الوحيدة المضمونة إن الرحلة خلصت: **رجوع الصفحة للمقدمة**. فننتظر
+// أول واحدة من ثلاث: رد المشاركة نفسها، أو رجوع الصفحة بعد ما راحت، أو مهلة
+// تنطبق فقط إذا اللوحة ما انفتحت أصلاً.
+function shareFile(pdfFile, fileName) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let wentAway = false;
+    let timer;
+    let returnTimer;
 
-  const share = navigator.share({ files: [pdfFile], title: fileName })
-    .then(() => 'shared', (err) => err || new Error('share failed'));
-  const guard = new Promise((resolve) => {
-    timer = setTimeout(() => { if (!sheetOpened) resolve(SHARE_TIMED_OUT); }, SHARE_TIMEOUT_MS);
+    const cleanup = () => {
+      clearTimeout(timer);
+      clearTimeout(returnTimer);
+      window.removeEventListener('blur', onLeave);
+      window.removeEventListener('focus', onReturn);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(value);
+    };
+
+    function onLeave() {
+      if (wentAway) return;
+      wentAway = true;
+      clearTimeout(timer);
+      // الدور صار على المستخدم (لوحة المشاركة مفتوحة) — نطفي شريط التحميل
+      stopBusyIndicator();
+    }
+    function onReturn() {
+      if (!wentAway || settled) return;
+      // مهلة قصيرة بعد الرجوع: نعطي فرصة لوعد المشاركة يرد بنتيجته الحقيقية
+      // (نجاح أو إلغاء) قبل ما نعتبرها خلصت بالرجوع
+      clearTimeout(returnTimer);
+      returnTimer = setTimeout(() => finish(SHARE_RETURNED), 600);
+    }
+    function onVisibility() {
+      if (document.visibilityState === 'hidden') onLeave();
+      else onReturn();
+    }
+
+    window.addEventListener('blur', onLeave);
+    window.addEventListener('focus', onReturn);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    navigator.share({ files: [pdfFile], title: fileName })
+      .then(() => finish('shared'), (err) => finish(err || new Error('share failed')));
+
+    timer = setTimeout(() => { if (!wentAway) finish(SHARE_TIMED_OUT); }, SHARE_TIMEOUT_MS);
   });
-  return Promise.race([share, guard]).finally(cleanup);
 }
 
 // إيصال الملف للمستخدم بالترتيب: مشاركة أصلية (تطبيق أندرويد) ← مشاركة ويب ←
@@ -282,8 +319,10 @@ export async function deliverPdf(blob, fileName) {
   if (nativeResult) return nativeResult;
 
   if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-    const outcome = await shareWithTimeout(pdfFile, fileName);
+    const outcome = await shareFile(pdfFile, fileName);
     if (outcome === 'shared') return { canceled: false, shared: true };
+    // رجع من لوحة المشاركة: الملف بيد المستخدم (أو ألغى بنفسه) — ما نطلعله خطأ
+    if (outcome === SHARE_RETURNED) return { canceled: false, shared: true };
     if (outcome && outcome.name === 'AbortError') return { canceled: true };
     // انتهت المهلة (وعد معلّق) أو انرفض الإذن (NotAllowedError) — الخيارات بضغطة جديدة
     return showDeliverDialog({ pdfFile, blob, fileName, allowShare: true });
