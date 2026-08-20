@@ -555,13 +555,15 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
     return blocks;
   };
 
-  // سفاري الآيفون: نروح لمسار الطباعة رأساً بلا ما نجرّب الكانفاس أصلاً.
-  // السبب مقيس مو مفترض: `html2canvas` علق عند المستخدم ولا رجّع أبداً
-  // («علقت خطوة: رسم صفحة الفاتورة»)، وتكراره بس يضيّع دقيقة قبل الرسالة.
-  if (isIosSafari()) {
-    await ensureArabicFont(null);
-    return printPages(await printBlocks(), { pdfAttachment: pdfAttachmentOf(attachment) });
-  }
+  // آلية التصدير وحدة لكل الأجهزة: رسم بالكانفاس ← jsPDF ← مشاركة أو تنزيل.
+  //
+  // كان سفاري الآيفون ينداز لمسار الطباعة رأساً (لأن `html2canvas` علّق عند
+  // المستخدم مرة برسالة «علقت خطوة: رسم صفحة الفاتورة»)، وانشال بطلب صريح
+  // منه: يريد نفس آلية التصدير القديمة بكل الأجهزة.
+  //
+  // الطباعة بقت **شبكة أمان أخيرة فقط**: تنداز إذا علّقت خطوة فعلاً (شوف
+  // الـcatch بالأسفل) — يعني ما تظهر أبداً بالحالة الطبيعية، وبالحالة
+  // المعطّلة تنطي البياع ملفاً بدل رسالة خطأ وخلص.
 
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-2000px;top:0;width:794px;background:#fff;z-index:-1;';

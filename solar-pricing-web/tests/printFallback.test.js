@@ -27,11 +27,23 @@ describe('مسار الطباعة بديلاً عن رسم الكانفاس', ()
     expect(body).toContain('@page { size: A4; margin: 0; }');
   });
 
-  it('سفاري الآيفون يروح للطباعة مباشرة بلا كانفاس', () => {
+  // انشال بطلب صريح من المستخدم: «رجّع آلية التصدير مثل يوم أمس» — يعني رسم
+  // بالكانفاس بكل الأجهزة، والطباعة شبكة أمان أخيرة بس.
+  it('ماكو مسار خاص لسفاري — كل الأجهزة تمر بالكانفاس أول', () => {
     const fn = src.slice(src.indexOf('export async function exportInvoicePdf'));
     const head = fn.slice(0, fn.indexOf('html2canvas('));
-    expect(head).toMatch(/if \(isIosSafari\(\)\)/);
-    expect(head).toContain('return printPages(await printBlocks(),');
+    expect(head).not.toMatch(/if \(isIosSafari\(\)\)/);
+    expect(head).not.toContain('return printPages(');
+    // وتبقى مستعملة بتسليم الملف (سفاري يتجاهل خاصية download بروابط blob)
+    const deliver = src.slice(src.indexOf('function downloadBlob'));
+    expect(deliver.slice(0, 500)).toContain('if (isIosSafari())');
+  });
+
+  it('الطباعة ما تنداز إلا بعد ما يعلّق الرسم فعلاً', () => {
+    const fn = src.slice(src.indexOf('export async function exportInvoicePdf'));
+    const canvasAt = fn.indexOf('html2canvas(');
+    const printAt = fn.indexOf('printPages(await printBlocks()');
+    expect(printAt).toBeGreaterThan(canvasAt);
   });
 
   it('أي متصفح يوقع بخطوة معلّقة يرجع للطباعة بدل ما يرمي الخطأ بوجه المستخدم', () => {
