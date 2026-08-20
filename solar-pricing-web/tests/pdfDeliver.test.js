@@ -256,3 +256,47 @@ describe('كل خطوة بتوليد الملف إلها سقف زمني', () =>
     }
   });
 });
+
+// العطل بقي بعد كل الإصلاحات، والمستخدم مسح البيانات وأعاد التشغيل بلا فايدة.
+// الرسالة العامة «التصدير طوّل» ما تدل على مكان — فصارت كل خطوة تسمّي نفسها،
+// حتى أول رسالة تجي تحدد الخطوة العالقة بدل التخمين.
+describe('كل خطوة تسمّي نفسها عند التعليق', () => {
+  const dataApi = fs.readFileSync(path.join(HERE, '../src/lib/dataApi.js'), 'utf8');
+
+  it('مساعد الخطوة يرمي خطأً باسم الخطوة', () => {
+    expect(src).toContain('function withStep');
+    expect(src).toMatch(/reject\(new Error\(`علقت خطوة: \$\{name\}`\)\)/);
+    expect(dataApi).toContain('function netStep');
+    expect(dataApi).toMatch(/reject\(new Error\(`علقت خطوة: \$\{name\}`\)\)/);
+  });
+
+  it('ماكو نداء html2canvas بلا سقف واسم', () => {
+    const calls = [...src.matchAll(/html2canvas\(/g)];
+    expect(calls.length).toBeGreaterThanOrEqual(3);
+    // كل نداء لازم يسبقه withStep بنفس السطر أو اللي قبله
+    for (const m of calls) {
+      const before = src.slice(Math.max(0, m.index - 200), m.index);
+      expect(before, `نداء html2canvas بلا withStep عند ${m.index}`).toContain('withStep(');
+    }
+  });
+
+  it('أسماء الخطوات عربية ومفهومة للبياع', () => {
+    for (const name of ['رسم صفحة الفاتورة', 'رسم صفحة التصميم', 'رسم الصورة']) {
+      expect(src, name).toContain(`'${name}'`);
+    }
+    for (const name of ['قراءة المخزون والإعدادات', 'قراءة ملف الشركة', 'حجز رقم العرض']) {
+      expect(dataApi, name).toContain(`'${name}'`);
+    }
+  });
+
+  it('طلبات الشبكة بمسار التصدير محدودة — مكتبة سوبابيس بلا مهلة', () => {
+    expect(dataApi).toContain('const NET_STEP_LIMIT');
+    const fn = dataApi.slice(dataApi.indexOf('async exportDraftPdf(input)'));
+    const body = fn.slice(0, fn.indexOf('\n    },'));
+    // النداءات مكتوبة بأسطر متعددة، فنفحص الاسم داخل جسم الدالة
+    for (const name of ['قراءة المخزون والإعدادات', 'قراءة ملف الشركة', 'حجز رقم العرض']) {
+      expect(body, name).toContain(`'${name}'`);
+    }
+    expect((body.match(/netStep\(/g) || []).length).toBeGreaterThanOrEqual(3);
+  });
+});

@@ -49,10 +49,22 @@ function withLimit(promise, ms, fallback = null) {
   return Promise.race([promise, guard]).finally(() => clearTimeout(timer));
 }
 
+// خطوة **إجبارية** بسقف: إذا تجاوزته نرمي خطأً يسمّي الخطوة بالضبط.
+// ليش الاسم مهم: بلاه الرسالة تكون «التصدير طوّل» وخلص — ما تدل على المكان،
+// فيصير التشخيص تخميناً. بالاسم، أول رسالة تجي من البياع تحدد الخطوة العالقة.
+function withStep(name, promise, ms) {
+  let timer;
+  const guard = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`علقت خطوة: ${name}`)), ms);
+  });
+  return Promise.race([promise, guard]).finally(() => clearTimeout(timer));
+}
+
 // سقوف الخطوات (مللي ثانية)
 const FONT_READY_LIMIT = 8000;    // انتظار جاهزية الخطوط
 const STRUCTURE_LIMIT = 15000;    // تحميل حزمة الثري-دي ورسم صفحة الغلاف
 const TO_BLOB_LIMIT = 10000;      // تحويل الرسم لملف صورة
+const CANVAS_LIMIT = 25000;       // رسم الصفحة بـhtml2canvas
 
 // الأوزان المستعملة بصفحات العرض (الفاتورة تستعمل 700، والغلاف 600 و800)
 const SHEET_WEIGHTS = [400, 600, 700, 800];
@@ -93,7 +105,11 @@ async function addHtmlPage(pdf, html, ensurePage, pageWmm = 210, pageHmm = 297) 
     const el = host.querySelector('.mkt-sheet') || Array.from(host.children).find((c) => c.tagName !== 'STYLE') || host.firstElementChild;
     if (!el) return;
     await ensureArabicFont(el);
-    const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+    const canvas = await withStep(
+      'رسم صفحة التصميم',
+      html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' }),
+      CANVAS_LIMIT,
+    );
     if (!canvas.width || !canvas.height) return; // لا نضيف صفحة فارغة/تالفة
     let w = pageWmm;
     let h = (canvas.height * pageWmm) / canvas.width;
@@ -403,7 +419,11 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
       domCuts.push(r.top - sheetRect.top, r.bottom - sheetRect.top);
     });
 
-    const canvas = await html2canvas(sheet, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+    const canvas = await withStep(
+      'رسم صفحة الفاتورة',
+      html2canvas(sheet, { scale: 2, useCORS: true, backgroundColor: '#ffffff' }),
+      CANVAS_LIMIT,
+    );
     const domToCanvas = canvas.width / sheetRect.width;
     const cuts = [...new Set(domCuts.map((v) => Math.round(v * domToCanvas)))]
       .filter((v) => v > 0 && v < canvas.height)
@@ -516,9 +536,9 @@ export async function exportPosterPng(innerHtml, fileName, { width = 1300, heigh
         img.onload = res; img.onerror = res;
       })))
     );
-    const canvas = await html2canvas(host.firstElementChild || host, {
+    const canvas = await withStep('رسم الصورة', html2canvas(host.firstElementChild || host, {
       scale, useCORS: true, backgroundColor: '#ffffff', width, height,
-    });
+    }), CANVAS_LIMIT);
     // `toBlob` ما يرجّع أبداً ببعض أجهزة iOS لما تكون الرسمة كبيرة أو الذاكرة
     // مضغوطة — فبسقف، وبديله `toDataURL` المتزامن
     let blob = await withLimit(new Promise((res) => canvas.toBlob(res, 'image/png')), TO_BLOB_LIMIT, null);

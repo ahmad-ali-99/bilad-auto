@@ -18,6 +18,19 @@ import { PANEL_SAFETY_FACTOR } from './calc.js';
 
 // معامل أمان الألواح الخاص بهذا العرض. العروض المحفوظة تمرّره صراحةً (والقديمة
 // تمرّر 1)، وأي حساب جديد بلا قيمة ياخذ المعامل الحالي.
+// خطوة شبكة بسقف واسم. مكتبة سوبابيس ما تحط أي مهلة على طلباتها، فطلب واحد
+// معلّق بتلفون على شبكة ضعيفة يوقف العملية كلها بصمت. الاسم يخلي الرسالة تدل
+// على المكان بدل ما تكون «التصدير طوّل» وخلص.
+const NET_STEP_LIMIT = 20000;
+
+function netStep(name, promise, ms = NET_STEP_LIMIT) {
+  let timer;
+  const guard = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`علقت خطوة: ${name}`)), ms);
+  });
+  return Promise.race([promise, guard]).finally(() => clearTimeout(timer));
+}
+
 function panelSafetyFactorOf(input) {
   const v = Number(input?.panelSafetyFactor);
   return v > 0 ? v : PANEL_SAFETY_FACTOR;
@@ -1174,9 +1187,12 @@ export const api = {
       });
     },
     async exportDraftPdf(input) {
-      const options = await this._options(input);
+      const options = await netStep('قراءة المخزون والإعدادات', this._options(input));
       const draft = quoteService.buildQuoteDraft(options, await this._draftArgs(input));
-      const { data: company } = await supabase.from('company_profile').select('*').eq('id', 1).single();
+      const { data: company } = await netStep(
+        'قراءة ملف الشركة',
+        supabase.from('company_profile').select('*').eq('id', 1).single(),
+      );
       const defaultNotes = Array.isArray(company?.notes_default) ? company.notes_default : JSON.parse(company?.notes_default || '[]');
       // إزالة التكرار: فتح العرض للتعديل يرجّع ملاحظاته المحفوظة **وهي أصلاً تحتوي**
       // ملاحظات الضمان من الحفظة السابقة — فبلا Set تتراكم نسخة بكل تعديل
@@ -1185,7 +1201,7 @@ export const api = {
       const pdfUser = await currentUser();
       const isStaffUser = String(pdfUser?.email || '').endsWith('@biladauto.local');
       const pseudoQuote = {
-        quote_number: isStaffUser ? await nextQuoteNumber() : '—',
+        quote_number: isStaffUser ? await netStep('حجز رقم العرض', nextQuoteNumber()) : '—',
         client_name: input.clientName,
         client_phone: input.clientPhone,
         location: input.location,
