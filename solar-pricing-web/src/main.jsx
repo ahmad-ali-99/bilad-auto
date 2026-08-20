@@ -16,6 +16,12 @@ let pendingCount = 0;
 function notifyBusy() {
   window.dispatchEvent(new CustomEvent('api-busy', { detail: { busy: pendingCount > 0 } }));
 }
+// سقف عمر النداء الواحد بعدّاد الانشغال. نداء ما يرجّع أبداً — مثل طلب شبكة
+// معلّق بتلفون على شبكة ضعيفة — كان يخلي العدّاد فوق الصفر للأبد، فيبقى شريط
+// التحميل يلف وكأن البرنامج شغال وهو أصلاً واقف. بعد هذا السقف نحرّر العدّاد
+// حتى لو النداء بعده معلّق: الشريط يهدأ والواجهة تعرف إنها ما تنتظر شي مفيد.
+const MAX_PENDING_MS = 45000;
+
 function wrapBusy(obj) {
   const out = {};
   for (const [key, val] of Object.entries(obj)) {
@@ -23,11 +29,19 @@ function wrapBusy(obj) {
       out[key] = async function (...args) {
         pendingCount++;
         notifyBusy();
+        let released = false;
+        const release = () => {
+          if (released) return;
+          released = true;
+          pendingCount = Math.max(0, pendingCount - 1);
+          notifyBusy();
+        };
+        const stuckTimer = setTimeout(release, MAX_PENDING_MS);
         try {
           return await val.apply(obj, args);
         } finally {
-          pendingCount--;
-          notifyBusy();
+          clearTimeout(stuckTimer);
+          release();
         }
       };
     } else if (val && typeof val === 'object') {

@@ -109,3 +109,34 @@ describe('التصدير ما يعتمد على نداء مصادقة شبكي',
     expect(log).toContain('supabase.auth.getSession()');
   });
 });
+
+// «ما طلعت أي رسالة وانتظرت 3 دقائق»: الحارس كان يشتغل فعلاً، بس الرسالة
+// تنرسم بوسط الصفحة والبياع بالتلفون واقف عند الشريط اللاصق بالأسفل — فما
+// يشوفها. وشريط التحميل يبقى يلف لأن النداء المعلّق ما يحرّر عدّاد الانشغال.
+describe('الرسالة تبين والشريط يهدأ', () => {
+  const styles = fs.readFileSync(path.join(HERE, '../src/styles.css'), 'utf8');
+  const main = fs.readFileSync(path.join(HERE, '../src/main.jsx'), 'utf8');
+
+  it('الرسالة داخل الشريط اللاصق مو بوسط الصفحة', () => {
+    const bar = builder.slice(builder.indexOf('<div className="action-bar">'));
+    const body = bar.slice(0, bar.indexOf('</div>\n\n'));
+    expect(body).toContain('className="action-msg"');
+    // ما بقت مرمية بمنتصف المحتوى
+    expect(builder).not.toContain('{saveMessage && <div className="alert alert-info">{saveMessage}</div>}');
+  });
+
+  it('الرسالة إلها زر إغلاق وتتمرر إذا طالت', () => {
+    expect(builder).toContain('action-msg-x');
+    const block = styles.slice(styles.indexOf('.action-msg {'));
+    expect(block.slice(0, block.indexOf('}'))).toMatch(/overflow-y:\s*auto/);
+    expect(block.slice(0, block.indexOf('}'))).toMatch(/flex:\s*1 0 100%/);
+  });
+
+  it('نداء معلّق ما يقدر يخلي شريط التحميل يلف للأبد', () => {
+    expect(main).toContain('MAX_PENDING_MS');
+    expect(main).toContain('const stuckTimer = setTimeout(release, MAX_PENDING_MS)');
+    // التحرير مرة وحدة بس — ما ننقص العدّاد مرتين لو رجع النداء بعد السقف
+    expect(main).toContain('if (released) return;');
+    expect(main).toContain('pendingCount = Math.max(0, pendingCount - 1)');
+  });
+});

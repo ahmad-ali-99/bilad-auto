@@ -1463,7 +1463,6 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
             />
           </div>
 
-          {saveMessage && <div className="alert alert-info">{saveMessage}</div>}
           {/* تذكير الحفظ: المسودة المحلية تحمي الشغل من الضياع، بس العرض ما ينحفظ
               بقاعدة البيانات إلا بالزر — وبدون الحفظ يرجع البياع فيلگى الأعداد
               انحسبت من جديد بدل ما ترجع مثل ما تركها. */}
@@ -1477,6 +1476,15 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
           )}
           {/* شريط إجراءات ثابت أسفل المحتوى: المجموع + الحفظ دائماً بمتناول اليد حتى مع التمرير */}
           <div className="action-bar">
+            {/* رسالة النتيجة داخل الشريط اللاصق نفسه: كانت تنرسم بوسط الصفحة،
+                وبالتلفون البياع واقف عند الأزرار بالأسفل فما يشوفها أبداً —
+                يعني حتى لما يطلع خطأ أو نجاح يبقى ما يعرف شنو صار. */}
+            {saveMessage && (
+              <div className="action-msg" role="status">
+                <span>{saveMessage}</span>
+                <button type="button" className="action-msg-x" onClick={() => setSaveMessage('')} aria-label="إغلاق">×</button>
+              </div>
+            )}
             <span className="action-total">
               {calculating ? '⏳' : '💰'} {fmt(draft.total)} <small>دينار</small>
             </span>
