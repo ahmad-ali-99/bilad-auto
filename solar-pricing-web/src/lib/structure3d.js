@@ -95,7 +95,9 @@ export async function renderStructurePng(panelCount, { width = 1000, height = 62
   try {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
     renderer.setSize(width, height, false);
-    renderer.setPixelRatio(2);
+    // 1.5 بدل 2: المخزن ينزل من 2000×1240 لـ1500×930 (≈نص الذاكرة)، والصورة
+    // تنحط بعرض صفحة A4 فالفرق مو مرئي — بس الفرق بالذاكرة يقرر تشتغل لو تطيح
+    renderer.setPixelRatio(1.5);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   } catch {
@@ -187,5 +189,19 @@ export async function renderStructurePng(panelCount, { width = 1000, height = 62
     if (o.geometry) o.geometry.dispose();
     if (o.material) { (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.map?.dispose?.(); m.dispose?.(); }); }
   });
+
+  // **تحرير ذاكرة الكانفاس** — `renderer.dispose()` يحرر موارد ثري.جي.إس بس
+  // ما يحرر لا سياق الـWebGL ولا مخزن الكانفاس نفسه. بالآيفون هذا يعني إن
+  // بَفَر بحجم 2000×1240 (≈10 ميغا) وسياق WebGL كامل يبقون حيّين طول العمر،
+  // وبعدهم يجي رسم الفاتورة بكانفاس ثاني أكبر — فتنكسر ميزانية الكانفاس مال
+  // iOS ويطيح التبويب أو يعلّق الرسم. (مقيس: ذروة 34 ميغا وماكو ولا بايت
+  // يتحرر، والعطل يظهر بالآيفون بس لأن أندرويد ميزانيته أوسع.)
+  try {
+    const lose = renderer.getContext()?.getExtension('WEBGL_lose_context');
+    lose?.loseContext();
+  } catch { /* الإضافة مو مدعومة — نكمل بتصفير المخزن على الأقل */ }
+  canvas.width = 0;
+  canvas.height = 0;
+
   return url;
 }

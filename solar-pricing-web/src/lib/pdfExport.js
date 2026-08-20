@@ -4,6 +4,7 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { PDFDocument } from 'pdf-lib';
 import { buildInvoiceInnerHtml } from './invoiceHtml.js';
+import { prefersPrintExport } from './exportMethod.js';
 import { buildStructurePageHtml, panelCountFromItems, integratedFromItems } from './structureDiagram.js';
 import { CABINET_IMAGE } from '../assets/cabinetImage.js';
 
@@ -94,6 +95,24 @@ async function ensureArabicFont(el) {
 
 // يرسم HTML لعنصر مخفي → canvas ويضيفه صفحة كاملة بالـPDF (لصفحة التصميم/الغلاف).
 // ensurePage: يبدأ صفحة جديدة (أو يستخدم الأولى إن كانت فارغة) — حتى نتحكم بالترتيب.
+// تحرير مخزن الكانفاس فوراً بعد ما نسحب منه الصورة.
+//
+// السبب مقيس مو مفترض: بقياس مسار التصدير كامل طلعت **ذروة 8.96 مليون بكسل
+// (≈34 ميغابايت) وتسعة كانفاسات باقية حيّة بالنهاية — ولا بايت ينتحرر**.
+// أندرويد والديسكتوب يتحملونها، بس iOS إله ميزانية كانفاس ضيقة: لمّا تنكسر،
+// المخصصات الجديدة تفشل بصمت أو التبويب يطيح — وهذا اللي كان يخلي «رسم صفحة
+// الفاتورة» (آخر وأكبر مخصّص) يعلّق بجهاز واحد بالضبط وباقي الأجهزة تشتغل.
+//
+// تصفير العرض والارتفاع هو الطريقة الوحيدة المضمونة بـWebKit لإرجاع المخزن —
+// حذف العنصر لا يكفي لأن جامع القمامة ما يشتغل بوقته.
+function releaseCanvas(canvas) {
+  if (!canvas) return;
+  try {
+    canvas.width = 0;
+    canvas.height = 0;
+  } catch { /* عنصر مو كانفاس أو محرّر أصلاً */ }
+}
+
 async function addHtmlPage(pdf, html, ensurePage, pageWmm = 210, pageHmm = 297) {
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-2000px;top:0;width:794px;background:#fff;z-index:-1;';
@@ -115,7 +134,9 @@ async function addHtmlPage(pdf, html, ensurePage, pageWmm = 210, pageHmm = 297) 
     let h = (canvas.height * pageWmm) / canvas.width;
     if (h > pageHmm) { const s = pageHmm / h; w = pageWmm * s; h = pageHmm; } // نلائم داخل الصفحة
     ensurePage();
-    pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', (pageWmm - w) / 2, 0, w, h);
+    const data = canvas.toDataURL('image/jpeg', 0.92);
+    releaseCanvas(canvas); // الصورة بيدنا — نرجّع الذاكرة قبل رسم الصفحة اللي بعدها
+    pdf.addImage(data, 'JPEG', (pageWmm - w) / 2, 0, w, h);
   } finally {
     document.body.removeChild(host);
   }
@@ -555,13 +576,18 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
     return blocks;
   };
 
-  // آلية التصدير وحدة لكل الأجهزة: رسم بالكانفاس ← jsPDF ← مشاركة أو تنزيل.
+  // آلية التصدير الافتراضية وحدة لكل الأجهزة: رسم بالكانفاس ← jsPDF ← مشاركة
+  // أو تنزيل. ماكو توجيه تلقائي حسب المتصفح — انشال بطلب صريح من المستخدم.
   //
-  // كان سفاري الآيفون ينداز لمسار الطباعة رأساً (لأن `html2canvas` علّق عند
-  // المستخدم مرة برسالة «علقت خطوة: رسم صفحة الفاتورة»)، وانشال بطلب صريح
-  // منه: يريد نفس آلية التصدير القديمة بكل الأجهزة.
-  //
-  // الطباعة بقت **شبكة أمان أخيرة فقط**: تنداز إذا علّقت خطوة فعلاً (شوف
+  // الاستثناء الوحيد: **تفضيل هذا الجهاز**. الجهاز اللي يتعثّر عنده الرسم
+  // (يعلّق أو يطيح التبويب) يبدّل الطريقة لنفسه من الإعدادات، وباقي الأجهزة
+  // ما تتأثر. والطريقتان تطلّعن نفس الملف بنفس الصفحات (مقارَن صفحةً بصفحة).
+  if (prefersPrintExport()) {
+    await ensureArabicFont(null);
+    return printPages(await printBlocks(), { pdfAttachment: pdfAttachmentOf(attachment) });
+  }
+
+  // والطباعة كذلك **شبكة أمان أخيرة**: تنداز إذا علّقت خطوة فعلاً (شوف
   // الـcatch بالأسفل) — يعني ما تظهر أبداً بالحالة الطبيعية، وبالحالة
   // المعطّلة تنطي البياع ملفاً بدل رسالة خطأ وخلص.
 
@@ -615,12 +641,16 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
     const FIT_TOL = 1.25;
     if (imgHmm <= pageHmm) {
       ensurePage();
-      pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageWmm, imgHmm);
+      const data = canvas.toDataURL('image/jpeg', 0.92);
+      releaseCanvas(canvas);
+      pdf.addImage(data, 'JPEG', 0, 0, pageWmm, imgHmm);
     } else if (imgHmm <= pageHmm * FIT_TOL) {
       ensurePage();
       const s = pageHmm / imgHmm;
       const w = pageWmm * s;
-      pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', (pageWmm - w) / 2, 0, w, pageHmm);
+      const data = canvas.toDataURL('image/jpeg', 0.92);
+      releaseCanvas(canvas);
+      pdf.addImage(data, 'JPEG', (pageWmm - w) / 2, 0, w, pageHmm);
     } else {
       const pageHpx = Math.floor((pageHmm / pageWmm) * canvas.width);
       let y = 0;
@@ -641,9 +671,13 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
         ctx.fillRect(0, 0, slice.width, slice.height);
         ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
         ensurePage();
-        pdf.addImage(slice.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageWmm, (sliceH * pageWmm) / canvas.width);
+        const sliceData = slice.toDataURL('image/jpeg', 0.92);
+        const sliceW = canvas.width;
+        releaseCanvas(slice); // شريحة لكل صفحة — بلا تحرير تتراكم صفحةً بصفحة
+        pdf.addImage(sliceData, 'JPEG', 0, 0, pageWmm, (sliceH * pageWmm) / sliceW);
         y = next;
       }
+      releaseCanvas(canvas);
     }
 
     // إذا اكو مرفق تصميم (صورة/PDF) نلحقه بنهاية الملف

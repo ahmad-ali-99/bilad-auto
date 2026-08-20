@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { getAgentKey, setAgentKey, SHARE_KEY_SQL } from '../lib/agent.js';
 import { getCurrentUsername } from '../lib/agent.js';
 import { canEditSettings } from '../lib/permissions.js';
+import { EXPORT_METHODS, getExportMethod, setExportMethod } from '../lib/exportMethod.js';
 
 const SETTINGS_FIELDS = [
   { key: 'system_voltage', label: 'فولتية النظام (لتحويل الأمبير لواط)' },
@@ -16,6 +17,8 @@ const SETTINGS_FIELDS = [
 export default function Settings() {
   // حسابات مقيّدة: صفحة الإعدادات كلها للقراءة — بلا تعديل ثوابت أو ملف شركة أو مفاتيح
   const [canEdit, setCanEdit] = useState(true);
+  // طريقة التصدير: تفضيل محلي لهذا الجهاز (مو بقاعدة البيانات)
+  const [exportMethod, setExportMethodState] = useState(getExportMethod);
   useEffect(() => {
     getCurrentUsername().then((n) => setCanEdit(canEditSettings(n))).catch(() => {});
   }, []);
@@ -169,6 +172,37 @@ export default function Settings() {
           👁 هذا الحساب للاطلاع فقط — يمكنك رؤية الإعدادات لكن التعديل محصور بحسابات الإدارة.
         </div>
       )}
+      {/* تفضيل هذا الجهاز — برّا fieldset المعطّل عمداً: مو إعداداً مشتركاً
+          يمس الفريق، بل خيار محلي يخص هذا الجهاز وحده، فيفتح لكل الحسابات. */}
+      <div className="card">
+        <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>📄 طريقة تصدير ملف العرض (هذا الجهاز فقط)</h3>
+        <p className="muted" style={{ marginTop: 0 }}>
+          الطريقتان تطلّعن <b>نفس الملف بنفس الصفحات ونفس الشكل</b> — الفرق بالآلية لا بالنتيجة.
+          إذا التصدير علّق أو طاح بجهازك، بدّلها لـ«طباعة المتصفح». التغيير يخص هذا الجهاز
+          وما يأثر على بقية الحسابات ولا الأجهزة.
+        </p>
+        <div className="export-method">
+          {EXPORT_METHODS.map((m) => (
+            <label key={m.key} className={`export-method-opt${exportMethod === m.key ? ' is-on' : ''}`}>
+              <input
+                type="radio"
+                name="export-method"
+                checked={exportMethod === m.key}
+                onChange={() => {
+                  setExportMethod(m.key);
+                  setExportMethodState(m.key);
+                  setMessage(`طريقة التصدير بهذا الجهاز: ${m.label} ✔`);
+                }}
+              />
+              <span>
+                <b>{m.label}</b>
+                <small>{m.hint}</small>
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
       <fieldset disabled={!canEdit} style={{ border: 'none', padding: 0, margin: 0, minInlineSize: 'auto' }}>
 
       <form className="card" onSubmit={saveSettings}>

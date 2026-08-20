@@ -1746,3 +1746,22 @@ h2.page-title::before {
   color: #1a3a5c;
   font-size: 0.85rem;
 }
+
+/* ===== خيار طريقة التصدير (تفضيل هذا الجهاز) ===== */
+.export-method { display: flex; flex-wrap: wrap; gap: 10px; }
+.export-method-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  flex: 1 1 260px;
+  padding: 10px 12px;
+  border: 1px solid #c7d2db;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  line-height: 1.5;
+}
+.export-method-opt.is-on { border-color: var(--navy, #1a3a5c); background: #eef3f8; }
+.export-method-opt input { margin-top: 4px; flex: none; }
+.export-method-opt b { display: block; color: var(--navy, #1a3a5c); font-size: 0.9rem; }
+.export-method-opt small { display: block; color: #556; font-size: 0.78rem; margin-top: 2px; }
