@@ -30,7 +30,10 @@ function trimOversized(details) {
 export function logActivity(action, entity, details = null) {
   (async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      // الجلسة المحلية بلا شبكة — `getUser()` نداء شبكة وممكن يعلّق بتلفون
+      // على شبكة ضعيفة، والسجل ما يستاهل يوقف عملية المستخدم
+      const { data: sess } = await supabase.auth.getSession();
+      const user = sess?.session?.user || null;
       await supabase.from('activity_log').insert({
         user_name: user?.user_metadata?.username || user?.user_metadata?.full_name || null,
         user_email: user?.email || null,

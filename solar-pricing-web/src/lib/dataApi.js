@@ -183,11 +183,26 @@ async function nextQuoteNumber() {
 // المنع هنا (طبقة البيانات) مو بالواجهة فقط — أي مسار يوصل للدالة ينمنع.
 // نقرأ المستخدم من الجلسة المخزّنة محلياً (بلا طلب شبكة) — أسرع ويشتغل حتى لو الشبكة متذبذبة،
 // ومع رجوع لـgetUser إذا الجلسة ماكو بالذاكرة لأي سبب.
+// المستخدم الحالي: **الجلسة المحلية أولاً**. `getSession()` تقرأ من التخزين بلا
+// شبكة، بينما `getUser()` تنادي خادم المصادقة — وبتلفون على شبكة ضعيفة ممكن
+// يبقى هذا النداء معلّقاً بلا مهلة (مكتبة سوبابيس ما تحط مهلة افتراضية).
+// هذا بالضبط اللي كان يعلّق التصدير من الشاشة الرئيسية: التصدير من صفحة
+// «العروض» ما ينادي المصادقة إطلاقاً فيشتغل، والرئيسية تناديها فتعلّق.
+// فالفولباك الشبكي صار محروساً بمهلة، وفشله يرجّع null بدل ما يوقف كلشي.
+const AUTH_NETWORK_TIMEOUT_MS = 6000;
+
 async function currentUser() {
   const { data } = await supabase.auth.getSession();
   if (data?.session?.user) return data.session.user;
-  const { data: u } = await supabase.auth.getUser();
-  return u?.user || null;
+  try {
+    const u = await Promise.race([
+      supabase.auth.getUser().then((r) => r?.data?.user || null),
+      new Promise((resolve) => setTimeout(() => resolve(null), AUTH_NETWORK_TIMEOUT_MS)),
+    ]);
+    return u || null;
+  } catch {
+    return null;
+  }
 }
 
 async function currentUsername() {
@@ -830,7 +845,7 @@ export const api = {
       // ملاحظات الضمان من الحفظة السابقة — فبلا Set تتراكم نسخة بكل تعديل
       const notes = [...new Set([...(input.notes || defaultNotes), ...draft.warrantyNotes])];
       const quote_number = await nextQuoteNumber();
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await currentUser();
 
       const { data: quote, error } = await supabase.from('quotes').insert({
         quote_number,
@@ -1030,7 +1045,7 @@ export const api = {
     },
     async remove(id) {
       // حذف ناعم: يروح لسلة المحذوفات مع تسجيل منو حذفه، ويمكن استرداده خلال أسبوع
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await currentUser();
       const username = user?.user_metadata?.username || user?.email || 'غير معروف';
       const { data: q } = await supabase.from('quotes').select('quote_number, client_name, total_price').eq('id', id).maybeSingle();
       const { error } = await supabase
@@ -1167,7 +1182,7 @@ export const api = {
       // ملاحظات الضمان من الحفظة السابقة — فبلا Set تتراكم نسخة بكل تعديل
       const notes = [...new Set([...(input.notes || defaultNotes), ...draft.warrantyNotes])];
       // رقم العرض التسلسلي للموظفين فقط — الزبون (Google) يطلع ملفه بدون رقم
-      const { data: { user: pdfUser } } = await supabase.auth.getUser();
+      const pdfUser = await currentUser();
       const isStaffUser = String(pdfUser?.email || '').endsWith('@biladauto.local');
       const pseudoQuote = {
         quote_number: isStaffUser ? await nextQuoteNumber() : '—',
