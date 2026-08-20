@@ -66,6 +66,22 @@ let lastAppliedPrefill = null;
 // جديد» يرث الأعداد اليدوية من العرض السابق ويطلع الحساب يدوياً بلا ما ينتبه البياع.
 // أي حقل جديد لازم يمرّ من هنا — واختبار بنيوي يفشّل البناء إذا انضاف حقل للمسودة
 // وما دخل هالقائمة.
+// حارس ضد «دوامة التحميل»: إذا التصدير أو الحفظ ما رجّع خلال هذا الوقت، نقطع
+// الانتظار ونطلع رسالة بدل ما يبقى شريط التحميل يلف بلا نهاية والبياع ما يعرف
+// شنو صاير. الوقت واسع عمداً — الملف بمنظومة كبيرة ياخذ ثوانٍ بالتلفون.
+const EXPORT_TIMEOUT_MS = 60000;
+
+function withTimeout(promise, ms, what) {
+  let timer;
+  const guard = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${what} (أكثر من ${Math.round(ms / 1000)} ثانية). جرّب مرة ثانية، وإذا تكرر اضغط 🔄 بأعلى الشاشة حتى ينزل آخر إصدار.`)),
+      ms,
+    );
+  });
+  return Promise.race([promise, guard]).finally(() => clearTimeout(timer));
+}
+
 const BLANK = {
   clientName: '', clientPhone: '', location: '',
   roofAreaM2: '', ampDay: '', ampNight: '', nightSupplyHours: '',
@@ -764,7 +780,11 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
           }
         }
       }
-      const saved = await window.api.quotes.save(buildBaseInput());
+      const saved = await withTimeout(
+        window.api.quotes.save(buildBaseInput()),
+        EXPORT_TIMEOUT_MS,
+        'الحفظ طوّل أكثر من اللازم',
+      );
       // العرض المحفوظ توه ما نحذر عنه — بلياها الفحص الحي يلگيه فوراً ويطلع التنبيه
       if (saved?.id != null) dupDismissedRef.current.add(saved.id);
       setSaveMessage(`تم حفظ العرض رقم ${saved.quote_number} بنجاح ✔`);
@@ -780,7 +800,11 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
     setSaving(true);
     setSaveMessage('');
     try {
-      const result = await window.api.quotes.exportDraftPdf(buildBaseInput());
+      const result = await withTimeout(
+        window.api.quotes.exportDraftPdf(buildBaseInput()),
+        EXPORT_TIMEOUT_MS,
+        'التصدير طوّل أكثر من اللازم',
+      );
       if (!result.canceled) setSaveMessage('تم تصدير ملف PDF بنجاح ✔');
     } catch (err) {
       setSaveMessage('حدث خطأ أثناء التصدير: ' + err.message);

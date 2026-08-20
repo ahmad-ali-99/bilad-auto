@@ -161,7 +161,13 @@ export default function CustomerView({ user }) {
     setBusy(true);
     setMessage('');
     try {
-      const result = await window.api.quotes.exportDraftPdf(baseInput());
+      // نفس حارس شاشة الموظف: ما ننطي الزبون شريط تحميل يلف بلا نهاية
+      const result = await Promise.race([
+        window.api.quotes.exportDraftPdf(baseInput()),
+        new Promise((_, reject) => setTimeout(
+          () => reject(new Error('التصدير طوّل أكثر من 60 ثانية — جرّب مرة ثانية')), 60000,
+        )),
+      ]);
       if (!result.canceled) setMessage('تم تصدير ملف العرض ✔');
     } catch (err) {
       setMessage('تعذر التصدير: ' + err.message);
