@@ -12,6 +12,7 @@ import Requests from './pages/Requests.jsx';
 import History from './pages/History.jsx';
 import { supabase } from './lib/supabase.js';
 import { isAdminName } from './lib/agent.js';
+import { isOwnerAccount } from './lib/permissions.js';
 import { forceUpdateApp } from './lib/appUpdate.js';
 import { startFitTables } from './lib/fitTables.js';
 
@@ -257,7 +258,7 @@ export default function App() {
   // تبويب الطلبات للمشرفين الثلاثة فقط
   const isAdmin = isAdminName(session.user?.user_metadata?.username || '');
   // سجل الحركات (الهستوري) لحساب أحمد حصراً — الحماية الفعلية بـRLS بقاعدة البيانات
-  const isAhmad = (session.user?.user_metadata?.username || '').replace(/[أإآ]/g, 'ا').trim() === 'احمد';
+  const isAhmad = isOwnerAccount(session.user?.user_metadata?.username || '');
   // «العروض» متاحة للجميع — لكن البياع يشوف عروضه هو فقط (الفلترة بطبقة البيانات)
   const navPages = [
     ...(isAdmin ? [...PAGES.slice(0, 2), ...ADMIN_PAGES, ...PAGES.slice(2)] : PAGES),

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { buildEditPrefill } from '../lib/editPrefill.js';
 import { getCurrentUsername } from '../lib/agent.js';
-import { canViewQuotes } from '../lib/permissions.js';
+import { canViewQuotes, isOwnerAccount } from '../lib/permissions.js';
 import { creatorsOf, filterByCreators, normName } from '../lib/quotesFilter.js';
 import AnchoredPopup from '../components/AnchoredPopup.jsx';
 
@@ -139,7 +139,7 @@ export default function Quotes({ onEditQuote }) {
   useEffect(() => {
     getCurrentUsername()
       .then((n) => {
-        setIsAhmad((n || '').replace(/[أإآ]/g, 'ا').trim() === 'احمد');
+        setIsAhmad(isOwnerAccount(n));
         setSeesAll(canViewQuotes(n));
       })
       .catch(() => {});

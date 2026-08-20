@@ -111,7 +111,11 @@ describe('اختيار المحرك', () => {
 
   it('المحرك الخفيف يتحمّل ديناميكياً — ما يثقل فتح التطبيق', () => {
     expect(pdf).not.toMatch(/^import .*svgRender/m);
-    expect(pdf).toContain("await withStep(\n      `تحميل محرك الرسم الخفيف`,\n      import('./svgRender.js')");
+    expect(pdf).toContain("import('./svgRender.js')");
+    // وبسقف زمني: `import()` المعلّق ما يمسكه catch
+    const fn = pdf.slice(pdf.indexOf('async function renderSheet'));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    expect(body).toMatch(/withStep\(\s*'تحميل محرك الرسم'/);
   });
 
   it('صفحتا الفاتورة والتصميم تمران بنفس الدالة', () => {

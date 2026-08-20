@@ -16,16 +16,21 @@
 //                 الحفظ يصير من شاشة الطباعة مال النظام.
 const KEY = 'export_method';
 
+// المحرك الافتراضي للكل. صار **الخفيف** بعد ما تأكد المستخدم إنه يشتغل عنده
+// مثل القديم بالضبط (نفس نافذة المشاركة والتنزيل)، وهو أصلاً أخف ذاكرةً بـ97%
+// وما يمر على انتظارات html2canvas المفتوحة اللي تعلّق بمحرك سفاري.
+const DEFAULT_METHOD = 'svg';
+
 export const EXPORT_METHODS = [
   {
-    key: 'canvas',
-    label: 'المحرك الاعتيادي (الافتراضي)',
-    hint: 'يشتغل بأغلب الأجهزة — يولّد الملف ثم يعرض خيارات المشاركة أو التنزيل',
+    key: 'svg',
+    label: 'المحرك الخفيف (الافتراضي)',
+    hint: 'رسم مباشر بلا نسخ للصفحة — أخف ذاكرةً وأسرع، ونفس الملف ونفس خيارات المشاركة والتنزيل',
   },
   {
-    key: 'svg',
-    label: 'المحرك الخفيف',
-    hint: 'نفس الملف ونفس خيارات المشاركة والتنزيل، بس برسم أخف — استعمله إذا التصدير علّق بجهازك',
+    key: 'canvas',
+    label: 'المحرك الاعتيادي',
+    hint: 'الطريقة القديمة (html2canvas) — تعلّق ببعض أجهزة سفاري، تنستعمل للمقارنة فقط',
   },
   {
     key: 'print',
@@ -37,15 +42,15 @@ export const EXPORT_METHODS = [
 export function getExportMethod() {
   try {
     const v = localStorage.getItem(KEY);
-    return EXPORT_METHODS.some((m) => m.key === v) ? v : 'canvas';
+    return EXPORT_METHODS.some((m) => m.key === v) ? v : DEFAULT_METHOD;
   } catch {
-    return 'canvas'; // التخزين المحلي محجوب (تصفح خاص) — الافتراضي
+    return DEFAULT_METHOD; // التخزين المحلي محجوب (تصفح خاص) — الافتراضي
   }
 }
 
 export function setExportMethod(value) {
   try {
-    if (value && value !== 'canvas' && EXPORT_METHODS.some((m) => m.key === value)) {
+    if (value && value !== DEFAULT_METHOD && EXPORT_METHODS.some((m) => m.key === value)) {
       localStorage.setItem(KEY, value);
     } else {
       localStorage.removeItem(KEY);
@@ -61,3 +66,5 @@ export function prefersPrintExport() {
 export function prefersSvgRender() {
   return getExportMethod() === 'svg';
 }
+
+export { DEFAULT_METHOD };

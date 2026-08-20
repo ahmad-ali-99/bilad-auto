@@ -22,23 +22,29 @@ function fakeStorage() {
 describe('طريقة التصدير — تفضيل هذا الجهاز', () => {
   beforeEach(() => fakeStorage());
 
-  it('الافتراضي الرسم', () => {
-    expect(getExportMethod()).toBe('canvas');
+  // الافتراضي للكل صار **الخفيف** بعد ما تأكد المستخدم إنه يشتغل عنده مثل
+  // القديم بالضبط، وهو أخف ذاكرةً وما يمر على انتظارات html2canvas المفتوحة.
+  it('الافتراضي المحرك الخفيف — بلا أي إعداد مخزون', () => {
+    expect(getExportMethod()).toBe('svg');
+    expect(prefersSvgRender()).toBe(true);
     expect(prefersPrintExport()).toBe(false);
+    expect(localStorage.getItem('export_method')).toBeNull();
   });
 
-  it('التبديل للطباعة ينحفظ ويرجع', () => {
-    setExportMethod('print');
-    expect(getExportMethod()).toBe('print');
-    expect(prefersPrintExport()).toBe(true);
+  it('التبديل ينحفظ، والرجوع للافتراضي يمسح المفتاح', () => {
     setExportMethod('canvas');
     expect(getExportMethod()).toBe('canvas');
+    expect(prefersSvgRender()).toBe(false);
+    setExportMethod('print');
+    expect(prefersPrintExport()).toBe(true);
+    setExportMethod('svg');
+    expect(getExportMethod()).toBe('svg');
     expect(localStorage.getItem('export_method')).toBeNull();
   });
 
   it('قيمة غريبة بالتخزين تنقرأ كالافتراضي مو كخطأ', () => {
     localStorage.setItem('export_method', 'شي غريب');
-    expect(getExportMethod()).toBe('canvas');
+    expect(getExportMethod()).toBe('svg');
   });
 
   it('التخزين المحجوب (تصفح خاص) ما يكسر التطبيق', () => {
@@ -47,32 +53,42 @@ describe('طريقة التصدير — تفضيل هذا الجهاز', () => {
       setItem() { throw new Error('blocked'); },
       removeItem() { throw new Error('blocked'); },
     };
-    expect(getExportMethod()).toBe('canvas');
+    expect(getExportMethod()).toBe('svg');
     expect(() => setExportMethod('print')).not.toThrow();
   });
 
-  it('ثلاثة خيارات مرتبة من الأقرب للافتراضي، وبكل واحد شرح للمستخدم', () => {
-    expect(EXPORT_METHODS.map((m) => m.key)).toEqual(['canvas', 'svg', 'print']);
+  it('الافتراضي أول القائمة، وبكل خيار شرح للمستخدم', () => {
+    expect(EXPORT_METHODS.map((m) => m.key)).toEqual(['svg', 'canvas', 'print']);
+    expect(EXPORT_METHODS[0].label).toContain('الافتراضي');
     for (const m of EXPORT_METHODS) expect(m.hint.length).toBeGreaterThan(20);
   });
 
-  it('المحرك الخفيف ينحفظ ويتقرأ مثل الباقي', () => {
-    setExportMethod('svg');
-    expect(getExportMethod()).toBe('svg');
-    expect(prefersPrintExport()).toBe(false);
+  it('الخيار محصور بحساب أحمد — بقية الحسابات ما تشوفه أصلاً', () => {
+    expect(settings).toContain('isOwnerAccount');
+    const card = settings.indexOf('محرك تصدير ملف العرض');
+    const guard = settings.lastIndexOf('{isOwner && (', card);
+    expect(guard).toBeGreaterThan(-1);
+    expect(card - guard).toBeLessThan(600); // الحارس ملتصق بالبطاقة
+  });
+
+  it('لو ما وصلت حزمة المحرك الخفيف نرجع للاعتيادي مو نفشل', () => {
+    const fn = src.slice(src.indexOf('async function renderSheet'));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    expect(body).toContain('const withCanvas = ()');
+    expect(body).toMatch(/catch \{\s*return withCanvas\(\);/);
   });
 
   it('التصدير يحترم التفضيل قبل ما يجرّب الكانفاس', () => {
     const fn = src.slice(src.indexOf('export async function exportInvoicePdf'));
-    const head = fn.slice(0, fn.indexOf('html2canvas('));
+    const head = fn.slice(0, fn.indexOf("renderSheet('رسم صفحة الفاتورة'"));
     expect(head).toContain('if (prefersPrintExport())');
     expect(head).toContain('return printPages(await printBlocks(),');
     // وماكو توجيه تلقائي حسب المتصفح — انشال بطلب المستخدم
     expect(head).not.toMatch(/if \(isIosSafari\(\)\)/);
   });
 
-  it('الخيار بشاشة الإعدادات مفتوح لكل الحسابات — تفضيل جهاز مو إعداد مشترك', () => {
-    const card = settings.indexOf('طريقة تصدير ملف العرض');
+  it('الخيار برّا fieldset المعطّل — تفضيل جهاز مو إعداد مشترك', () => {
+    const card = settings.indexOf('محرك تصدير ملف العرض');
     const fieldset = settings.indexOf('<fieldset disabled={!canEdit}');
     expect(card).toBeGreaterThan(-1);
     expect(card).toBeLessThan(fieldset);

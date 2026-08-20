@@ -102,19 +102,27 @@ async function ensureArabicFont(el) {
 // النتيجة كانفاس بالحالتين، فباقي المسار (jsPDF ← مشاركة أو تنزيل) ما يتغير
 // ولا حرف — نفس الملف ونفس نافذة الخيارات.
 async function renderSheet(stepName, el, scale = 2) {
-  if (prefersSvgRender()) {
-    const { renderElementToCanvas } = await withStep(
-      `تحميل محرك الرسم الخفيف`,
-      import('./svgRender.js'),
-      STRUCTURE_LIMIT,
-    );
-    return withStep(stepName, renderElementToCanvas(el, { scale, background: '#ffffff' }), CANVAS_LIMIT);
-  }
-  return withStep(
+  const withCanvas = () => withStep(
     stepName,
     html2canvas(el, { scale, useCORS: true, backgroundColor: '#ffffff' }),
     CANVAS_LIMIT,
   );
+  if (!prefersSvgRender()) return withCanvas();
+
+  let renderElementToCanvas;
+  try {
+    // حزمة منفصلة تنجلب وقت التصدير بس. إذا ما وصلت (نسخة مخبأة قديمة، أو
+    // شبكة مقطوعة قبل ما يخزنها العامل) ما نترك البياع بلا ملف — نرجع للمحرك
+    // الاعتيادي بدل ما نفشل. صار مهماً أكثر بعد ما بقى الخفيف هو الافتراضي.
+    ({ renderElementToCanvas } = await withStep(
+      'تحميل محرك الرسم',
+      import('./svgRender.js'),
+      STRUCTURE_LIMIT,
+    ));
+  } catch {
+    return withCanvas();
+  }
+  return withStep(stepName, renderElementToCanvas(el, { scale, background: '#ffffff' }), CANVAS_LIMIT);
 }
 
 // تحرير مخزن الكانفاس فوراً بعد ما نسحب منه الصورة.

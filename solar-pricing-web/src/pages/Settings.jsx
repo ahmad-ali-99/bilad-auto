@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { getAgentKey, setAgentKey, SHARE_KEY_SQL } from '../lib/agent.js';
 import { getCurrentUsername } from '../lib/agent.js';
-import { canEditSettings } from '../lib/permissions.js';
+import { canEditSettings, isOwnerAccount } from '../lib/permissions.js';
 import { EXPORT_METHODS, getExportMethod, setExportMethod } from '../lib/exportMethod.js';
 
 const SETTINGS_FIELDS = [
@@ -19,8 +19,13 @@ export default function Settings() {
   const [canEdit, setCanEdit] = useState(true);
   // طريقة التصدير: تفضيل محلي لهذا الجهاز (مو بقاعدة البيانات)
   const [exportMethod, setExportMethodState] = useState(getExportMethod);
+  // خيار محرك التصدير محصور بحساب أحمد — الباقي ياخذ الافتراضي بلا ما يشوف
+  // الخيار أصلاً (قرار المستخدم بعد ما تثبّت المحرك الخفيف عنده)
+  const [isOwner, setIsOwner] = useState(false);
   useEffect(() => {
-    getCurrentUsername().then((n) => setCanEdit(canEditSettings(n))).catch(() => {});
+    getCurrentUsername()
+      .then((n) => { setCanEdit(canEditSettings(n)); setIsOwner(isOwnerAccount(n)); })
+      .catch(() => {});
   }, []);
   const [settings, setSettings] = useState(null);
   const [company, setCompany] = useState(null);
@@ -172,14 +177,15 @@ export default function Settings() {
           👁 هذا الحساب للاطلاع فقط — يمكنك رؤية الإعدادات لكن التعديل محصور بحسابات الإدارة.
         </div>
       )}
-      {/* تفضيل هذا الجهاز — برّا fieldset المعطّل عمداً: مو إعداداً مشتركاً
-          يمس الفريق، بل خيار محلي يخص هذا الجهاز وحده، فيفتح لكل الحسابات. */}
+      {/* تفضيل هذا الجهاز — برّا fieldset المعطّل عمداً: مو إعداداً مشتركاً يمس
+          الفريق، بل خيار محلي. ومحصور بحساب أحمد: بقية الحسابات تاخذ المحرك
+          الافتراضي بلا ما تشوف الخيار ولا تحتاجه. */}
+      {isOwner && (
       <div className="card">
-        <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>📄 طريقة تصدير ملف العرض (هذا الجهاز فقط)</h3>
+        <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>📄 محرك تصدير ملف العرض (هذا الجهاز فقط)</h3>
         <p className="muted" style={{ marginTop: 0 }}>
-          الطريقتان تطلّعن <b>نفس الملف بنفس الصفحات ونفس الشكل</b> — الفرق بالآلية لا بالنتيجة.
-          إذا التصدير علّق أو طاح بجهازك، بدّلها لـ«طباعة المتصفح». التغيير يخص هذا الجهاز
-          وما يأثر على بقية الحسابات ولا الأجهزة.
+          الكل يشتغل بـ<b>المحرك الخفيف</b> افتراضياً. الخيارات هنا للمقارنة والفحص —
+          تخص <b>هذا الجهاز وحده</b> وما تأثر على أي حساب ولا جهاز ثاني.
         </p>
         <div className="export-method">
           {EXPORT_METHODS.map((m) => (
@@ -202,6 +208,7 @@ export default function Settings() {
           ))}
         </div>
       </div>
+      )}
 
       <fieldset disabled={!canEdit} style={{ border: 'none', padding: 0, margin: 0, minInlineSize: 'auto' }}>
 

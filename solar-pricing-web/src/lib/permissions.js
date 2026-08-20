@@ -107,6 +107,13 @@ export function canEditSettings(username) {
   return isAdminName(username);
 }
 
+// حساب المالك (أحمد) — صلاحيات فردية مو إدارية عامة: سجل الحركات، وتفريغ سلة
+// المحذوفات، وخيار محرك التصدير. كانت المقارنة مكررة بثلاثة ملفات بنفس النص —
+// وأي تعديل بوحدة منهن يخلي الباقيات ورا.
+export function isOwnerAccount(username) {
+  return norm(username) === norm('أحمد');
+}
+
 // الاطلاع على عروض *الفريق كلها* — للمشرفين حصراً.
 // البياع الاعتيادي يفتح صفحة العروض عادي لكن يشوف عروضه هو فقط (فلترة بـdataApi).
 export function canViewQuotes(username) {
