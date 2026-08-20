@@ -411,6 +411,21 @@ export const api = {
       });
       return row;
     },
+    // درجة الحماية وحدها — بلا ما نعيد كتابة صف المادة كله.
+    // تغذّي «إكمال درجات الحماية» بالمخزون: قائمة المواد الناقصة تنملأ سطراً سطراً.
+    async setIp(id, value) {
+      await assertCanEditMaterial(id, 'درجة الحماية لهذه المادة');
+      const { data: m } = await supabase.from('materials').select('full_description').eq('id', id).maybeSingle();
+      const before = await api.config.get(ipKey(id));
+      await saveIpRating(id, { ip_rating: value });
+      const n = parseIp(value);
+      logActivity(n == null ? 'حذف درجة الحماية' : 'تحديد درجة الحماية', 'المخزون', {
+        'المادة': m?.full_description || id,
+        ...(n == null ? {} : { 'درجة الحماية': `IP${String(n).padStart(2, '0')}` }),
+        [UNDO]: { kind: 'config', key: ipKey(id), before, label: 'إرجاع درجة الحماية السابقة', confirm: `إرجاع درجة الحماية لـ«${m?.full_description || id}» مثل ما كانت` },
+      });
+      return { ok: true, ip: n };
+    },
     async update(id, data) {
       await assertCanEditMaterial(id, 'هذه المادة');
       // لقطة الصف كامل قبل التعديل — السجل يبيّن شنو تغيّر، والاسترجاع يرجّع كل

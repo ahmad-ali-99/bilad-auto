@@ -93,9 +93,9 @@ describe('المنع بطبقة البيانات', () => {
     expect(dataApi).toContain('upsert({ key: ownerKey(row.id)');
   });
 
-  it('التعديل والحذف والإخفاء والصورة كلها تمر بفحص الملكية', () => {
+  it('التعديل والحذف والإخفاء والصورة ودرجة الحماية كلها تمر بفحص الملكية', () => {
     const guarded = (dataApi.match(/await assertCanEditMaterial\(id/g) || []).length;
-    expect(guarded, 'update + remove + setActive + setImage').toBe(4);
+    expect(guarded, 'update + remove + setActive + setImage + setIp').toBe(5);
   });
 
   it('الاستيراد يرفض تحديث الموجود لحساب الإضافة، ويسجّل مالك الجديد', () => {

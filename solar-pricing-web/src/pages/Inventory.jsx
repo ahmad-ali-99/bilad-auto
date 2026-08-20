@@ -5,7 +5,7 @@ import ImportPreviewModal from '../components/ImportPreviewModal.jsx';
 import { getCurrentUsername } from '../lib/agent.js';
 import { canEditInventory, canAddMaterial, canEditMaterial, canImportInventory, canEditLabor } from '../lib/permissions.js';
 import { useMediaQuery, PHONE } from '../lib/useMediaQuery.js';
-import { formatIp } from '../lib/materialSpecs.js';
+import { formatIp, hasIp, parseIp, IP_RANGE_ERROR } from '../lib/materialSpecs.js';
 
 const TABS = [
   { key: 'panel', label: 'الألواح' },
@@ -15,6 +15,121 @@ const TABS = [
   { key: 'secondary', label: 'مواد ثانوية' },
   { key: 'labor', label: 'أجور العمل' },
 ];
+
+// عدّ المواد بالعربي الصحيح: «مادة وحدة» · «مادتين» · «3 مواد» · «11 مادة».
+// بلا هذا تطلع «اكو 3 مادة» و«اكو 1 مادة» — ركيكة بوجه المستخدم.
+function countMaterials(n) {
+  if (n === 1) return 'مادة وحدة';
+  if (n === 2) return 'مادتين';
+  if (n <= 10) return `${n} مواد`;
+  return `${n} مادة`;
+}
+
+// ترتيب الفئات بلوحة الإكمال: الفئات اللي تدخل بالمستويات أولاً (الـIP هو اللي
+// يقرر اقتصادي/متوسط/ممتاز)، والثانوية آخر شي لأن الـIP إلها أقل معنى.
+const IP_GROUPS = [
+  { key: 'inverter', label: 'الانفيرترات' },
+  { key: 'battery', label: 'البطاريات' },
+  { key: 'panel', label: 'الألواح' },
+  { key: 'integrated', label: 'سستم متكامل' },
+  { key: 'secondary', label: 'مواد ثانوية (اختيارية)' },
+];
+
+/**
+ * إكمال درجات الحماية — طلب صريح من المستخدم: «ابدي واطلب مني ايبي بالمخزون للكل».
+ *
+ * الشارة بكل سطر تبيّن المادة الناقصة، بس ما تطلب شي: لازم يفتّش صف صف. هذي
+ * اللوحة تجمع **كل** الناقصات بمكان واحد ويملأهن سطراً سطراً بحفظة وحدة.
+ *
+ * ليش يهم: الـIP هو مقياس المواصفات اللي ينبني عليه مستوى المنظومة — والمادة
+ * بلا IP تطيح بأدنى درجة، فتطلع «اقتصادية» وهي مو كذلك.
+ */
+function IpFillPanel({ materials, canEditOne, onSaved }) {
+  const [open, setOpen] = useState(false);
+  const [values, setValues] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const missing = materials.filter((m) => !hasIp(m) && canEditOne(m));
+  if (!missing.length) return null;
+
+  const filled = Object.entries(values).filter(([, v]) => String(v).trim() !== '');
+  const bad = filled.filter(([, v]) => parseIp(v) == null);
+
+  async function saveAll() {
+    if (bad.length) { setMsg(IP_RANGE_ERROR); return; }
+    setSaving(true);
+    setMsg('');
+    let done = 0;
+    const failed = [];
+    for (const [id, v] of filled) {
+      try {
+        await window.api.materials.setIp(Number(id), v);
+        done++;
+      } catch (e) {
+        failed.push(e.message);
+      }
+    }
+    setSaving(false);
+    setValues({});
+    setMsg(failed.length
+      ? `انحفظت ${countMaterials(done)}، وتعذّر حفظ ${failed.length}: ${failed[0]}`
+      : `تم حفظ درجة الحماية لـ${countMaterials(done)} ✔`);
+    onSaved();
+  }
+
+  return (
+    <div className="ip-fill">
+      <div className="ip-fill-head">
+        <span className="ip-fill-warn">⚠</span>
+        <span>
+          اكو <b>{countMaterials(missing.length)}</b> بلا درجة حماية (IP) — تنحسب بأدنى درجة
+          بالمستويات، فتطلع «اقتصادية» وهي مو كذلك.
+        </span>
+        <button className="btn btn-secondary btn-sm" onClick={() => setOpen((o) => !o)}>
+          {open ? 'إخفاء' : 'املأها الآن'}
+        </button>
+      </div>
+
+      {open && (
+        <div className="ip-fill-body">
+          {IP_GROUPS.map(({ key, label }) => {
+            const rows = missing.filter((m) => m.category === key);
+            if (!rows.length) return null;
+            return (
+              <div key={key} className="ip-fill-group">
+                <h4>{label} <span className="muted">({rows.length})</span></h4>
+                {rows.map((m) => (
+                  <label key={m.id} className="ip-fill-row">
+                    <span className="ip-fill-name">
+                      <b>{m.brand}</b> {m.model}
+                      {m.watt_or_capacity != null && <span className="muted"> · {m.watt_or_capacity}</span>}
+                    </span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="مثل 65"
+                      value={values[m.id] ?? ''}
+                      onChange={(e) => setValues((v) => ({ ...v, [m.id]: e.target.value }))}
+                    />
+                  </label>
+                ))}
+              </div>
+            );
+          })}
+          {msg && <div className="ip-fill-msg">{msg}</div>}
+          <div className="ip-fill-actions">
+            <button className="btn btn-primary" disabled={saving || !filled.length} onClick={saveAll}>
+              {saving ? 'يحفظ...' : filled.length ? `احفظ ${countMaterials(filled.length)}` : 'احفظ'}
+            </button>
+            <span className="muted">اتركها فارغة إذا ما تعرفها — تكدر تكملها بأي وقت.</span>
+          </div>
+        </div>
+      )}
+      {!open && msg && <div className="ip-fill-msg">{msg}</div>}
+    </div>
+  );
+}
 
 function capacityLabel(category) {
   if (category === 'battery' || category === 'integrated') return 'السعة (kWh)';
@@ -103,10 +218,19 @@ export default function Inventory({ initialSearch }) {
   const [importParsed, setImportParsed] = useState(null);
   const [importMessage, setImportMessage] = useState('');
 
+  // لوحة إكمال الـIP تشتغل على **كل** المخزون مو على التبويب الحالي — الطلب كان
+  // «للكل»، وبلا هذا يبقى الناقص بتبويب ثاني مخفياً عن العين.
+  const [allMaterials, setAllMaterials] = useState([]);
+
+  const reloadAll = useCallback(() => {
+    window.api.materials.list().then(setAllMaterials).catch(() => {});
+  }, []);
+
   const reload = useCallback(() => {
+    reloadAll();
     if (tab === 'labor') return;
     window.api.materials.list(tab).then(setMaterials);
-  }, [tab]);
+  }, [tab, reloadAll]);
 
   useEffect(() => {
     reload();
@@ -199,6 +323,9 @@ export default function Inventory({ initialSearch }) {
         )}
       </div>
       {importMessage && <div className="alert alert-info">{importMessage}</div>}
+
+      <IpFillPanel materials={allMaterials} canEditOne={mayEdit} onSaved={reload} />
+
       <div className="tabs">
         {TABS.map((t) => (
           <button key={t.key} className={tab === t.key ? 'active' : ''} onClick={() => setTab(t.key)}>

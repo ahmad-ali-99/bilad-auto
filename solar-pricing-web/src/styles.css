@@ -1677,3 +1677,72 @@ h2.page-title::before {
   border-radius: 9px;
   background: #fff;
 }
+
+/* ===== لوحة إكمال درجات الحماية (IP) بالمخزون =====
+   الشارة بالسطر تبيّن الناقص بس ما تطلب شي — واللوحة هذي تجمع الناقصات كلها
+   بمكان واحد وتنملأ بحفظة وحدة. */
+.ip-fill {
+  margin: 10px 0 12px;
+  border: 1px solid #f0c98a;
+  background: #fffaf1;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.ip-fill-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: #7a4f0e;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+.ip-fill-head > span:nth-child(2) { flex: 1; min-width: 220px; }
+.ip-fill-warn { font-size: 1.1rem; }
+.ip-fill-body { margin-top: 10px; border-top: 1px dashed #e6c691; padding-top: 10px; }
+.ip-fill-group { margin-bottom: 12px; }
+.ip-fill-group h4 {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  color: #1a3a5c;
+  font-weight: 800;
+}
+.ip-fill-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px solid #f3e6cf;
+  font-size: 0.85rem;
+}
+.ip-fill-row:last-child { border-bottom: none; }
+.ip-fill-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ip-fill-row input {
+  width: 92px;
+  flex: none;
+  padding: 4px 8px;
+  border: 1px solid #c7d2db;
+  border-radius: 6px;
+  font-family: inherit;
+  text-align: center;
+}
+.ip-fill-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+@media (max-width: 430px) {
+  .ip-fill-row { flex-wrap: wrap; }
+  .ip-fill-row input { width: 100%; }
+}
+.ip-fill-msg {
+  margin: 8px 0 4px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #eef3f8;
+  border: 1px solid #c7d2db;
+  color: #1a3a5c;
+  font-size: 0.85rem;
+}
