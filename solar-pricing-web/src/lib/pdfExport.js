@@ -124,13 +124,45 @@ const blobToBase64 = (blob) =>
     r.readAsDataURL(blob);
   });
 
+// سفاري الآيفون: هل المتصفح سفاري على iOS؟ (كروم وفايرفوكس بالآيفون يشتغلون
+// على محرك سفاري نفسه بس سلوك التنزيل عندهم مختلف، فنستثنيهم بالفحص)
+function isIosSafari() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  const iOS = /iP(hone|ad|od)/.test(ua)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // آيباد بوضع سطح المكتب
+  const safari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|Chrome/.test(ua);
+  return iOS && safari;
+}
+
+// تنزيل الملف للجهاز.
+//
+// مشكلتان حقيقيتان كانتا هنا:
+// 1) **سفاري الآيفون يتجاهل خاصية `download`** بروابط blob: — الضغط ما يسوي شي،
+//    فالمستخدم يشوف نافذة الخيارات ويضغط «تنزيل» وما ينزل ولا شي. البديل: نفتح
+//    الملف بتبويب جديد، فيطلع بعارض PDF مال سفاري ومنه يحفظ أو يشارك بأزرار
+//    النظام نفسها.
+// 2) `revokeObjectURL` كان ينندى **فوراً** بعد الضغط — والتنزيل ما يكون بدأ بعد،
+//    فالرابط ينموت قبل ما ينقرأ. التحرير صار مؤجلاً.
 function downloadBlob(blob, fileName) {
   const url = URL.createObjectURL(blob);
+  const release = () => setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+  if (isIosSafari()) {
+    const win = window.open(url, '_blank');
+    if (!win) window.location.href = url; // منع النوافذ المنبثقة — نفتحه بنفس التبويب
+    release();
+    return;
+  }
+
   const a = document.createElement('a');
   a.href = url;
   a.download = fileName;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  release();
 }
 
 // داخل تطبيق الأندرويد (غلاف Capacitor): الـWebView ما يدعم مشاركة الويب أصلاً،

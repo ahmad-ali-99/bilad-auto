@@ -179,3 +179,39 @@ describe('الرجوع من واتساب يعني إن المشاركة خلصت
     expect(src).toContain("outcome.name === 'AbortError'");
   });
 });
+
+// المستخدم حصر العطل: «بس بجهازي وبس بمتصفح سفاري». وسفاري الآيفون له سلوكان
+// معروفان يكسران التسليم: يتجاهل خاصية `download` بروابط blob:، وتحرير الرابط
+// فوراً بعد الضغط يقطع التنزيل قبل ما يبدي.
+describe('تسليم الملف بسفاري الآيفون', () => {
+  it('يتعرّف على سفاري الآيفون ويستثني كروم وفايرفوكس الآيفون', () => {
+    expect(src).toContain('function isIosSafari');
+    expect(src).toMatch(/CriOS\|FxiOS\|EdgiOS\|OPiOS\|Chrome/);
+    // الآيباد بوضع سطح المكتب ينحسب iOS هم
+    expect(src).toContain("navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1");
+  });
+
+  it('بسفاري يفتح الملف بتبويب بدل <a download> اللي يتجاهلها', () => {
+    const fn = src.slice(src.indexOf('function downloadBlob'));
+    const body = fn.slice(0, fn.indexOf('\n}'));
+    expect(body).toContain('if (isIosSafari())');
+    expect(body).toContain("window.open(url, '_blank')");
+    // وإذا انمنعت النوافذ المنبثقة نفتحه بنفس التبويب بدل ما ما يصير شي
+    expect(body).toContain('window.location.href = url');
+  });
+
+  it('تحرير رابط blob مؤجل — ما يقطع التنزيل', () => {
+    const fn = src.slice(src.indexOf('function downloadBlob'));
+    const body = fn.slice(0, fn.indexOf('\n}'));
+    expect(body).toMatch(/setTimeout\(\(\) => URL\.revokeObjectURL\(url\), \d+\)/);
+    // ماكو تحرير فوري بعد الضغط
+    expect(body).not.toMatch(/a\.click\(\);\s*URL\.revokeObjectURL/);
+  });
+
+  it('المسار الاعتيادي (غير سفاري) يبقى تنزيلاً مباشراً', () => {
+    const fn = src.slice(src.indexOf('function downloadBlob'));
+    const body = fn.slice(0, fn.indexOf('\n}'));
+    expect(body).toContain('a.download = fileName');
+    expect(body).toContain('a.click()');
+  });
+});
