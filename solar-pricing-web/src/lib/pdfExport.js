@@ -4,7 +4,7 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { PDFDocument } from 'pdf-lib';
 import { buildInvoiceInnerHtml } from './invoiceHtml.js';
-import { prefersPrintExport } from './exportMethod.js';
+import { prefersPrintExport, prefersSvgRender } from './exportMethod.js';
 import { buildStructurePageHtml, panelCountFromItems, integratedFromItems } from './structureDiagram.js';
 import { CABINET_IMAGE } from '../assets/cabinetImage.js';
 
@@ -95,6 +95,28 @@ async function ensureArabicFont(el) {
 
 // يرسم HTML لعنصر مخفي → canvas ويضيفه صفحة كاملة بالـPDF (لصفحة التصميم/الغلاف).
 // ensurePage: يبدأ صفحة جديدة (أو يستخدم الأولى إن كانت فارغة) — حتى نتحكم بالترتيب.
+// رسم صفحة على كانفاس — بمحرك واحد من اثنين حسب تفضيل الجهاز:
+//   • html2canvas (الافتراضي)
+//   • SVG foreignObject (المحرك الخفيف) — بلا iframe ولا انتظارات بلا سقف،
+//     وهي بالضبط اللي تعلّق بمحرك سفاري عند بعض الأجهزة.
+// النتيجة كانفاس بالحالتين، فباقي المسار (jsPDF ← مشاركة أو تنزيل) ما يتغير
+// ولا حرف — نفس الملف ونفس نافذة الخيارات.
+async function renderSheet(stepName, el, scale = 2) {
+  if (prefersSvgRender()) {
+    const { renderElementToCanvas } = await withStep(
+      `تحميل محرك الرسم الخفيف`,
+      import('./svgRender.js'),
+      STRUCTURE_LIMIT,
+    );
+    return withStep(stepName, renderElementToCanvas(el, { scale, background: '#ffffff' }), CANVAS_LIMIT);
+  }
+  return withStep(
+    stepName,
+    html2canvas(el, { scale, useCORS: true, backgroundColor: '#ffffff' }),
+    CANVAS_LIMIT,
+  );
+}
+
 // تحرير مخزن الكانفاس فوراً بعد ما نسحب منه الصورة.
 //
 // السبب مقيس مو مفترض: بقياس مسار التصدير كامل طلعت **ذروة 8.96 مليون بكسل
@@ -124,11 +146,7 @@ async function addHtmlPage(pdf, html, ensurePage, pageWmm = 210, pageHmm = 297) 
     const el = host.querySelector('.mkt-sheet') || Array.from(host.children).find((c) => c.tagName !== 'STYLE') || host.firstElementChild;
     if (!el) return;
     await ensureArabicFont(el);
-    const canvas = await withStep(
-      'رسم صفحة التصميم',
-      html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' }),
-      CANVAS_LIMIT,
-    );
+    const canvas = await renderSheet('رسم صفحة التصميم', el);
     if (!canvas.width || !canvas.height) return; // لا نضيف صفحة فارغة/تالفة
     let w = pageWmm;
     let h = (canvas.height * pageWmm) / canvas.width;
@@ -609,11 +627,7 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
       domCuts.push(r.top - sheetRect.top, r.bottom - sheetRect.top);
     });
 
-    const canvas = await withStep(
-      'رسم صفحة الفاتورة',
-      html2canvas(sheet, { scale: 2, useCORS: true, backgroundColor: '#ffffff' }),
-      CANVAS_LIMIT,
-    );
+    const canvas = await renderSheet('رسم صفحة الفاتورة', sheet);
     const domToCanvas = canvas.width / sheetRect.width;
     const cuts = [...new Set(domCuts.map((v) => Math.round(v * domToCanvas)))]
       .filter((v) => v > 0 && v < canvas.height)

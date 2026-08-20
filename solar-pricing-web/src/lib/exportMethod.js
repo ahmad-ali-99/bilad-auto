@@ -8,21 +8,36 @@
 //
 // الطريقتان تطلّعن **نفس الملف بنفس الصفحات ونفس الشكل** (تأكدنا بمقارنة
 // صفحةً بصفحة: الفرق حواف الحروف فقط). الفرق بالآلية لا بالنتيجة:
-//   • الرسم    — كانفاس ← jsPDF ← مشاركة أو تنزيل. صورة داخل الملف.
-//   • الطباعة  — طباعة المتصفح نفسها. بلا كانفاس وبلا ذاكرة، والنص يطلع نصاً
-//                حقيقياً (أوضح بالتكبير وأخف حجماً)، بس الحفظ يصير من شاشة
-//                الطباعة مال النظام.
+//   • الاعتيادي — html2canvas ← jsPDF ← مشاركة أو تنزيل.
+//   • الخفيف    — رسم بـSVG foreignObject ← jsPDF ← **نفس** المشاركة والتنزيل.
+//                 ماكو iframe ولا نسخة مستند ولا انتظارات بلا سقف — وهي
+//                 بالضبط اللي تعلّق بمحرك سفاري. الملف والخيارات نفسها تماماً.
+//   • الطباعة   — طباعة المتصفح نفسها. آخر حل: بلا ملف وبلا خيارات مشاركة،
+//                 الحفظ يصير من شاشة الطباعة مال النظام.
 const KEY = 'export_method';
 
 export const EXPORT_METHODS = [
-  { key: 'canvas', label: 'الرسم (الافتراضي)', hint: 'يولّد الملف داخل التطبيق ثم يعرض خيارات المشاركة أو التنزيل' },
-  { key: 'print', label: 'طباعة المتصفح', hint: 'يفتح شاشة الطباعة مال الجهاز — استعملها إذا التصدير علّق أو طاح بجهازك' },
+  {
+    key: 'canvas',
+    label: 'المحرك الاعتيادي (الافتراضي)',
+    hint: 'يشتغل بأغلب الأجهزة — يولّد الملف ثم يعرض خيارات المشاركة أو التنزيل',
+  },
+  {
+    key: 'svg',
+    label: 'المحرك الخفيف',
+    hint: 'نفس الملف ونفس خيارات المشاركة والتنزيل، بس برسم أخف — استعمله إذا التصدير علّق بجهازك',
+  },
+  {
+    key: 'print',
+    label: 'طباعة المتصفح',
+    hint: 'آخر حل: يفتح شاشة الطباعة مال الجهاز بدل ما ينزّل ملفاً',
+  },
 ];
 
 export function getExportMethod() {
   try {
     const v = localStorage.getItem(KEY);
-    return v === 'print' ? 'print' : 'canvas';
+    return EXPORT_METHODS.some((m) => m.key === v) ? v : 'canvas';
   } catch {
     return 'canvas'; // التخزين المحلي محجوب (تصفح خاص) — الافتراضي
   }
@@ -30,11 +45,19 @@ export function getExportMethod() {
 
 export function setExportMethod(value) {
   try {
-    if (value === 'print') localStorage.setItem(KEY, 'print');
-    else localStorage.removeItem(KEY);
+    if (value && value !== 'canvas' && EXPORT_METHODS.some((m) => m.key === value)) {
+      localStorage.setItem(KEY, value);
+    } else {
+      localStorage.removeItem(KEY);
+    }
   } catch { /* ما ينحفظ التفضيل — يبقى الافتراضي */ }
 }
 
 export function prefersPrintExport() {
   return getExportMethod() === 'print';
+}
+
+/** المحرك الخفيف: نفس مسار الملف والمشاركة، بس الرسم بـSVG بدل html2canvas */
+export function prefersSvgRender() {
+  return getExportMethod() === 'svg';
 }

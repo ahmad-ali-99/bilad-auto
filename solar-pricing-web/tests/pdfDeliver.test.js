@@ -271,8 +271,9 @@ describe('كل خطوة تسمّي نفسها عند التعليق', () => {
   });
 
   it('ماكو نداء html2canvas بلا سقف واسم', () => {
+    // صفحتا الفاتورة والتصميم توحّدن بـrenderSheet، فبقى نداءان: هو ومنشور الباقات
     const calls = [...src.matchAll(/html2canvas\(/g)];
-    expect(calls.length).toBeGreaterThanOrEqual(3);
+    expect(calls.length).toBeGreaterThanOrEqual(2);
     // كل نداء لازم يسبقه withStep بنفس السطر أو اللي قبله
     for (const m of calls) {
       const before = src.slice(Math.max(0, m.index - 200), m.index);

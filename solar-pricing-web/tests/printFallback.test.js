@@ -31,7 +31,7 @@ describe('مسار الطباعة بديلاً عن رسم الكانفاس', ()
   // بالكانفاس بكل الأجهزة، والطباعة شبكة أمان أخيرة بس.
   it('ماكو توجيه تلقائي حسب المتصفح — الافتراضي الكانفاس للكل', () => {
     const fn = src.slice(src.indexOf('export async function exportInvoicePdf'));
-    const head = fn.slice(0, fn.indexOf('html2canvas('));
+    const head = fn.slice(0, fn.indexOf("renderSheet('رسم صفحة الفاتورة'"));
     expect(head).not.toMatch(/if \(isIosSafari\(\)\)/);
     // الاستثناء الوحيد تفضيل الجهاز نفسه — اختيار المستخدم مو تخمين المتصفح
     expect(head).toContain('if (prefersPrintExport())');
@@ -42,10 +42,11 @@ describe('مسار الطباعة بديلاً عن رسم الكانفاس', ()
 
   it('بلا تفضيل، الطباعة ما تنداز إلا بعد ما يعلّق الرسم فعلاً', () => {
     const fn = src.slice(src.indexOf('export async function exportInvoicePdf'));
-    const canvasAt = fn.indexOf('html2canvas(');
-    // آخر نداء للطباعة (اللي بالـcatch) لازم يكون بعد الرسم
+    const drawAt = fn.indexOf("renderSheet('رسم صفحة الفاتورة'");
+    // نداء الطباعة اللي بالـcatch لازم يكون بعد الرسم
     const printAt = fn.lastIndexOf('printPages(await printBlocks()');
-    expect(printAt).toBeGreaterThan(canvasAt);
+    expect(drawAt).toBeGreaterThan(-1);
+    expect(printAt).toBeGreaterThan(drawAt);
   });
 
   it('أي متصفح يوقع بخطوة معلّقة يرجع للطباعة بدل ما يرمي الخطأ بوجه المستخدم', () => {

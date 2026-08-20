@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getExportMethod, setExportMethod, prefersPrintExport, EXPORT_METHODS } from '../src/lib/exportMethod.js';
+import { getExportMethod, setExportMethod, prefersPrintExport, prefersSvgRender, EXPORT_METHODS } from '../src/lib/exportMethod.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const src = fs.readFileSync(path.join(HERE, '../src/lib/pdfExport.js'), 'utf8');
@@ -51,9 +51,15 @@ describe('طريقة التصدير — تفضيل هذا الجهاز', () => {
     expect(() => setExportMethod('print')).not.toThrow();
   });
 
-  it('خيارَان بس، وبكل واحد شرح للمستخدم', () => {
-    expect(EXPORT_METHODS.map((m) => m.key)).toEqual(['canvas', 'print']);
+  it('ثلاثة خيارات مرتبة من الأقرب للافتراضي، وبكل واحد شرح للمستخدم', () => {
+    expect(EXPORT_METHODS.map((m) => m.key)).toEqual(['canvas', 'svg', 'print']);
     for (const m of EXPORT_METHODS) expect(m.hint.length).toBeGreaterThan(20);
+  });
+
+  it('المحرك الخفيف ينحفظ ويتقرأ مثل الباقي', () => {
+    setExportMethod('svg');
+    expect(getExportMethod()).toBe('svg');
+    expect(prefersPrintExport()).toBe(false);
   });
 
   it('التصدير يحترم التفضيل قبل ما يجرّب الكانفاس', () => {
