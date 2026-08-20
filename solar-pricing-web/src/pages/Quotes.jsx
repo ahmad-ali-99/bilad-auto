@@ -267,13 +267,21 @@ export default function Quotes({ onEditQuote }) {
     try {
       const prefill = await buildEditPrefill(id);
       if (prefill) onEditQuote(prefill);
+    } catch (err) {
+      // منها منع الملكية: العرض يخص حساباً ثانياً — نوري السبب بدل ما تنبلع الرسالة
+      setMessage('تعذر فتح العرض: ' + err.message);
     } finally {
       setBusyId(null);
     }
   }
 
   async function handleRestore(id, quoteNumber) {
-    await window.api.quotes.restore(id);
+    try {
+      await window.api.quotes.restore(id);
+    } catch (err) {
+      setMessage('تعذر استرداد العرض: ' + err.message);
+      return;
+    }
     setMessage(`تم استرداد العرض رقم ${quoteNumber} ✔`);
     reload();
   }

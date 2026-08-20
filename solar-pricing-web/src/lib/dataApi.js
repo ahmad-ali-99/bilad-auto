@@ -7,7 +7,8 @@ import * as excelImport from './excelImport.js';
 import { exportInvoicePdf, quoteFileName } from './pdfExport.js';
 import { logActivity } from './activityLog.js';
 import { UNDO, DRAFT } from './activityUndo.js';
-import { isRestrictedUser, canEditSettings, canViewQuotes, canAddMaterial, canEditMaterial, canImportInventory, canImportUpdates, canEditLabor } from './permissions.js';
+import { isRestrictedUser, canEditSettings, canAddMaterial, canEditMaterial, canImportInventory, canImportUpdates, canEditLabor } from './permissions.js';
+import { canAccessQuote, visibleQuotes, canAttributeQuote, accessDeniedMessage } from './quoteAccess.js';
 import { installmentPlanLabel } from './installment.js';
 import { imageKey, isImageKey } from './materialImages.js';
 import { ipKey, isIpKey, materialIdFromIpKey, parseIp, IP_RANGE_ERROR } from './materialSpecs.js';
@@ -263,16 +264,37 @@ async function assertAdminSettings(what = 'الإعدادات') {
   }
 }
 
-// سجل العروض: المشرف يشوف عروض الفريق كلها، والبياع يشوف عروضه هو فقط.
-// المطابقة متسامحة مع فروقات الهمزة، وتقبل الإيميل للعروض القديمة اللي انحفظت بيه.
-async function onlyMyQuotes(rows) {
+// هوية الحساب الحالي بالشكل اللي تفهمه وحدة الملكية (اسم + إيميل للعروض القديمة)
+async function currentIdentity() {
   const user = await currentUser();
-  const name = user?.user_metadata?.username || '';
-  if (canViewQuotes(name)) return rows;
-  const norm = (x) => String(x || '').trim().replace(/[أإآ]/g, 'ا');
-  const me = norm(name);
-  const email = String(user?.email || '');
-  return rows.filter((q) => norm(q.created_by) === me || (email && q.created_by === email));
+  return { username: user?.user_metadata?.username || '', email: user?.email || '' };
+}
+
+// سجل العروض: الإدارة تشوف عروض الفريق كلها، والبياع يشوف عروضه هو فقط
+// (وعروضه = اللي سواها بنفسه + اللي أسندتها له الإدارة بـ«العرض من طرف»).
+async function onlyMyQuotes(rows) {
+  return visibleQuotes(await currentIdentity(), rows);
+}
+
+// **الحارس الحقيقي**: الفلترة بالقائمة تخفي بس، وما تمنع. أي عملية على عرض
+// بالمعرّف (فتح، تعديل، حذف، استرجاع، تصدير، مرفق، حالة) تمر من هنا أولاً —
+// وإلا كان أي حساب يوصل لأي عرض إذا عرف رقمه.
+async function assertQuoteAccess(id, what = 'هذا العرض') {
+  const { data: quote } = await supabase.from('quotes').select('id, created_by').eq('id', id).maybeSingle();
+  if (!quote) throw new Error('العرض غير موجود');
+  if (!canAccessQuote(await currentIdentity(), quote)) throw new Error(accessDeniedMessage(what));
+  return quote;
+}
+
+// «العرض من طرف»: إسناد العرض لحساب ثاني — صلاحية إدارية حصراً.
+// بدونها كان أي حساب يكدر يمرر createdBy ويسند عرضاً لغيره (أو يخفيه عن نفسه).
+async function attributedCreator(input) {
+  if (!input?.createdBy) return null;
+  const { username } = await currentIdentity();
+  if (!canAttributeQuote(username)) {
+    throw new Error('إسناد العرض لحساب ثاني محصور بحسابات الإدارة');
+  }
+  return input.createdBy;
 }
 
 export const api = {
@@ -678,6 +700,7 @@ export const api = {
       return map;
     },
     async setStatus(id, status) {
+      await assertQuoteAccess(id, 'حالة هذا العرض');
       const { data: q } = await supabase.from('quotes').select('quote_number, client_name').eq('id', id).maybeSingle();
       const beforeStatus = await api.config.get(`quote_status_${id}`);
       logActivity('تغيير حالة عرض', 'العروض', {
@@ -686,8 +709,10 @@ export const api = {
       });
       return api.config.set(`quote_status_${id}`, { level: status.level, note: status.note || '' });
     },
-    // أسماء كل من سبق وأنشأ عرضاً — تغذي قائمة «العرض من طرف» تلقائياً بدون قائمة ثابتة
+    // أسماء كل من سبق وأنشأ عرضاً — تغذي قائمة «العرض من طرف» تلقائياً بدون قائمة ثابتة.
+    // للإدارة فقط: هي وحدها اللي تسند العروض، وأسماء الفريق ما تنعرض لغيرها.
     async creators() {
+      if (!canAttributeQuote((await currentIdentity()).username)) return [];
       const { data, error } = await supabase.from('quotes').select('created_by');
       throwIf(error);
       return [...new Set((data || []).map((r) => r.created_by).filter(Boolean))];
@@ -826,7 +851,7 @@ export const api = {
         night_supply_hours: 0,
         selected_tier: 'economy',
         total_price: Math.round(Number(input.totalPrice) || 0),
-        created_by: input.createdBy || user?.user_metadata?.username || user?.email || null,
+        created_by: (await attributedCreator(input)) || user?.user_metadata?.username || user?.email || null,
         attachment_name: file.name,
         attachment_data: file.data,
       }).select().single();
@@ -871,8 +896,8 @@ export const api = {
         night_supply_hours: options.nightSupplyHours,
         selected_tier: input.tier,
         total_price: draft.total,
-        // «العرض من طرف»: المشرف يكدر يسند العرض لموظف آخر — وإلا اسم الحساب الحافظ
-        created_by: input.createdBy || user?.user_metadata?.username || user?.email || null,
+        // «العرض من طرف»: الإدارة تكدر تسند العرض لموظف آخر — وإلا اسم الحساب الحافظ
+        created_by: (await attributedCreator(input)) || user?.user_metadata?.username || user?.email || null,
       }).select().single();
       throwIf(error);
 
@@ -901,6 +926,7 @@ export const api = {
     },
     // تحديث عرض محفوظ بمدخلات جديدة: نفس الرقم وتاريخ الإنشاء والمرفق، وبنود وملاحظات جديدة
     async update(id, input) {
+      await assertQuoteAccess(id, 'هذا العرض');
       // لقطة كاملة قبل أي كتابة — للسجل (تغيّر المجموع وتحويل المنشئ) وللاسترجاع:
       // الصف والبنود والملاحظات ونِسَب العرض. أعمدة المرفق مستثناة عمداً (base64 ضخم)
       // والتعديل أصلاً ما يمسها.
@@ -925,6 +951,7 @@ export const api = {
         label: 'إرجاع العرض قبل التعديل',
         confirm: `إرجاع العرض ${before.quote_number} ببنوده وملاحظاته ونِسَبه مثل ما كانت قبل هذا التعديل`,
       } : { kind: 'none', why: 'ما انلقطت حالة العرض قبل التعديل' };
+      const assigned = await attributedCreator(input);
       const options = await this._options(input);
       const draft = quoteService.buildQuoteDraft(options, await this._draftArgs(input));
       const notes = [...new Set([...(input.notes || []), ...draft.warrantyNotes])];
@@ -941,8 +968,9 @@ export const api = {
           night_supply_hours: options.nightSupplyHours,
           selected_tier: input.tier,
           total_price: draft.total,
-          // تغيير الإسناد فقط إذا انطى اسم صريح — وإلا يبقى المنشئ الأصلي بلا مساس
-          ...(input.createdBy ? { created_by: input.createdBy } : {}),
+          // تغيير الإسناد فقط إذا انطى اسم صريح (وبصلاحية إدارية) — وإلا يبقى
+          // المنشئ الأصلي بلا مساس، حتى لو اللي يعدّل حساب ثاني
+          ...(assigned ? { created_by: assigned } : {}),
         })
         .eq('id', id)
         .select()
@@ -967,13 +995,13 @@ export const api = {
       if (notesPayload.length) throwIf((await supabase.from('quote_notes').insert(notesPayload)).error);
 
       await this._saveAdjustments(id, await this._adjustments(input), input.extraUnits, input.secondarySelections, { systemType: input.systemType, overrides: input.overrides, unitCounts: input.unitCounts });
-      const transferred = input.createdBy && before?.created_by && input.createdBy !== before.created_by;
+      const transferred = assigned && before?.created_by && assigned !== before.created_by;
       logActivity(transferred ? 'تعديل عرض + تحويل الحساب' : 'تعديل عرض', 'العروض', {
         'رقم العرض': quote.quote_number, 'العميل': quote.client_name || '-',
         ...(before && before.total_price !== quote.total_price
           ? { 'المجموع القديم': before.total_price, 'المجموع الجديد': quote.total_price }
           : { 'المجموع': quote.total_price }),
-        ...(transferred ? { 'من حساب': before.created_by, 'إلى حساب': input.createdBy } : {}),
+        ...(transferred ? { 'من حساب': before.created_by, 'إلى حساب': assigned } : {}),
         [UNDO]: snapshot,
       });
       return quote;
@@ -998,8 +1026,12 @@ export const api = {
       // البياع يشوف محذوفاته هو فقط — والتنظيف التلقائي للأسبوع يبقى على مستوى الجدول
       return onlyMyQuotes(deleted.filter((q) => new Date(q.deleted_at).getTime() >= weekAgo));
     },
-    // تفريغ السلة نهائياً (صلاحية حساب أحمد بالواجهة): حذف كل المحذوفات فوراً بلا انتظار الأسبوع
+    // تفريغ السلة نهائياً: حذف كل المحذوفات فوراً بلا انتظار الأسبوع.
+    // يمس عروض الفريق كله — فالصلاحية إدارية بالقاعدة مو بالواجهة بس.
     async purgeDeleted() {
+      if (!canAttributeQuote((await currentIdentity()).username)) {
+        throw new Error('تفريغ سلة المحذوفات محصور بحسابات الإدارة');
+      }
       const { data, error: selError } = await supabase.from('quotes').select('id, quote_number').not('deleted_at', 'is', null);
       throwIf(selError);
       const ids = (data || []).map((q) => q.id);
@@ -1016,6 +1048,7 @@ export const api = {
       return { count: ids.length };
     },
     async restore(id) {
+      await assertQuoteAccess(id, 'هذا العرض');
       const { error } = await supabase.from('quotes').update({ deleted_at: null, deleted_by: null }).eq('id', id);
       throwIf(error);
       const { data: q } = await supabase.from('quotes').select('quote_number, client_name').eq('id', id).maybeSingle();
@@ -1027,6 +1060,7 @@ export const api = {
     },
     // إرفاق ملف تصميم (صورة أو PDF) بالعرض — يخزن base64 ويتصدر مع ملف العرض
     async setAttachment(id, { name, data }) {
+      await assertQuoteAccess(id, 'هذا العرض');
       const { error } = await supabase.from('quotes').update({ attachment_name: name, attachment_data: data }).eq('id', id);
       throwIf(error);
       const { data: q } = await supabase.from('quotes').select('quote_number').eq('id', id).maybeSingle();
@@ -1038,6 +1072,7 @@ export const api = {
       return { ok: true };
     },
     async removeAttachment(id) {
+      await assertQuoteAccess(id, 'هذا العرض');
       const { data: q } = await supabase.from('quotes').select('quote_number, attachment_name').eq('id', id).maybeSingle();
       const { error } = await supabase.from('quotes').update({ attachment_name: null, attachment_data: null }).eq('id', id);
       throwIf(error);
@@ -1048,6 +1083,7 @@ export const api = {
       return { ok: true };
     },
     async get(id) {
+      await assertQuoteAccess(id, 'هذا العرض');
       const { data: quote } = await supabase.from('quotes').select('*').eq('id', id).single();
       if (!quote) return null;
       const [{ data: items }, { data: notes }] = await Promise.all([
@@ -1057,6 +1093,7 @@ export const api = {
       return { quote, items: items || [], notes: notes || [] };
     },
     async remove(id) {
+      await assertQuoteAccess(id, 'هذا العرض');
       // حذف ناعم: يروح لسلة المحذوفات مع تسجيل منو حذفه، ويمكن استرداده خلال أسبوع
       const user = await currentUser();
       const username = user?.user_metadata?.username || user?.email || 'غير معروف';
@@ -1073,6 +1110,7 @@ export const api = {
       return { ok: true };
     },
     async exportPdf(id) {
+      await assertQuoteAccess(id, 'هذا العرض');
       const { data: quote } = await supabase.from('quotes').select('*').eq('id', id).single();
       if (!quote) throw new Error('العرض غير موجود');
       const [{ data: items }, { data: notes }, { data: company }, savedAdj] = await Promise.all([

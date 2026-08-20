@@ -8,6 +8,7 @@ const PumpShowcase = lazy(() => import('../components/PumpShowcase.jsx'));
 import { buildEditPrefill } from '../lib/editPrefill.js';
 import { detectSceneType } from '../lib/sceneType.js';
 import { getIsAdmin, getCurrentUsername, ADMIN_USERS } from '../lib/agent.js';
+import { canAttributeQuote } from '../lib/quoteAccess.js';
 import { canPickBrand, canPriceAdjust } from '../lib/permissions.js';
 import {
   brandSectionsFor, emptyBrandPick, pruneBrandPick, BRAND_SECTION_LABELS,
@@ -244,8 +245,10 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   }, []);
   // قائمة الأسماء: المشرفون الثلاثة + كل من سبق وأنشأ عرضاً (بدون تكرار)
   const creatorOptions = useMemo(() => [...new Set([...ADMIN_USERS, ...pastCreators])], [pastCreators]);
-  // إسناد العرض لموظف آخر: صلاحية حصرية لحساب أحمد فقط (مو كل المشرفين)
-  const canAttribute = isAdmin && (myName || '').replace(/[أإآ]/g, 'ا').trim() === 'احمد';
+  // إسناد العرض لموظف آخر («العرض من طرف»): صلاحية **حسابات الإدارة** كلها.
+  // كانت محصورة بحساب أحمد وانفتحت بطلب صريح — العرض المُسنَد يروح لصاحبه:
+  // يطلع بقائمته ويفتحه ويعدّله، ويبقى مفتوحاً للإدارة معه.
+  const canAttribute = canAttributeQuote(myName);
   // العرض التفاعلي موقوف مؤقتاً عن الجميع عدا حساب أحمد الشخصي — إلى أن يكتمل ترتيبه
   // ⏸ العرض التفاعلي 3D موقوف بقرار المستخدم: المشهد المبني بالكود ما يوصل لواقعية مقنعة،
   // والانتظار لموديلات حقيقية (فيلا فوتوريالستك) قبل إرجاعه. الكود كله باقٍ كما هو —
