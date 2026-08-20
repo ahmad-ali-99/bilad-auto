@@ -377,6 +377,27 @@ function shareFile(pdfFile, fileName) {
   });
 }
 
+// المرفق بمسار الطباعة: الصورة تنحط بصفحة كاملة مثل ما يسويها المسار القديم.
+// المرفق PDF ما ينندمج بالطباعة (ماكو دمج ملفات بالمتصفح) — ينزل ملفاً منفصلاً.
+function attachmentPageHtml(attachment) {
+  const data = attachment?.data;
+  if (!data || !data.startsWith('data:image/')) return null;
+  return `
+<style>
+.att-sheet { width:794px; height:1123px; display:flex; align-items:center; justify-content:center;
+             background:#fff; padding:10mm; }
+.att-sheet img { max-width:100%; max-height:100%; object-fit:contain; }
+</style>
+<div class="att-sheet"><img src="${data}" alt="" /></div>`;
+}
+
+function pdfAttachmentOf(attachment) {
+  const data = attachment?.data;
+  if (!data || !data.startsWith('data:application/pdf')) return null;
+  return { name: attachment.name || 'التصميم.pdf', data };
+}
+
+
 // ═══ مسار الطباعة: بديل كامل عن رسم الصفحة بالكانفاس ══════════════════════
 //
 // `html2canvas` يرسم الصفحة على canvas بمقاس A4 ×2 (~1588×2246 بكسل) قبل ما
@@ -389,23 +410,37 @@ function shareFile(pdfFile, fileName) {
 //
 // الميزة الثانية: النص يطلع **نصاً حقيقياً** بالملف مو صورة — أوضح بالطباعة
 // وأخف حجماً ويمكن البحث بيه.
-function printPages(htmlBlocks) {
+function printPages(htmlBlocks, { pdfAttachment = null } = {}) {
   return new Promise((resolve) => {
     const host = document.createElement('div');
     host.id = 'print-root';
     host.innerHTML = htmlBlocks
       .filter(Boolean)
-      .map((h, i) => `<div class="print-page"${i ? ' style="page-break-before:always"' : ''}>${h}</div>`)
+      .map((h, i) => `<div class="print-page"${i ? ' style="break-before:page;page-break-before:always"' : ''}>${h}</div>`)
       .join('');
 
     const style = document.createElement('style');
     style.textContent = `
       #print-root { position: fixed; left: -10000px; top: 0; }
       @media print {
+        /* خلفية التطبيق الرمادية كانت تنطبع بنص الورقة الفاضي — الورقة بيضاء */
+        html, body { background: #fff !important; }
         body > *:not(#print-root) { display: none !important; }
         #print-root { position: static !important; left: auto !important; }
-        #print-root .inv-sheet { box-shadow: none !important; margin: 0 !important; }
-        @page { size: A4; margin: 6mm; }
+        /* الورقة تملأ A4 بالضبط: 794×1123 بكسل على 96dpi، وهامش الصفحة صفر
+           والحشوة الداخلية تلعب دوره. بهامش @page كان العرض المتاح أقل من عرض
+           التصميم فيتقلّص الرسم وتنولد صفحة زايدة (نفس درس كتب الشركة). */
+        @page { size: A4; margin: 0; }
+        #print-root, #print-root * {
+          /* بلا هذا المتصفح **يشيل كل الخلفيات** بالطباعة: الترويسة الكحلية
+             وشريط العنوان وصفوف الجدول تطلع بيضاء — وهذا أكبر فرق كان بين
+             ملف الطباعة والملف القديم المرسوم بالكانفاس. */
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        #print-root .print-page { width: 794px; margin: 0 auto; overflow: hidden; }
+        #print-root .inv-sheet { box-shadow: none !important; margin: 0 !important; width: 794px !important; }
+        #print-root .mkt-sheet { box-shadow: none !important; margin: 0 !important; }
       }
     `;
     document.body.appendChild(style);
@@ -419,7 +454,15 @@ function printPages(htmlBlocks) {
       clearTimeout(timer);
       host.remove();
       style.remove();
-      resolve({ canceled: false, printed: true });
+      // المرفق PDF ما ينندمج بالطباعة — ننزله ملفاً منفصلاً حتى ما يضيع
+      if (pdfAttachment) {
+        try {
+          const bin = atob(pdfAttachment.data.split(',')[1]);
+          const buf = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+          downloadBlob(new Blob([buf], { type: 'application/pdf' }), pdfAttachment.name);
+        } catch { /* المرفق تعذّر تنزيله — العرض نفسه انطبع على أي حال */ }
+      }
+      resolve({ canceled: false, printed: true, attachmentSeparate: !!pdfAttachment });
     };
     // بعض المتصفحات ما تطلق `afterprint` إذا المستخدم ألغى — ننظف على أي حال
     const timer = setTimeout(cleanup, 120000);
@@ -461,15 +504,63 @@ export async function deliverPdf(blob, fileName) {
   return { canceled: false, shared: false };
 }
 
+// صفحة الغلاف (التصميم) — كانت مبنية داخل مسار الكانفاس فقط، فمسار الطباعة كان
+// يطلع **بلا غلاف**: فاتورة وحدها. وهذا اللي خلّى المستخدم يكول «الطريقة القديمة
+// أفضل بكثير». هسه المساران يبنونها من هنا بنفس المنطق ونفس السقوف الزمنية.
+async function buildCoverHtml({ items, company, quote, capability, integrated, panelCount: panelCountIn }) {
+  try {
+    // عدد الألواح يجي جاهزاً من طبقة البيانات (تعرُّف بفئة المادة). قراءة الوصف
+    // احتياط أخير فقط: كانت تفشل إذا الوصف ما بيه كلمة «شمسية» أو بيه كلمة مثل
+    // «الهيكل» أو «لشحن البطاريات» — فتختفي صفحة الغلاف بلا سبب ظاهر.
+    const panelCount = panelCountIn != null ? panelCountIn : panelCountFromItems(items);
+    // الكابينة تجي جاهزة من طبقة البيانات، وقراءة الوصف احتياط أخير فقط
+    const cabinet = integrated || (quote?.system_type === 'integrated' ? integratedFromItems(items) : null);
+    if (cabinet) {
+      // بالسستم المتكامل: صورة الكابينة بدل رندر الستركجر — مصفوفة بمئات الألواح
+      // تطلع مشوّهة وما تخدم العرض، وهذا يتخطى three.js كلياً
+      return buildStructurePageHtml(panelCount, company, CABINET_IMAGE, capability, cabinet) || null;
+    }
+    if (panelCount > 0) {
+      // three.js يُحمّل ديناميكياً هنا فقط (وقت التصدير) حتى ما يثقل فتح التطبيق.
+      // بسقف زمني: تحميل الحزمة عبر الشبكة ممكن يعلّق بتلفون على LTE ضعيف،
+      // و`import()` المعلّق ما يرميه catch — يبلع التصدير كله بصمت.
+      const img = await withLimit((async () => {
+        const { renderStructurePng } = await import('./structure3d.js');
+        return renderStructurePng(panelCount, { width: 1000, height: 620 });
+      })(), STRUCTURE_LIMIT, null);
+      // بلا صورة هيكل نتخطى صفحة الغلاف كلياً — الملف يطلع بلاها بدل ما يعلّق
+      if (img) return buildStructurePageHtml(panelCount, company, img, capability) || null;
+    }
+  } catch {
+    /* فشل الرندر 3D (WebGL غير متاح) — نتخطى صفحة الغلاف بلا كسر العرض */
+  }
+  return null;
+}
+
 export async function exportInvoicePdf({ quote, items, notes, company, fileName, attachment = null, installment = null, structure = true, capability = null, integrated = null, panelCount: panelCountIn = null }) {
   const invoiceHtml = buildInvoiceInnerHtml({ quote, items, notes, company, installment });
+
+  // كل صفحات الملف بمسار الطباعة — نفس صفحات المسار القديم بالضبط:
+  // الغلاف (التصميم) ثم الفاتورة ثم صورة المرفق. بدونها كان مسار الطباعة
+  // يطلّع الفاتورة وحدها بلا غلاف، وهذا اللي خلاه أضعف من القديم.
+  const printBlocks = async () => {
+    const blocks = [];
+    if (structure) {
+      const cover = await buildCoverHtml({ items, company, quote, capability, integrated, panelCount: panelCountIn });
+      if (cover) blocks.push(cover);
+    }
+    blocks.push(invoiceHtml);
+    const attachHtml = attachmentPageHtml(attachment);
+    if (attachHtml) blocks.push(attachHtml);
+    return blocks;
+  };
 
   // سفاري الآيفون: نروح لمسار الطباعة رأساً بلا ما نجرّب الكانفاس أصلاً.
   // السبب مقيس مو مفترض: `html2canvas` علق عند المستخدم ولا رجّع أبداً
   // («علقت خطوة: رسم صفحة الفاتورة»)، وتكراره بس يضيّع دقيقة قبل الرسالة.
   if (isIosSafari()) {
     await ensureArabicFont(null);
-    return printPages([invoiceHtml]);
+    return printPages(await printBlocks(), { pdfAttachment: pdfAttachmentOf(attachment) });
   }
 
   const host = document.createElement('div');
@@ -512,34 +603,8 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
     // بالسستم المتكامل: صورة الكابينة بدل رندر الستركجر — مصفوفة بمئات الألواح
     // تطلع مشوّهة وما تخدم العرض، وهذا يتخطى three.js كلياً (تصدير أسرع وبلا WebGL).
     if (structure) {
-      try {
-        // عدد الألواح يجي جاهزاً من طبقة البيانات (تعرُّف بفئة المادة). قراءة الوصف
-        // احتياط أخير فقط: كانت تفشل إذا الوصف ما بيه كلمة «شمسية» أو بيه كلمة مثل
-        // «الهيكل» أو «لشحن البطاريات» — فتختفي صفحة الغلاف بلا سبب ظاهر.
-        const panelCount = panelCountIn != null ? panelCountIn : panelCountFromItems(items);
-        // الكابينة تجي جاهزة من طبقة البيانات (تعرُّف بفئة المادة)، وقراءة الوصف
-        // احتياط أخير فقط — حتى ما تختفي الصفحة لو الوسيط ما وصل لأي سبب
-        const cabinet = integrated || (quote?.system_type === 'integrated' ? integratedFromItems(items) : null);
-        if (cabinet) {
-          const html = buildStructurePageHtml(panelCount, company, CABINET_IMAGE, capability, cabinet);
-          if (html) await addHtmlPage(pdf, html, ensurePage, pageWmm, pageHmm);
-        } else if (panelCount > 0) {
-          // three.js يُحمّل ديناميكياً هنا فقط (وقت التصدير) حتى ما يثقل فتح التطبيق.
-          // بسقف زمني: تحميل الحزمة عبر الشبكة ممكن يعلّق بتلفون على LTE ضعيف،
-          // و`import()` المعلّق ما يرميه catch — يبلع التصدير كله بصمت.
-          const img = await withLimit((async () => {
-            const { renderStructurePng } = await import('./structure3d.js');
-            return renderStructurePng(panelCount, { width: 1000, height: 620 });
-          })(), STRUCTURE_LIMIT, null);
-          // بلا صورة هيكل نتخطى صفحة الغلاف كلياً — الملف يطلع بلاها بدل ما يعلّق
-          if (img) {
-            const structHtml = buildStructurePageHtml(panelCount, company, img, capability);
-            if (structHtml) await addHtmlPage(pdf, structHtml, ensurePage, pageWmm, pageHmm);
-          }
-        }
-      } catch {
-        /* فشل الرندر 3D (WebGL غير متاح) — نتخطى صفحة الهيكل بلا كسر العرض */
-      }
+      const coverHtml = await buildCoverHtml({ items, company, quote, capability, integrated, panelCount: panelCountIn });
+      if (coverHtml) await addHtmlPage(pdf, coverHtml, ensurePage, pageWmm, pageHmm);
     }
 
     // 2) الفاتورة بعد الغلاف
@@ -591,7 +656,7 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
     // علق الرسم بأي متصفح — ما نترك البياع بلا ملف: ننزل لمسار الطباعة
     if (/علقت خطوة/.test(err?.message || '')) {
       await ensureArabicFont(null);
-      return printPages([invoiceHtml]);
+      return printPages(await printBlocks(), { pdfAttachment: pdfAttachmentOf(attachment) });
     }
     throw err;
   } finally {

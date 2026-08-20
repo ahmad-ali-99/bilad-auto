@@ -22,21 +22,23 @@ describe('مسار الطباعة بديلاً عن رسم الكانفاس', ()
     const fn = src.slice(src.indexOf('function printPages'));
     const body = fn.slice(0, fn.indexOf('\n}\n'));
     expect(body).toContain('body > *:not(#print-root) { display: none !important; }');
-    expect(body).toContain('@page { size: A4; margin: 6mm; }');
+    // هامش صفر: عرض التصميم 794px = A4 على 96dpi بالضبط. بهامش @page يتقلّص
+    // العرض المتاح فينضغط الرسم وتنولد صفحة زايدة.
+    expect(body).toContain('@page { size: A4; margin: 0; }');
   });
 
   it('سفاري الآيفون يروح للطباعة مباشرة بلا كانفاس', () => {
     const fn = src.slice(src.indexOf('export async function exportInvoicePdf'));
     const head = fn.slice(0, fn.indexOf('html2canvas('));
     expect(head).toMatch(/if \(isIosSafari\(\)\)/);
-    expect(head).toContain('return printPages([invoiceHtml]);');
+    expect(head).toContain('return printPages(await printBlocks(),');
   });
 
   it('أي متصفح يوقع بخطوة معلّقة يرجع للطباعة بدل ما يرمي الخطأ بوجه المستخدم', () => {
     expect(src).toMatch(/\/علقت خطوة\/\.test\(err\?\.message \|\| ''\)/);
     const fn = src.slice(src.indexOf('export async function exportInvoicePdf'));
     const tail = fn.slice(fn.indexOf('catch (err)'));
-    expect(tail).toContain('return printPages([invoiceHtml]);');
+    expect(tail).toContain('return printPages(await printBlocks(),');
   });
 
   it('الخطأ الحقيقي (مو تعليق) يبقى يُرمى — ما ننبلع الأعطال', () => {
@@ -64,7 +66,7 @@ describe('مسار الطباعة بديلاً عن رسم الكانفاس', ()
   });
 
   it('الطباعة ترجع printed حتى تنطلع رسالة مختلفة عن رسالة التنزيل', () => {
-    expect(src).toContain('resolve({ canceled: false, printed: true })');
+    expect(src).toContain('resolve({ canceled: false, printed: true, attachmentSeparate: !!pdfAttachment })');
     for (const page of [builder, customer]) {
       expect(page).toContain('result.printed');
       expect(page).toMatch(/انفتحت شاشة الطباعة/);
@@ -75,5 +77,69 @@ describe('مسار الطباعة بديلاً عن رسم الكانفاس', ()
     const fn = src.slice(src.indexOf('function printPages'));
     const body = fn.slice(0, fn.indexOf('\n}\n'));
     expect(body).toContain('page-break-before:always');
+  });
+});
+
+// المستخدم بلّغ إن الطباعة اشتغلت **بس «الطريقة القديمة أفضل بكثير»**. السبب
+// مقيس مو مفترض: مسار الطباعة كان يطبع **الفاتورة وحدها** — بلا صفحة الغلاف
+// اللي يبني عليها العرض، وبلا خلفيات (المتصفح يشيل الخلفيات بالطباعة افتراضياً)
+// فالترويسة الكحلية وشريط العنوان وصفوف الجدول تطلع بيضاء.
+describe('مسار الطباعة يطلّع نفس صفحات المسار القديم', () => {
+  it('نفس الصفحات بنفس الترتيب: غلاف ثم فاتورة ثم المرفق', () => {
+    const fn = src.slice(src.indexOf('const printBlocks = async'));
+    const body = fn.slice(0, fn.indexOf('\n  };'));
+    const cover = body.indexOf('buildCoverHtml');
+    const invoice = body.indexOf('blocks.push(invoiceHtml)');
+    const attach = body.indexOf('attachmentPageHtml(attachment)');
+    expect(cover).toBeGreaterThan(-1);
+    expect(cover).toBeLessThan(invoice);
+    expect(invoice).toBeLessThan(attach);
+  });
+
+  it('صفحة الغلاف تنبني بنفس المنطق للمسارين — ماكو نسختين تتفرقان', () => {
+    expect(src).toContain('async function buildCoverHtml');
+    // مسار الكانفاس صار ينادي نفس الدالة بدل ما يبني الغلاف بنفسه
+    const canvasPath = src.slice(src.indexOf('if (structure) {'), src.indexOf('// 2) الفاتورة بعد الغلاف'));
+    expect(canvasPath).toContain('await buildCoverHtml(');
+    expect((src.match(/await import\('\.\/structure3d\.js'\)/g) || []).length).toBe(1);
+  });
+
+  it('الخلفيات تنطبع — بلاها الترويسة والجداول تطلع بيضاء', () => {
+    const fn = src.slice(src.indexOf('function printPages'));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    expect(body).toContain('-webkit-print-color-adjust: exact !important;');
+    expect(body).toContain('print-color-adjust: exact !important;');
+  });
+
+  it('خلفية التطبيق الرمادية ما تنطبع بنص الورقة', () => {
+    const fn = src.slice(src.indexOf('function printPages'));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    expect(body).toContain('html, body { background: #fff !important; }');
+  });
+
+  it('عرض الورقة 794px بالضبط بالطباعة — بلا تقلّص ولا صفحة زايدة', () => {
+    const fn = src.slice(src.indexOf('function printPages'));
+    const body = fn.slice(0, fn.indexOf('\n}\n'));
+    expect(body).toContain('#print-root .print-page { width: 794px;');
+    expect(body).toContain('#print-root .inv-sheet { box-shadow: none !important; margin: 0 !important; width: 794px !important; }');
+  });
+
+  it('المرفق صورة يصير صفحة، والمرفق PDF ينزل ملفاً منفصلاً مو يضيع', () => {
+    expect(src).toContain('function attachmentPageHtml');
+    expect(src).toContain('function pdfAttachmentOf');
+    const fn = src.slice(src.indexOf('function attachmentPageHtml'));
+    expect(fn.slice(0, 400)).toContain("data.startsWith('data:image/')");
+    const p = src.slice(src.indexOf('function pdfAttachmentOf'));
+    expect(p.slice(0, 300)).toContain("data.startsWith('data:application/pdf')");
+    // وينزل فعلاً بعد ما تخلص الطباعة
+    const pp = src.slice(src.indexOf('function printPages'));
+    expect(pp.slice(0, pp.indexOf('\n}\n'))).toContain('downloadBlob(new Blob([buf], { type: \'application/pdf\' }), pdfAttachment.name)');
+  });
+
+  it('الرسالة تخبر المستخدم إن المرفق نزل لحاله', () => {
+    for (const page of [builder, customer]) {
+      expect(page).toContain('result.attachmentSeparate');
+      expect(page).toMatch(/المرفق نزل/);
+    }
   });
 });

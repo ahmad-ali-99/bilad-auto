@@ -235,7 +235,7 @@ describe('كل خطوة بتوليد الملف إلها سقف زمني', () =>
     const blk = src.slice(src.indexOf("await import('./structure3d.js')") - 400);
     expect(blk.slice(0, 700)).toContain('withLimit(');
     // بلا صورة نتخطى صفحة الغلاف بدل ما نمرر قيمة فارغة
-    expect(src).toContain('if (img) {');
+    expect(src).toContain('if (img) return buildStructurePageHtml(');
   });
 
   it('toBlob محدود وله بديل متزامن', () => {
