@@ -377,6 +377,67 @@ function shareFile(pdfFile, fileName) {
   });
 }
 
+// ═══ مسار الطباعة: بديل كامل عن رسم الصفحة بالكانفاس ══════════════════════
+//
+// `html2canvas` يرسم الصفحة على canvas بمقاس A4 ×2 (~1588×2246 بكسل) قبل ما
+// يحطها بملف PDF. بأجهزة iOS بذاكرة مضغوطة هذي العملية **تعلّق ولا ترجّع أبداً**
+// — وهذا اللي انثبت عند المستخدم برسالة «علقت خطوة: رسم صفحة الفاتورة».
+//
+// البديل: ما نرسم شي. نحقن الفاتورة بالصفحة نفسها ونستدعي طباعة المتصفح.
+// سفاري يفتح شاشة الطباعة مال النظام، ومنها المستخدم يحفظ بـ«الملفات» أو
+// يشارك بواتساب مباشرة — بلا كانفاس وبلا ذاكرة وبلا مكتبات.
+//
+// الميزة الثانية: النص يطلع **نصاً حقيقياً** بالملف مو صورة — أوضح بالطباعة
+// وأخف حجماً ويمكن البحث بيه.
+function printPages(htmlBlocks) {
+  return new Promise((resolve) => {
+    const host = document.createElement('div');
+    host.id = 'print-root';
+    host.innerHTML = htmlBlocks
+      .filter(Boolean)
+      .map((h, i) => `<div class="print-page"${i ? ' style="page-break-before:always"' : ''}>${h}</div>`)
+      .join('');
+
+    const style = document.createElement('style');
+    style.textContent = `
+      #print-root { position: fixed; left: -10000px; top: 0; }
+      @media print {
+        body > *:not(#print-root) { display: none !important; }
+        #print-root { position: static !important; left: auto !important; }
+        #print-root .inv-sheet { box-shadow: none !important; margin: 0 !important; }
+        @page { size: A4; margin: 6mm; }
+      }
+    `;
+    document.body.appendChild(style);
+    document.body.appendChild(host);
+
+    let done = false;
+    const cleanup = () => {
+      if (done) return;
+      done = true;
+      window.removeEventListener('afterprint', cleanup);
+      clearTimeout(timer);
+      host.remove();
+      style.remove();
+      resolve({ canceled: false, printed: true });
+    };
+    // بعض المتصفحات ما تطلق `afterprint` إذا المستخدم ألغى — ننظف على أي حال
+    const timer = setTimeout(cleanup, 120000);
+    window.addEventListener('afterprint', cleanup);
+
+    // الدور صار على المستخدم بشاشة الطباعة — نطفي شريط التحميل
+    stopBusyIndicator();
+    // مهلة قصيرة حتى ينضم العنصر للصفحة ويطبّق الستايل قبل الطباعة
+    setTimeout(() => {
+      try {
+        window.print();
+      } catch {
+        cleanup();
+      }
+    }, 120);
+  });
+}
+
 // إيصال الملف للمستخدم بالترتيب: مشاركة أصلية (تطبيق أندرويد) ← مشاركة ويب ←
 // نافذة الخيارات عند فشل الإذن أو تعليقه ← تنزيل مباشر.
 // مصدَّرة حتى تنفحص بالاختبارات.
@@ -401,9 +462,19 @@ export async function deliverPdf(blob, fileName) {
 }
 
 export async function exportInvoicePdf({ quote, items, notes, company, fileName, attachment = null, installment = null, structure = true, capability = null, integrated = null, panelCount: panelCountIn = null }) {
+  const invoiceHtml = buildInvoiceInnerHtml({ quote, items, notes, company, installment });
+
+  // سفاري الآيفون: نروح لمسار الطباعة رأساً بلا ما نجرّب الكانفاس أصلاً.
+  // السبب مقيس مو مفترض: `html2canvas` علق عند المستخدم ولا رجّع أبداً
+  // («علقت خطوة: رسم صفحة الفاتورة»)، وتكراره بس يضيّع دقيقة قبل الرسالة.
+  if (isIosSafari()) {
+    await ensureArabicFont(null);
+    return printPages([invoiceHtml]);
+  }
+
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-2000px;top:0;width:794px;background:#fff;z-index:-1;';
-  host.innerHTML = buildInvoiceInnerHtml({ quote, items, notes, company, installment });
+  host.innerHTML = invoiceHtml;
   document.body.appendChild(host);
 
   try {
@@ -516,6 +587,13 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
       blob = pdf.output('blob');
     }
     return await deliverPdf(blob, fileName);
+  } catch (err) {
+    // علق الرسم بأي متصفح — ما نترك البياع بلا ملف: ننزل لمسار الطباعة
+    if (/علقت خطوة/.test(err?.message || '')) {
+      await ensureArabicFont(null);
+      return printPages([invoiceHtml]);
+    }
+    throw err;
   } finally {
     document.body.removeChild(host);
   }

@@ -805,7 +805,13 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
         EXPORT_TIMEOUT_MS,
         'التصدير طوّل أكثر من اللازم',
       );
-      if (!result.canceled) setSaveMessage('تم تصدير ملف PDF بنجاح ✔');
+      if (result.printed) {
+        // مسار الطباعة (سفاري): الملف ما ينزل لحاله — المستخدم يحفظه أو يشاركه
+        // من شاشة الطباعة نفسها، فنكتبله شنو يسوي بدل «تم التصدير» اللي تلخبط
+        setSaveMessage('انفتحت شاشة الطباعة — اختر «مشاركة» لإرساله بالواتساب، أو «حفظ إلى الملفات» لتنزيله ✔');
+      } else if (!result.canceled) {
+        setSaveMessage('تم تصدير ملف PDF بنجاح ✔');
+      }
     } catch (err) {
       setSaveMessage('حدث خطأ أثناء التصدير: ' + err.message);
     } finally {

@@ -168,7 +168,8 @@ export default function CustomerView({ user }) {
           () => reject(new Error('التصدير طوّل أكثر من 60 ثانية — جرّب مرة ثانية')), 60000,
         )),
       ]);
-      if (!result.canceled) setMessage('تم تصدير ملف العرض ✔');
+      if (result.printed) setMessage('انفتحت شاشة الطباعة — اختر «مشاركة» أو «حفظ إلى الملفات» ✔');
+      else if (!result.canceled) setMessage('تم تصدير ملف العرض ✔');
     } catch (err) {
       setMessage('تعذر التصدير: ' + err.message);
     } finally {
