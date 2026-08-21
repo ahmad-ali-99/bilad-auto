@@ -89,6 +89,7 @@ const BLANK = {
   systemType: 'full', tier: 'economy', brands: emptyBrandPick(),
   // العرض الجديد ينبني بالمعامل الحالي — والعرض المفتوح للتعديل يجيب معامله المحفوظ
   panelSafetyFactor: PANEL_SAFETY_FACTOR,
+  batteryFactors: null,
   overrides: {},
   markupPercent: '', markupMode: 'visible', discountPercent: '',
   installment: false, installmentPlan: 'company',
@@ -196,6 +197,9 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   // معامل أمان الألواح: 1.25 للعروض الجديدة، والعرض المحفوظ يرجع بمعامله هو
   // (والمحفوظ قبل القاعدة يرجع بـ1) حتى ما يتبدّل عدد ألواحه عند فتحه
   const [panelSafetyFactor, setPanelSafetyFactor] = useState(savedDraft?.panelSafetyFactor ?? PANEL_SAFETY_FACTOR);
+  // معاملات البطاريات: null = بلا معامل (الوضع الحالي). العرض المحفوظ قبل إلغاء
+  // المعامل يرجع بمعاملاته المخزونة حتى ما يتبدّل عدد بطارياته عند التعديل.
+  const [batteryFactors, setBatteryFactors] = useState(savedDraft?.batteryFactors ?? null);
   // الماركات المتوفرة بالمخزون مقسّمة على الفئات
   const [brandOptions, setBrandOptions] = useState(null);
   // المبدّل معروض لحسابات محددة حالياً (بكر وأحمد)
@@ -360,7 +364,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   // اللي محله ذاكرة الجلسة). أي حقل جديد يُضاف هنا وبـBLANK سوية.
   const draftState = {
     clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours,
-    systemType, tier, brands, panelSafetyFactor, overrides, secondarySel, markupPercent, markupMode, discountPercent,
+    systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent,
     installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf,
     extraUnits, unitCounts, notes, pricingOpen, createdBy,
   };
@@ -372,7 +376,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   useEffect(() => {
     const t = setTimeout(() => writeSavedDraft(draftStateRef.current), 500);
     return () => clearTimeout(t);
-  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts, notes, pricingOpen, createdBy]);
+  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts, notes, pricingOpen, createdBy]);
 
   // حفظ فوري عند مغادرة الصفحة أو إغلاق النافذة — بدونه آخر نص ثانية من الكتابة
   // تروح: المؤقت ينلغي مع فكّ الصفحة قبل ما يوصل للتخزين.
@@ -400,6 +404,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
     setTier(s.tier);
     setBrands({ ...emptyBrandPick(), ...(s.brands || {}) });
     setPanelSafetyFactor(s.panelSafetyFactor ?? PANEL_SAFETY_FACTOR);
+    setBatteryFactors(s.batteryFactors ?? null);
     setOverrides(s.overrides);
     setMarkupPercent(s.markupPercent);
     setMarkupMode(s.markupMode);
@@ -470,6 +475,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
         installmentPlan: a.installment?.plan === 'cbi' ? 'cbi' : 'company',
         brands: { ...emptyBrandPick(), ...(p.brands || {}) },
         panelSafetyFactor: Number(p.panelSafetyFactor) > 0 ? Number(p.panelSafetyFactor) : PANEL_SAFETY_FACTOR,
+        batteryFactors: p.batteryFactors ?? null,
         installmentRate: a.installment?.rate ? String(a.installment.rate) : '',
         installmentMonths: a.installment?.months ? String(a.installment.months) : '',
         hideTotalInPdf: a.installment?.hideTotal === true,
@@ -523,6 +529,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
       setInstallmentPlan(a.installment?.plan === 'cbi' ? 'cbi' : 'company');
       if (p.brands) setBrands({ ...emptyBrandPick(), ...p.brands });
       if (Number(p.panelSafetyFactor) > 0) setPanelSafetyFactor(Number(p.panelSafetyFactor));
+      setBatteryFactors(p.batteryFactors ?? null);
       setInstallmentRate(a.installment?.rate ? String(a.installment.rate) : '');
       setInstallmentMonths(a.installment?.months ? String(a.installment.months) : '');
       setHideTotalInPdf(a.installment?.hideTotal === true);
@@ -650,8 +657,8 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
 
   // useMemo ضروري: بدونه الكائن يتجدد بكل رندر → المؤقت ينعاد → حلقة إعادة حساب لا نهائية
   const inputs = useMemo(
-    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts }),
-    [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts]
+    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts }),
+    [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts]
   );
   const debouncedInputs = useDebouncedValue(inputs, 300);
 
@@ -685,6 +692,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
         tier: debouncedInputs.tier,
         brands: debouncedInputs.brands,
         panelSafetyFactor: debouncedInputs.panelSafetyFactor,
+        batteryFactors: debouncedInputs.batteryFactors,
         overrides: debouncedInputs.overrides,
         secondarySelections: debouncedInputs.secondarySel,
         adjustments: {

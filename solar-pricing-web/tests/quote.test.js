@@ -76,8 +76,11 @@ describe('إلغاء المخزون: المواد تُختار دائماً بل
     // ما فيه أي خطأ من نوع مخزون (بس ممكن خطأ أجور عمل للحجم 50 لأنه غير معرّف)
     const stockErrors = Object.keys(draft.errors).filter((k) => k.startsWith('secondary_'));
     expect(stockErrors).toEqual([]);
-    // معامل أمان الاقتصادي 0.9: 48.9×0.9=44 ← ceil(44/16)=3 بدل 4
-    expect(draft.items.find((i) => i.description.includes('بطاريات')).quantity).toBe(3);
+    // بلا معامل: 50×220×4÷1000 = 44kWh ÷ 0.9 = 48.9 ← ceil(48.9/16) = 4.
+    // كانت 3 بمعامل 0.9، و3×16×0.9 = 43.2kWh فقط — أي **نقص** عن الـ44 المطلوبة.
+    const units = draft.items.find((i) => i.description.includes('بطاريات')).quantity;
+    expect(units).toBe(4);
+    expect(units * 16 * SETTINGS_ROW.dod).toBeGreaterThanOrEqual(44);
   });
 });
 
@@ -293,14 +296,26 @@ describe('دستور المستويات الجديد: IP قبل السعر + ه�
   // 18 أمبير ليلي × 4 ساعات × 220 فولت = 15.84kWh ← ÷0.9 dod = 17.6kWh مطلوبة
   const borderline = { roofAreaM2: 60, ampDay: 18, ampNight: 18, nightSupplyHours: 4 };
 
-  it('معامل الاقتصادي 0.9 يقلب 2×15kWh إلى 1×16kWh بالحالة الحدية', () => {
+  // أُلغي معامل أمان البطاريات بقرار المستخدم: معامل الأمان الحقيقي هو عمق
+  // التفريغ (DoD) بالإعدادات، والمعامل الثاني كان مضاعفةً له — وأسوأ منها إنه
+  // كان **يقبل نقصاً صامتاً بالساعات** (يجهّز 7.3 ساعة بدل 8 المطلوبة).
+  it('ماكو معامل: الحاجة الحقيقية ÷ DoD هي اللي تقرر العدد', () => {
     const options = opts2(borderline);
-    // 17.6×0.9=15.84 ← 16kWh توليفة وحدة، و15kWh توليفتين ← أقل عدد يفوز
-    expect(options.batteryTiers.economy.units).toBe(1);
-    expect(options.batteryTiers.economy.material.watt_or_capacity).toBe(16);
-    // بمعامل 1.0 (بدون تسامح) نفس الحالة تطلع 2
-    const strict = buildOptions({ materials: MATERIALS2, laborTiers: LABOR2, settingsRow: SETTINGS_ROW, ...borderline, batteryFactors: { economy: 1, standard: 1, premium: 1 } });
-    expect(strict.batteryTiers.economy.units).toBe(2);
+    // 17.6 ÷ 0.9 = 19.56kWh ← 16kWh ما تكفي وحدة، فتصير ثنتين
+    expect(options.batteryTiers.economy.units).toBe(2);
+    // والساعات المتحققة ما تنزل تحت المطلوب أبداً
+    const kwh = options.batteryTiers.economy.units * options.batteryTiers.economy.material.watt_or_capacity;
+    expect(kwh * SETTINGS_ROW.dod).toBeGreaterThanOrEqual(17.6);
+  });
+
+  it('العرض المحفوظ قبل الإلغاء يرجع بمعاملاته القديمة — عدد بطارياته ما يتبدل', () => {
+    const legacy = buildOptions({
+      materials: MATERIALS2, laborTiers: LABOR2, settingsRow: SETTINGS_ROW, ...borderline,
+      batteryFactors: { economy: 0.9, standard: 0.85, premium: 1.25 },
+    });
+    // 17.6×0.9=15.84 ← بطارية 16kWh وحدة، مثل ما انحفظ العرض بالضبط
+    expect(legacy.batteryTiers.economy.units).toBe(1);
+    expect(legacy.batteryTiers.economy.material.watt_or_capacity).toBe(16);
   });
 
   // القاعدة تُفحص مباشرة على selectInverterTiers بمصفوفة ألواح صفر — عبر
@@ -597,7 +612,11 @@ describe('الممتاز أكبر فعلاً — مو الأرخص', () => {
     expect(pre.total, 'الممتاز أغلى — مو نفس الاقتصادي').toBeGreaterThan(eco.total);
     // سعة البنك وقدرة الانفيرتر بالكيلوواط — مو مجرد عدد وحدات
     const bankKwh = (o, tier) => o.batteryTiers[tier].units * o.batteryTiers[tier].material.watt_or_capacity;
-    expect(bankKwh(opts, 'premium'), 'بنك الممتاز أكبر').toBeGreaterThan(bankKwh(opts, 'economy'));
+    // بعد إلغاء معامل البطاريات: البنك ينحسب بالحاجة الحقيقية لكل المستويات، فما
+    // عاد الممتاز ياخذ بطاريات **أكثر** — يتفرق بالمواصفة (درجة الحماية) وقواعد
+    // الاختيار. وبمخزون هذا الفحص ماكو تنوّع IP بالبطاريات، فالبنك يتساوى.
+    // الشرط الباقي: الممتاز ما ينزل تحت الاقتصادي أبداً.
+    expect(bankKwh(opts, 'premium'), 'بنك الممتاز ما ينزل عن الاقتصادي').toBeGreaterThanOrEqual(bankKwh(opts, 'economy'));
     const invW = (d) => d.inverterTiers.premium.units * d.inverterTiers.premium.material.watt_or_capacity;
     const invEcoW = (d) => d.inverterTiers.economy.units * d.inverterTiers.economy.material.watt_or_capacity;
     expect(invW(pre), 'قدرة انفيرتر الممتاز أكبر').toBeGreaterThan(invEcoW(eco));

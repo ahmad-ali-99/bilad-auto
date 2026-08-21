@@ -15,7 +15,7 @@ import { ipKey, isIpKey, materialIdFromIpKey, parseIp, IP_RANGE_ERROR } from './
 import {
   BRAND_CATEGORIES, normalizeBrandPick, pruneBrandPick, filterMaterialsByBrands, hasBrandPick,
 } from './brandPick.js';
-import { PANEL_SAFETY_FACTOR } from './calc.js';
+import { PANEL_SAFETY_FACTOR, DEFAULT_BATTERY_FACTORS } from './calc.js';
 
 // معامل أمان الألواح الخاص بهذا العرض. العروض المحفوظة تمرّره صراحةً (والقديمة
 // تمرّر 1)، وأي حساب جديد بلا قيمة ياخذ المعامل الحالي.
@@ -35,6 +35,15 @@ function netStep(name, promise, ms = NET_STEP_LIMIT) {
 function panelSafetyFactorOf(input) {
   const v = Number(input?.panelSafetyFactor);
   return v > 0 ? v : PANEL_SAFETY_FACTOR;
+}
+
+// معاملات البطاريات الخاصة بهذا العرض. العروض المحفوظة قبل إلغاء المعامل تمرّر
+// معاملاتها القديمة صراحةً (من editPrefill)، وأي حساب جديد ياخذ الحالي (بلا معامل).
+function batteryFactorsOf(input) {
+  const f = input?.batteryFactors;
+  if (!f) return DEFAULT_BATTERY_FACTORS;
+  const pick = (k) => (Number(f[k]) > 0 ? Number(f[k]) : DEFAULT_BATTERY_FACTORS[k]);
+  return { economy: pick('economy'), standard: pick('standard'), premium: pick('premium') };
 }
 
 function throwIf(error) {
@@ -650,12 +659,10 @@ export const api = {
       return { ...(input.adjustments || {}), installment: await this._installment(input) };
     },
     async _options(input) {
-      const [materials, { data: laborTiers }, { data: settingsRow }, batteryFactors] = await Promise.all([
+      const [materials, { data: laborTiers }, { data: settingsRow }] = await Promise.all([
         allMaterials(),
         supabase.from('labor_tiers').select('*'),
         supabase.from('settings').select('*').eq('id', 1).single(),
-        // معاملات أمان البطاريات لكل مستوى — من الإعدادات المشتركة (وإلا الافتراضي بالمحرك)
-        api.config.get('battery_factors'),
       ]);
       // فلتر البراند: كل قسم بماركته المختارة لحاله (لوح · بطارية · انفيرتر ·
       // كابينة)، والأقسام بلا اختيار تبقى مفتوحة. المواد الثانوية والأجور ما
@@ -676,7 +683,9 @@ export const api = {
         ampDay: input.ampDay,
         ampNight: input.ampNight,
         nightSupplyHours: input.nightSupplyHours,
-        batteryFactors: batteryFactors || null,
+        // معاملات البطاريات صارت خاصية بالعرض مو إعداداً مشتركاً: الجديد بلا معامل،
+        // والمحفوظ قبل الإلغاء يمرّر معاملاته المخزونة فيرجع بنفس بطارياته
+        batteryFactors: batteryFactorsOf(input),
         // معامل أمان الألواح يجي مع العرض: الجديد 1.25، والمحفوظ قبل القاعدة 1
         panelSafetyFactor: panelSafetyFactorOf(input),
       });
@@ -804,6 +813,10 @@ export const api = {
           // بالمعامل الحالي ويتبدّل عدد ألواحه. العروض المحفوظة قبل القاعدة
           // ماكو عندها هذا المفتاح، فتنقرأ بـ1 (بلا معامل) وتبقى مثل ما هي.
           panelSafetyFactor: panelSafetyFactorOf(input),
+          // معاملات البطاريات وقت الحفظ — بنفس منطق معامل الألواح. العروض
+          // المحفوظة قبل الإلغاء ماكو عندها هذا المفتاح، فتنقرأ بالمعاملات
+          // القديمة وتبقى مثل ما هي.
+          batteryFactors: batteryFactorsOf(input),
           // ماركة كل قسم لحاله. `brand` القديم ينحفظ هم للتوافق مع أي قارئ قديم
           // (كان يعني الانفيرتر والبطارية بس) — والقراءة تعتمد `brands` أولاً.
           brands: picked,
@@ -1372,7 +1385,6 @@ export const api = {
       if (!isInternalConfigKey(key)) {
         const labels = {
           secondary_defaults: 'القائمة الافتراضية للمواد الثانوية',
-          battery_factors: 'معاملات أمان البطاريات',
           installment: 'إعدادات التقسيط عبر مصرف النهرين',
         };
         const label = labels[key] || key;

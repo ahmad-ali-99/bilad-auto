@@ -1,7 +1,7 @@
 // بناء كائن التعبئة الكاملة لفتح عرض محفوظ بوضع التعديل — مشترك بين صفحة العروض
 // وتنبيه التكرار بصفحة إنشاء العرض. المواد المبدلة يدوياً والثانوية تُستنتج من البنود.
 import { normalizeBrandPick, pruneBrandPick } from './brandPick.js';
-import { LEGACY_PANEL_SAFETY_FACTOR } from './calc.js';
+import { LEGACY_BATTERY_FACTORS, LEGACY_PANEL_SAFETY_FACTOR } from './calc.js';
 export async function buildEditPrefill(quoteId) {
   const [full, materials, adjustments] = await Promise.all([
     window.api.quotes.get(quoteId),
@@ -47,6 +47,10 @@ export async function buildEditPrefill(quoteId) {
     panelSafetyFactor: Number(adjustments?.panelSafetyFactor) > 0
       ? Number(adjustments.panelSafetyFactor)
       : LEGACY_PANEL_SAFETY_FACTOR,
+    // معاملات البطاريات المحفوظة مع العرض. أُلغيت المعاملات للحسابات الجديدة،
+    // فالعرض المحفوظ قبل الإلغاء (ماكو عنده المفتاح) يرجع بمعاملاته القديمة
+    // حتى ما يتبدّل عدد بطارياته عند إعادة الفتح.
+    batteryFactors: adjustments?.batteryFactors || LEGACY_BATTERY_FACTORS,
     // ماركات الأقسام المحفوظة — بدونها يرجع العرض بكل الماركات ويتبدل اختيار
     // المواد. العروض القديمة محفوظة بحقل `brand` واحد كان يعني الانفيرتر
     // والبطارية، وnormalizeBrandPick يقرأها بنفس معناها بالضبط.
