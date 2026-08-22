@@ -1,17 +1,16 @@
-// محرك 3D حقيقي لهيكل الألواح (three.js) — يرسم مشهداً واقعياً بكاميرا آيزومترية
-// وإضاءة وظلال، ويتقسّم تلقائياً: كل ستركجر 2×8 حد أقصى، والإضافي يرفع أقدامه.
+// محرك 3D حقيقي لمصفوفة الألواح (three.js) — يرسم مشهداً واقعياً بكاميرا آيزومترية
+// وإضاءة وظلال، ويتقسّم تلقائياً: كل صف 2×8 حد أقصى، والباقي يتوزّع على صفوف خلفه.
+// **بلا صبّات وبلا هيكل**: الصفوف تكعد مباشرة على السطح بميلها، بارتفاع مسند
+// بسيط بس — ماكو أعمدة ولا دعامات ولا قواعد كونكريتية بالمشهد.
 import * as THREE from 'three';
 import { structuresForRender } from './structureDiagram.js';
 
 // أبعاد فيزيائية (متر)
 const PANEL_W = 1.05; // عرض اللوح (على الصف)
-const TIER_L = 1.35; // طول اللوح على الميل (طابق واحد) — لاندسكيب حتى ما يطول الهيكل
+const TIER_L = 1.35; // طول اللوح على الميل (طابق واحد) — لاندسكيب
 const TILT = THREE.MathUtils.degToRad(26);
-const FRONT_H = 0.5; // ارتفاع الحافة الأمامية للستركجر الأول
-const LIFT = 0.9; // زيادة ارتفاع كل ستركجر خلفي
-const GAP = 1.3; // ممر بين الستركجرات
-const POST = 0.06; // سماكة العمود الحديدي
-const FOOT = 0.34; // ضلع الصبّة الكونكريتية
+const FRONT_H = 0.12; // خلوص الحافة الأمامية فوق السطح (مسند اللوح نفسه)
+const GAP = 1.3; // ممر بين الصفوف
 
 // نسيج اللوح: خلايا زرقاء بشبكة رفيعة
 function panelTexture() {
@@ -30,8 +29,8 @@ function panelTexture() {
   return t;
 }
 
-// ستركجر واحد: مجموعة three.js (ألواح + أرجل + دعامات + صبّات)
-function buildStructure(cols, baseH, panelMat, metalMat, concreteMat) {
+// صف ألواح واحد: سطح مائل فقط — بلا أرجل ولا دعامات ولا صبّات
+function buildRow(cols, baseH, panelMat) {
   const grp = new THREE.Group();
   const W = cols * PANEL_W;
   const slope = 2 * TIER_L;
@@ -52,33 +51,6 @@ function buildStructure(cols, baseH, panelMat, metalMat, concreteMat) {
   surf.position.set(W / 2, (baseH + backH) / 2, dz / 2);
   surf.rotation.x = -TILT; // الحافة الأمامية أوطى والخلفية أعلى (الوجه للكاميرا)
   grp.add(surf);
-
-  // أرجل + دعامات + صبّات عند كل عمود
-  for (let c = 0; c <= cols; c++) {
-    const x = c * PANEL_W;
-    // رجل أمامية
-    const fLeg = new THREE.Mesh(new THREE.BoxGeometry(POST, baseH, POST), metalMat);
-    fLeg.position.set(x, baseH / 2, 0); fLeg.castShadow = true; grp.add(fLeg);
-    // رجل خلفية
-    const bLeg = new THREE.Mesh(new THREE.BoxGeometry(POST, backH, POST), metalMat);
-    bLeg.position.set(x, backH / 2, dz); bLeg.castShadow = true; grp.add(bLeg);
-    // دعامة قطرية (من قاعدة الأمامية لأعلى الخلفية)
-    const braceLen = Math.hypot(dz, backH);
-    const brace = new THREE.Mesh(new THREE.BoxGeometry(POST * 0.7, braceLen, POST * 0.7), metalMat);
-    brace.position.set(x, backH / 2, dz / 2);
-    brace.rotation.x = Math.atan2(dz, backH);
-    grp.add(brace);
-    // صبّة تحت الرجل الأمامية والخلفية
-    const f1 = new THREE.Mesh(new THREE.BoxGeometry(FOOT, 0.3, FOOT), concreteMat);
-    f1.position.set(x, 0.15, 0); f1.castShadow = true; f1.receiveShadow = true; grp.add(f1);
-    const f2 = new THREE.Mesh(new THREE.BoxGeometry(FOOT, 0.3, FOOT), concreteMat);
-    f2.position.set(x, 0.15, dz); f2.castShadow = true; f2.receiveShadow = true; grp.add(f2);
-  }
-  // عارضة أفقية علوية أمامية وخلفية (تربط الأرجل)
-  const railF = new THREE.Mesh(new THREE.BoxGeometry(W, POST, POST), metalMat);
-  railF.position.set(W / 2, baseH, 0); grp.add(railF);
-  const railB = new THREE.Mesh(new THREE.BoxGeometry(W, POST, POST), metalMat);
-  railB.position.set(W / 2, backH, dz); grp.add(railB);
 
   grp.userData = { W, dz };
   return grp;
@@ -106,16 +78,14 @@ export async function renderStructurePng(panelCount, { width = 1000, height = 62
 
   const scene = new THREE.Scene();
   const panelMat = new THREE.MeshStandardMaterial({ map: panelTexture(), roughness: 0.35, metalness: 0.1 });
-  const metalMat = new THREE.MeshStandardMaterial({ color: 0x8a929c, roughness: 0.5, metalness: 0.7 });
-  const concreteMat = new THREE.MeshStandardMaterial({ color: 0xdfe2e6, roughness: 0.9 });
   // أرضية شفافة تلتقط الظلال فقط — تندمج مع خلفية الصفحة بدل مربع رمادي
   const groundMat = new THREE.ShadowMaterial({ opacity: 0.22 });
 
-  // بناء الستركجرات متدرّجة
+  // بناء الصفوف: كلها بنفس الارتفاع لأن ماكو هيكل يرفع الصف الخلفي
   const group = new THREE.Group();
   let maxW = 0, totalDepth = 0;
   structs.forEach((s, i) => {
-    const g = buildStructure(s.cols, FRONT_H + i * LIFT, panelMat, metalMat, concreteMat);
+    const g = buildRow(s.cols, FRONT_H, panelMat);
     const depthOffset = i * (2 * TIER_L * Math.cos(TILT) + GAP);
     g.position.set(-s.cols * PANEL_W / 2, 0, depthOffset); // توسيط أفقي
     group.add(g);
@@ -126,7 +96,7 @@ export async function renderStructurePng(panelCount, { width = 1000, height = 62
   group.position.z = -totalDepth / 2;
   scene.add(group);
 
-  // أرضية/منصّة كونكريت
+  // مستوى السطح: يلتقط الظل بس — ماكو صبّة ولا منصّة
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(maxW + totalDepth + 12, maxW + totalDepth + 12), groundMat);
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = 0;
@@ -145,7 +115,7 @@ export async function renderStructurePng(panelCount, { width = 1000, height = 62
   scene.add(new THREE.AmbientLight(0xffffff, 0.35));
 
   // كاميرا آيزومترية أمامية بزاوية الرفرنس، مع ملاءمة تلقائية لحدود المشهد
-  // حتى ما ينكصّ أي ستركجر مرفوع (مهما زاد عدد الطوابق).
+  // حتى ما ينكصّ أي صف (مهما زاد عددها).
   const aspect = width / height;
   const dir = new THREE.Vector3(0.85, 0.6, -0.85).normalize(); // اتجاه من المركز للكاميرا (z سالب = الوجه)
   const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, -500, 500);
