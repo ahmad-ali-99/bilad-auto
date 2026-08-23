@@ -14,10 +14,19 @@
 import { ipOf } from './materialSpecs.js';
 
 const PANEL_AMPS_PER_WATT = 2.18 / 650;
+// الفولتية اللي انبنى عليها الرقم 2.18: لوح 650 واط على 220 فولت يعطي 2.95 أمبير
+// اسمياً، والمقاس 2.18 — يعني معامل واقعي 0.738 (غيم وغبار وزاوية وحرارة وفقد).
+const PANEL_AMPS_REF_VOLTAGE = 220;
+const PANEL_REAL_YIELD = (PANEL_AMPS_PER_WATT * PANEL_AMPS_REF_VOLTAGE); // ≈0.7379
 
-// أمبير اللوح الواحد بحسب واطيته (لوح 650 = 2.18، لوح 720 = 2.41...)
-function panelAmpsFor(panelWatt) {
-  return panelWatt * PANEL_AMPS_PER_WATT;
+// أمبير اللوح الواحد بحسب واطيته وفولتية النظام (لوح 650 على 220 = 2.18).
+// **لازم تدخل الفولتية**: البطاريات والانفيرتر يحسبون الحمل بـ(أمبير × فولت)،
+// فلو الألواح انحسبت بالأمبير وحده تبقى المعادلتان متفقتين على 220 فولت بس،
+// وبأي فولتية ثانية ينفصلون: على 48 فولت مثلاً الحمل ينزل ×4.6 بينما عدد
+// الألواح يبقى مثل ما هو، فتطلع مصفوفة تجبر انفيرترات إضافية بلا سبب.
+function panelAmpsFor(panelWatt, systemVoltage = PANEL_AMPS_REF_VOLTAGE) {
+  const v = Number(systemVoltage) > 0 ? Number(systemVoltage) : PANEL_AMPS_REF_VOLTAGE;
+  return (panelWatt * PANEL_REAL_YIELD) / v;
 }
 
 // عدد وحدات البطارية المطلوبة لتغطية الليل بساعات التجهيز المدخلة بالعرض.
@@ -44,7 +53,9 @@ const PREMIUM_CHARGE_PANEL_FACTOR = 1.25;
 // عدد الألواح النهائي = تغذية النهار (بمعامل الأمان) + شحن البطاريات — العدد حر
 function panelsRequired(ampDay, batteryCount, settings, panelWatt, chargeFactor = 1) {
   const safety = settings.panelSafetyFactor > 0 ? settings.panelSafetyFactor : PANEL_SAFETY_FACTOR;
-  const feedPanels = ampDay > 0 ? Math.ceil((ampDay * safety) / panelAmpsFor(panelWatt)) : 0;
+  const feedPanels = ampDay > 0
+    ? Math.ceil((ampDay * safety) / panelAmpsFor(panelWatt, settings.systemVoltage))
+    : 0;
   const chargePanels = Math.ceil(batteryCount * settings.chargePanelsPerBattery * chargeFactor);
   return { feedPanels, chargePanels, total: feedPanels + chargePanels };
 }
@@ -334,6 +345,11 @@ function premiumPool(combos, systemAmps) {
 const PREMIUM_OVERSIZE_CAP = 3;
 // سقف تكبير الانفيرتر بالممتاز: القدرة الكلية ما تتجاوز الطلب ×2
 const PREMIUM_INVERTER_CAP = 2;
+// هامش الممتاز على الانفيرتر: ربع إضافي فوق حِمل البيت. ينطبق على **حدّ الحمل
+// وحده** لا على الطلب النهائي — لأن الطلب النهائي ممكن يجي من حدّ الألواح
+// (مصفوفة ÷ 1.3)، وضربه بـ1.3 يلغي القسمة نفسها ويصير الانفيرتر = قدرة
+// المصفوفة كاملة (نسبة DC/AC = 1)، فينهدم كل معنى سماحية التحميل بالهجين.
+const PREMIUM_INVERTER_HEADROOM = 1.3;
 function pickBatteryPremium(combos, neededKwh = 0) {
   let group = fewestUnitsGroup(combos);
   if (neededKwh > 0) {
@@ -444,6 +460,8 @@ function selectPanelTiers(panelMaterials, ampDay, batteryCount, settings, tier =
 
 function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, panelArrayW = 0, systemAmps = 0) {
   const requiredW = inverterCapacityRequired(ampDay, ampNight, settings, panelArrayW);
+  // حدّ الحمل لحاله (بلا حدّ الألواح) — عليه يتحسب هامش الممتاز
+  const loadOnlyW = inverterCapacityRequired(ampDay, ampNight, settings, 0);
   const combos = [];
   for (const material of inverterMaterials) {
     const units = Math.ceil(requiredW / material.watt_or_capacity);
@@ -459,7 +477,8 @@ function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, pane
   // انفيرتر 50kW لبيت 10 أمبير؛ إذا كل الخيارات فوق السقف ناخذ الأقرب للطلب.
   function pickInverterPremium(all) {
     const candidates = premiumPool(all, systemAmps).map((c) => {
-      const units = Math.max(1, Math.ceil((requiredW * 1.3) / c.material.watt_or_capacity));
+      const premiumW = Math.max(loadOnlyW * PREMIUM_INVERTER_HEADROOM, requiredW);
+      const units = Math.max(1, Math.ceil(premiumW / c.material.watt_or_capacity));
       return { material: c.material, units, totalPrice: units * c.material.price };
     });
     const minUnits = Math.min(...candidates.map((c) => c.units));
@@ -595,6 +614,9 @@ function capabilityOf({
 
 export {
   PANEL_AMPS_PER_WATT,
+  PANEL_AMPS_REF_VOLTAGE,
+  PANEL_REAL_YIELD,
+  PREMIUM_INVERTER_HEADROOM,
   PANEL_SAFETY_FACTOR,
   LEGACY_PANEL_SAFETY_FACTOR,
   PREMIUM_CHARGE_PANEL_FACTOR,
