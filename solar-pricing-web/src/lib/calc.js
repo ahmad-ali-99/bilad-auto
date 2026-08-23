@@ -13,16 +13,20 @@
 // واطية اللوح تؤخذ من مادة اللوح نفسها بالمخزون، والأمبير يشتق منها تلقائياً
 import { ipOf } from './materialSpecs.js';
 
-const PANEL_AMPS_PER_WATT = 2.18 / 650;
-// الفولتية اللي انبنى عليها الرقم 2.18: لوح 650 واط على 220 فولت يعطي 2.95 أمبير
-// اسمياً، والمقاس 2.18 — يعني معامل واقعي 0.738 (غيم وغبار وزاوية وحرارة وفقد).
-const PANEL_AMPS_REF_VOLTAGE = 220;
-const PANEL_REAL_YIELD = (PANEL_AMPS_PER_WATT * PANEL_AMPS_REF_VOLTAGE); // ≈0.7379
+// ═══ قاعدة الشركة لتحويل الألواح لأمبير ════════════════════════════════════
+//   الأمبيرية = (واطية اللوح × عدد الألواح − 25%) ÷ فولتية النظام
+// وعكسها اللي يستعمله المحرك: عدد الألواح = الأمبير × الفولتية ÷ (الواط × 0.75)
+// تحقّق على عرض حقيقي: 50 لوح × 650 واط × 0.75 ÷ 230 = 106 أمبير — وهو نفس
+// عنوان العرض 426 «بسعة 105 أمبير» بالضبط.
+const PANEL_REAL_YIELD = 0.75; // ننقص 25%: غيم وغبار وزاوية وحرارة وفقد
+const PANEL_AMPS_REF_VOLTAGE = 230;
+// أمبير اللوح الواحد عند فولتية المرجع — يبقى مُصدَّراً للتوافق (650 واط ← 2.12)
+const PANEL_AMPS_PER_WATT = PANEL_REAL_YIELD / PANEL_AMPS_REF_VOLTAGE;
 
-// أمبير اللوح الواحد بحسب واطيته وفولتية النظام (لوح 650 على 220 = 2.18).
+// أمبير اللوح الواحد بحسب واطيته وفولتية النظام (لوح 650 على 230 = 2.12).
 // **لازم تدخل الفولتية**: البطاريات والانفيرتر يحسبون الحمل بـ(أمبير × فولت)،
-// فلو الألواح انحسبت بالأمبير وحده تبقى المعادلتان متفقتين على 220 فولت بس،
-// وبأي فولتية ثانية ينفصلون: على 48 فولت مثلاً الحمل ينزل ×4.6 بينما عدد
+// فلو الألواح انحسبت بالأمبير وحده تبقى المعادلات متفقة على فولتية وحدة بس،
+// وبأي فولتية ثانية ينفصلون: على 48 فولت مثلاً الحمل ينزل ×4.8 بينما عدد
 // الألواح يبقى مثل ما هو، فتطلع مصفوفة تجبر انفيرترات إضافية بلا سبب.
 function panelAmpsFor(panelWatt, systemVoltage = PANEL_AMPS_REF_VOLTAGE) {
   const v = Number(systemVoltage) > 0 ? Number(systemVoltage) : PANEL_AMPS_REF_VOLTAGE;
@@ -49,6 +53,9 @@ const PANEL_SAFETY_FACTOR = 1.25;
 const LEGACY_PANEL_SAFETY_FACTOR = 1;
 // الممتاز يزيد ألواح الشحن ربعاً إضافياً — شحن أسرع وهامش أوسع
 const PREMIUM_CHARGE_PANEL_FACTOR = 1.25;
+// ألواح الشحن لكل بطارية إذا الإعداد فارغ أو صفر — لوح واحد (قرار المستخدم،
+// نزّلها من 1.5). القيمة المحفوظة بالإعدادات تسبق هذا الافتراض دائماً.
+const DEFAULT_CHARGE_PANELS_PER_BATTERY = 1;
 
 // عدد الألواح النهائي = تغذية النهار (بمعامل الأمان) + شحن البطاريات — العدد حر
 function panelsRequired(ampDay, batteryCount, settings, panelWatt, chargeFactor = 1) {
@@ -56,7 +63,10 @@ function panelsRequired(ampDay, batteryCount, settings, panelWatt, chargeFactor 
   const feedPanels = ampDay > 0
     ? Math.ceil((ampDay * safety) / panelAmpsFor(panelWatt, settings.systemVoltage))
     : 0;
-  const chargePanels = Math.ceil(batteryCount * settings.chargePanelsPerBattery * chargeFactor);
+  const perBattery = Number(settings.chargePanelsPerBattery) > 0
+    ? Number(settings.chargePanelsPerBattery)
+    : DEFAULT_CHARGE_PANELS_PER_BATTERY;
+  const chargePanels = Math.ceil(batteryCount * perBattery * chargeFactor);
   return { feedPanels, chargePanels, total: feedPanels + chargePanels };
 }
 
@@ -616,6 +626,7 @@ export {
   PANEL_AMPS_PER_WATT,
   PANEL_AMPS_REF_VOLTAGE,
   PANEL_REAL_YIELD,
+  DEFAULT_CHARGE_PANELS_PER_BATTERY,
   PREMIUM_INVERTER_HEADROOM,
   PANEL_SAFETY_FACTOR,
   LEGACY_PANEL_SAFETY_FACTOR,
