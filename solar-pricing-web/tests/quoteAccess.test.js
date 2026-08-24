@@ -123,3 +123,16 @@ describe('الحارس عند نقطة الوصول مو بالواجهة', () =
     expect(dataApi).not.toContain('canViewQuotes');
   });
 });
+
+describe('توحيد التاء المربوطة بملكية العروض', () => {
+  it('صاحب العرض يفتح عرضه مهما انكتب اسمه بالتاء أو الهاء', () => {
+    const q = { id: 1, created_by: 'حسين انوار المدينة' };
+    expect(canAccessQuote({ username: 'حسين انوار المدينه' }, q)).toBe(true);
+    expect(canAccessQuote({ username: 'حسين انوار المدينة' }, q)).toBe(true);
+  });
+
+  it('وما ينفتح لاسم ثاني', () => {
+    const q = { id: 1, created_by: 'حسين انوار المدينة' };
+    expect(canAccessQuote({ username: 'براء' }, q)).toBe(false);
+  });
+});
