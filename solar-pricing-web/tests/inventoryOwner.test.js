@@ -95,7 +95,28 @@ describe('المنع بطبقة البيانات', () => {
 
   it('التعديل والحذف والإخفاء والصورة ودرجة الحماية كلها تمر بفحص الملكية', () => {
     const guarded = (dataApi.match(/await assertCanEditMaterial\(id/g) || []).length;
-    expect(guarded, 'update + remove + setActive + setImage + setIp').toBe(5);
+    expect(guarded, 'update + remove + setActive + setImage + setIp + config.set')
+      .toBe(6);
+  });
+
+  it('app_config ما يصير باباً خلفياً: الملكية ما تنكتب من برّة، والمفاتيح المرتبطة بمادة تمر بفحصها', () => {
+    // app_config مفتوح للكتابة لأي حساب مسجّل، وبيه تنخزن بيانات الصلاحية نفسها
+    // (material_owner_<id>) — فبلا هذا الحارس يكدر حساب «يضيف بس» يعلن نفسه
+    // مالكاً لأي مادة قديمة وبعدها يعدّلها بشكل شرعي
+    expect(dataApi).toContain('async function assertCanWriteConfig(key)');
+    expect(dataApi).toContain('await assertCanWriteConfig(key)');
+    expect(dataApi).toContain("k.startsWith('material_owner_')");
+    expect(dataApi).toContain('ملكية المواد تنحدد وقت الإضافة');
+    // المفاتيح المرتبطة بمادة تنمرّر لفحص ملكيتها
+    expect(dataApi).toMatch(/materialIdOfConfigKey[\s\S]{0,400}assertCanEditMaterial\(id/);
+  });
+
+  it('الكاتب الخام داخلي فقط — كل مستدعٍ له فحص صلاحيته قبله', () => {
+    expect(dataApi).toContain('async function setConfigRaw(key, value)');
+    // setActive يفحص المادة ثم يكتب خاماً — ما يمر بالحارس العام مرتين
+    expect(dataApi).toMatch(/assertCanEditMaterial\(id, 'هذه المادة'\);[\s\S]{0,400}setConfigRaw\(MATERIALS_DISABLED_KEY/);
+    // وما ينكشف بالواجهة العامة
+    expect(dataApi).not.toMatch(/config:\s*\{[\s\S]{0,2000}setConfigRaw\s*,/);
   });
 
   it('الاستيراد يرفض تحديث الموجود لحساب الإضافة، ويسجّل مالك الجديد', () => {

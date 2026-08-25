@@ -7,7 +7,7 @@ import * as excelImport from './excelImport.js';
 import { exportInvoicePdf, quoteFileName } from './pdfExport.js';
 import { logActivity } from './activityLog.js';
 import { UNDO, DRAFT } from './activityUndo.js';
-import { isRestrictedUser, canEditSettings, canAddMaterial, canEditMaterial, canImportInventory, canImportUpdates, canEditLabor } from './permissions.js';
+import { isRestrictedUser, canEditSettings, canAddMaterial, canEditMaterial, canEditInventory, canImportInventory, canImportUpdates, canEditLabor } from './permissions.js';
 import { canAccessQuote, visibleQuotes, canAttributeQuote, accessDeniedMessage } from './quoteAccess.js';
 import { installmentPlanLabel } from './installment.js';
 import { imageKey, isImageKey } from './materialImages.js';
@@ -103,7 +103,7 @@ function materialPayload(data) {
 async function saveIntegratedKw(materialId, data) {
   if (data.category !== 'integrated' || data.integrated_kw == null) return;
   try {
-    await api.config.set(`integrated_specs_${materialId}`, { kw: Number(data.integrated_kw) || 0 });
+    await setConfigRaw(`integrated_specs_${materialId}`, { kw: Number(data.integrated_kw) || 0 });
   } catch {
     /* app_config اختياري — المادة انحفظت على أي حال */
   }
@@ -118,7 +118,7 @@ async function saveIpRating(materialId, data) {
   const n = empty ? null : parseIp(raw);
   if (!empty && n == null) throw new Error(IP_RANGE_ERROR);
   try {
-    await api.config.set(ipKey(materialId), n == null ? null : { ip: n });
+    await setConfigRaw(ipKey(materialId), n == null ? null : { ip: n });
   } catch {
     /* app_config اختياري — المادة انحفظت على أي حال */
   }
@@ -175,6 +175,51 @@ async function withActive(rows) {
   } catch {
     // تعذر قراءة القائمة — الافتراض إن الكل مفعّل حتى ما تختفي مواد بالغلط
     return rows.map((m) => ({ ...m, active: true }));
+  }
+}
+
+// كتابة مباشرة لـapp_config بلا فحص صلاحية — للاستدعاءات الداخلية اللي فحصت
+// صلاحيتها قبل (setActive وحفظ العرض...). الواجهة العامة api.config.set محروسة.
+async function setConfigRaw(key, value) {
+  const { error } = await supabase.from('app_config').upsert({ key, value: JSON.stringify(value) });
+  throwIf(error);
+}
+
+// رقم المادة من مفاتيح app_config المرتبطة بمادة
+function materialIdOfConfigKey(key) {
+  const m = /^(?:material_image_|material_ip_|integrated_specs_|material_owner_)(\d+)$/.exec(String(key));
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * حارس الكتابة على app_config من الواجهة العامة.
+ *
+ * **ليش لازم**: `app_config` مفتوح للكتابة لأي حساب مسجّل (سياسة RLS
+ * `for all to authenticated`)، وبنفس الجدول تنخزن **بيانات الصلاحية نفسها** —
+ * `material_owner_<id>`. يعني بلا هذا الحارس، حساب «يضيف بس» يكدر يكتب
+ * `material_owner_<id>` باسمه لأي مادة قديمة وبعدها يعدّلها بشكل شرعي تماماً:
+ * الحارس assertCanEditMaterial راح يشوف إنه هو المالك ويسمح. باب خلفي كامل
+ * للمخزون القديم بسطر واحد من الكونسول.
+ */
+async function assertCanWriteConfig(key) {
+  const k = String(key);
+
+  // الملكية ما تنكتب من برّة أبداً — تنكتب داخلياً وقت الإضافة فقط
+  if (k.startsWith('material_owner_')) {
+    throw new Error('ملكية المواد تنحدد وقت الإضافة — ما تنكتب من برّة');
+  }
+
+  const id = materialIdOfConfigKey(k);
+  if (id != null) {
+    await assertCanEditMaterial(id, 'هذه المادة');
+    return;
+  }
+
+  // قائمة المواد المخفية = إخفاء/إظهار مواد المخزون. المسار الشرعي setActive
+  // يفحص المادة بعينها ويكتب بـsetConfigRaw، فالكتابة المباشرة هنا ممنوعة
+  // على أي حساب ما يعدّل المخزون كاملاً.
+  if (k === MATERIALS_DISABLED_KEY && !canEditInventory(await currentUsername())) {
+    throw new Error('إخفاء وإظهار مواد المخزون محصور بحسابات الإدارة');
   }
 }
 
@@ -388,7 +433,7 @@ export const api = {
       const off = new Set(before.map(Number));
       if (active) off.delete(Number(id));
       else off.add(Number(id));
-      await api.config.set(MATERIALS_DISABLED_KEY, [...off]);
+      await setConfigRaw(MATERIALS_DISABLED_KEY, [...off]);  // setActive فحص المادة قبلها
       const { data: m } = await supabase.from('materials').select('full_description').eq('id', id).maybeSingle();
       const name = m?.full_description || `المادة ${id}`;
       logActivity(active ? 'تفعيل مادة بالعروض' : 'إخفاء مادة من العروض', 'المخزون', {
@@ -1377,10 +1422,10 @@ export const api = {
       }
     },
     async set(key, value) {
+      await assertCanWriteConfig(key);
       // القيمة القديمة تنقرأ قبل الكتابة — بيها يرجع الإعداد لحاله بضغطة من السجل
       const before = isInternalConfigKey(key) ? null : await this.get(key);
-      const { error } = await supabase.from('app_config').upsert({ key, value: JSON.stringify(value) });
-      throwIf(error);
+      await setConfigRaw(key, value);
       // نسجل الإعدادات المشتركة فقط — المفاتيح الداخلية لها تسجيلها الخاص بمكان الاستدعاء
       if (!isInternalConfigKey(key)) {
         const labels = {
