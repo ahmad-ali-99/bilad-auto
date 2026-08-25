@@ -237,7 +237,16 @@ describe('كل مسارات بناء العرض تستعمل نفس الوسائ
     const src = fs.readFileSync(new URL('../src/lib/dataApi.js', import.meta.url), 'utf8');
     const calls = src.match(/buildQuoteDraft\([\s\S]*?\);/g) || [];
     expect(calls.length).toBeGreaterThan(0);
-    for (const call of calls) expect(call).toContain('_draftArgs(input)');
+    // الوسيط الثاني الاختياري (تلميح صاحب العرض بمسار التعديل) مسموح — المهم
+    // إن الوسائط تنبني بالمساعد الواحد لا بيد كل مسار
+    for (const call of calls) expect(call).toMatch(/_draftArgs\(input(, [^)]*)?\)/);
+  });
+
+  it('مسار التعديل وحده يمرّر صاحب العرض المخزون — الباقي صاحبه هو المستخدم الحالي', async () => {
+    const fs = await import('node:fs');
+    const src = fs.readFileSync(new URL('../src/lib/dataApi.js', import.meta.url), 'utf8');
+    const withHint = (src.match(/this\._draftArgs\(input, [^)]+\)/g) || []);
+    expect(withHint).toEqual(['this._draftArgs(input, before?.created_by)']);
   });
 });
 

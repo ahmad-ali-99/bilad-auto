@@ -131,6 +131,51 @@ function roundAdjustedPrice(p) {
   return Math.round(p / 50) * 50;
 }
 
+// ═══ الزيادة المخفية ═══════════════════════════════════════════════════════
+// المجموع يطلع أعلى بالنسبة المطلوبة، والزيادة كلها تتوزع على أسعار البنود
+// **ما عدا الألواح** — سعر اللوح يبقى مثل المخزون بالضبط.
+//
+// الحساب: خلي T المجموع قبل، وP مجموع بنود الألواح، وR = T − P (البنود
+// الحاملة). المطلوب مجموع جديد = T×(1+n). الزيادة كلها لازم تنزل على R،
+// فمعاملها = (R + n×T) ÷ R — يعني البنود الحاملة تزيد أكثر من النسبة
+// المطلوبة بكثير كل ما كانت حصة الألواح أكبر، وهذا مقصود.
+//
+// ملاحظة: الأسعار تنقرّب لأرقام طبيعية (roundAdjustedPrice) حتى ما تطلع
+// أرقام شاذة تفضح الزيادة، فالمجموع النهائي يقرب من الهدف ولا يطابقه بالضبط.
+// المطابقة التامة تتطلب أسعاراً بكسور، وهي أوضح للعين من فرق بسيط بالمجموع.
+function applyHiddenMarkup(items, total, percent, panelMaterialId) {
+  if (!(percent > 0) || total <= 0) return { total, applied: 0 };
+  const target = Math.round(total * (1 + percent / 100));
+
+  // البنود الحاملة: كل شي عدا الألواح. إذا ماكو (عرض ألواح فقط) ما نلمس شي —
+  // توزيعها على الألواح يخالف الشرط، والسطر العلني يفضح الزيادة.
+  const carriers = items.filter((i) => !(panelMaterialId != null && i.material_id === panelMaterialId));
+  const base = carriers.reduce((sum, i) => sum + i.subtotal, 0);
+  if (carriers.length === 0 || base <= 0) return { total, applied: 0 };
+
+  const factor = (base + (target - total)) / base;
+  for (const item of carriers) {
+    item.unit_price = roundAdjustedPrice(item.unit_price * factor);
+    item.subtotal = Math.round(item.quantity * item.unit_price);
+  }
+
+  // فرق التقريب ينزل على أكبر بند حامل — عبر سعر وحدته، حتى يبقى
+  // (الكمية × سعر الوحدة = المجموع) صحيحاً بالعين على ورقة العرض
+  let newTotal = items.reduce((sum, i) => sum + i.subtotal, 0);
+  const drift = target - newTotal;
+  if (drift !== 0) {
+    const biggest = carriers.reduce((a, b) => (b.subtotal > a.subtotal ? b : a));
+    const q = Math.max(1, biggest.quantity);
+    const adjusted = roundAdjustedPrice(biggest.unit_price + drift / q);
+    if (adjusted > 0) {
+      biggest.unit_price = adjusted;
+      biggest.subtotal = Math.round(q * adjusted);
+      newTotal = items.reduce((sum, i) => sum + i.subtotal, 0);
+    }
+  }
+  return { total: newTotal, applied: newTotal - total };
+}
+
 function formatPercent(p) {
   return String(Math.round(p * 100) / 100);
 }
@@ -223,7 +268,7 @@ function applyUnitCount(combo, wanted, delta) {
 // adjustments (اختياري): نسبة الزيادة (علنية/موزعة) ونسبة الخصم — تنطبق بعد اكتمال البنود.
 // extraUnits (اختياري): { panel, battery, inverter } — زيادة/نقصان يدوي بالوحدات لوح بلوح
 // (العدد الفردي مسموح)، والفحوصات (المساحة/الشحن/التوازي) تحسب بالعدد النهائي.
-function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, secondarySelections = null, adjustments = null, extraUnits = null, unitCounts = null, systemType = null, integrated = null }) {
+function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, secondarySelections = null, adjustments = null, extraUnits = null, unitCounts = null, systemType = null, integrated = null, hiddenMarkupPercent = 0 }) {
   const { settings, roofAreaM2, ampDay, ampNight, nightSupplyHours, batteryTiers, panelMaterials, inverterMaterials, integratedCombos = [], integratedRequired = null, secondary, labor, systemAmps } = options;
 
   const errors = {};
@@ -387,6 +432,11 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
   }
 
   // نسبة الزيادة (علنية أو موزعة على الأسعار) ونسبة الخصم — على مجموع البنود النهائي
+  // الزيادة المخفية أولاً: تنبني بأسعار البنود نفسها، فأي زيادة أو خصم يكتبه
+  // البياع بعدها ينحسب على السعر الجديد — الشركة تحافظ على هامشها بكل الحالات
+  applyHiddenMarkup(items, total, hiddenMarkupPercent, panelCombo?.material?.id ?? null);
+  total = items.reduce((sum, i) => sum + i.subtotal, 0);
+
   const adjusted = applyAdjustments(items, total, adjustments);
   total = adjusted.total;
 

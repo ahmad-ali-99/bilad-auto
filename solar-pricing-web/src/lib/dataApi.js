@@ -7,7 +7,7 @@ import * as excelImport from './excelImport.js';
 import { exportInvoicePdf, quoteFileName } from './pdfExport.js';
 import { logActivity } from './activityLog.js';
 import { UNDO, DRAFT } from './activityUndo.js';
-import { isRestrictedUser, canEditSettings, canAddMaterial, canEditMaterial, canEditInventory, canImportInventory, canImportUpdates, canEditLabor } from './permissions.js';
+import { isRestrictedUser, canEditSettings, canAddMaterial, canEditMaterial, canEditInventory, canImportInventory, canImportUpdates, canEditLabor, hiddenMarkupPercentFor } from './permissions.js';
 import { canAccessQuote, visibleQuotes, canAttributeQuote, accessDeniedMessage } from './quoteAccess.js';
 import { installmentPlanLabel } from './installment.js';
 import { imageKey, isImageKey } from './materialImages.js';
@@ -688,8 +688,14 @@ export const api = {
     // وسائط بناء العرض — نقطة واحدة يستعملها الجميع (المعاينة، الحفظ، تصدير PDF).
     // كانت كل نقطة تبنيها بيدها، فنسي التصدير نوع المنظومة والأعداد المثبتة وطلع
     // ملف PDF مختلف كلياً عن اللي يشوفه البياع بالشاشة.
-    async _draftArgs(input) {
+    // ownerHint = صاحب العرض المخزون (بمسار التعديل) — الزيادة المخفية تتبع
+    // **صاحب العرض** مو اللي يفتحه، وإلا مجموع عرض قديم ينزل 10% لمجرد إن
+    // حساباً إدارياً فتحه للتعديل، ويرتفع لو فتحه صاحبه — والمجموع يتذبذب
+    // بلا سبب ظاهر للزبون.
+    async _draftArgs(input, ownerHint = null) {
+      const owner = (await attributedCreator(input)) || ownerHint || (await currentUsername());
       return {
+        hiddenMarkupPercent: hiddenMarkupPercentFor(owner),
         tier: input.tier,
         overrides: input.overrides || {},
         cableMeters: input.cableMeters || {},
@@ -1026,7 +1032,7 @@ export const api = {
       } : { kind: 'none', why: 'ما انلقطت حالة العرض قبل التعديل' };
       const assigned = await attributedCreator(input);
       const options = await this._options(input);
-      const draft = quoteService.buildQuoteDraft(options, await this._draftArgs(input));
+      const draft = quoteService.buildQuoteDraft(options, await this._draftArgs(input, before?.created_by));
       const notes = [...new Set([...(input.notes || []), ...draft.warrantyNotes])];
 
       const { data: quote, error } = await supabase
