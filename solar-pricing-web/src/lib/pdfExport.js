@@ -585,7 +585,22 @@ async function buildCoverHtml({ items, company, quote, capability, integrated, p
 }
 
 export async function exportInvoicePdf({ quote, items, notes, company, fileName, attachment = null, installment = null, structure = true, capability = null, integrated = null, panelCount: panelCountIn = null }) {
-  const invoiceHtml = buildInvoiceInnerHtml({ quote, items, notes, company, installment });
+  // ── النسخ الثلاث ────────────────────────────────────────────────────────
+  // بلا تقسيط: ورقة وحدة مثل قبل بالضبط.
+  // بالتقسيط: ثلاث أوراق بملف واحد — رسمية للمصرف بمبلغ النقد، ثم الفنية
+  // للزبون بالقسط والنقد، ثم التجارية النقدية بلا عنونة.
+  //
+  // ملف واحد لا ثلاثة ملفات: التسليم بالآيفون يمر بورقة مشاركة لكل ملف،
+  // وثلاث عمليات رسم متتالية تعيد نفس ضغط الذاكرة اللي كان يعلّق التصدير.
+  // ورقة وحدة تنرسل كلها أو تنطبع منها الصفحة المطلوبة.
+  const sheets = installment
+    ? [
+        buildInvoiceInnerHtml({ quote, items, notes, company, installment, copy: 'bank', bank: installment.addressBank || 'nahrain' }),
+        buildInvoiceInnerHtml({ quote, items, notes, company, installment, copy: 'client' }),
+        buildInvoiceInnerHtml({ quote, items, notes, company, installment, copy: 'cash' }),
+      ]
+    : [buildInvoiceInnerHtml({ quote, items, notes, company, installment })];
+  const invoiceHtml = sheets[0];
 
   // كل صفحات الملف بمسار الطباعة — نفس صفحات المسار القديم بالضبط:
   // الغلاف (التصميم) ثم الفاتورة ثم صورة المرفق. بدونها كان مسار الطباعة
@@ -596,7 +611,7 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
       const cover = await buildCoverHtml({ items, company, quote, capability, integrated, panelCount: panelCountIn });
       if (cover) blocks.push(cover);
     }
-    blocks.push(invoiceHtml);
+    blocks.push(...sheets);
     const attachHtml = attachmentPageHtml(attachment);
     if (attachHtml) blocks.push(attachHtml);
     return blocks;
@@ -619,27 +634,10 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
 
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-2000px;top:0;width:794px;background:#fff;z-index:-1;';
-  host.innerHTML = invoiceHtml;
   document.body.appendChild(host);
 
   try {
-    const sheet = host.querySelector('.inv-sheet');
-    await ensureArabicFont(sheet);
-
-    // نجمع حدود العناصر (صفوف الجدول، الملاحظات، الترويسة...) قبل الرسم — حتى القص
-    // بين الصفحات يصير عند حدود الصفوف فقط ولا ينقص أي صف أو رقم من نصه
-    const sheetRect = sheet.getBoundingClientRect();
-    const domCuts = [];
-    sheet.querySelectorAll('tr, li, .title-bar, .header, .client-table, .notes-section h3, .footer').forEach((el) => {
-      const r = el.getBoundingClientRect();
-      domCuts.push(r.top - sheetRect.top, r.bottom - sheetRect.top);
-    });
-
-    const canvas = await renderSheet('رسم صفحة الفاتورة', sheet);
-    const domToCanvas = canvas.width / sheetRect.width;
-    const cuts = [...new Set(domCuts.map((v) => Math.round(v * domToCanvas)))]
-      .filter((v) => v > 0 && v < canvas.height)
-      .sort((a, b) => a - b);
+    await ensureArabicFont(null);
 
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageWmm = 210;
@@ -657,49 +655,72 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
       if (coverHtml) await addHtmlPage(pdf, coverHtml, ensurePage, pageWmm, pageHmm);
     }
 
-    // 2) الفاتورة بعد الغلاف
-    const imgHmm = (canvas.height * pageWmm) / canvas.width;
-    // فائض بسيط (≤25%) نضغطه على صفحة واحدة حتى الملاحظات/التوقيع ما يطفحون لصفحة شبه فارغة
-    const FIT_TOL = 1.25;
-    if (imgHmm <= pageHmm) {
-      ensurePage();
-      const data = canvas.toDataURL('image/jpeg', 0.92);
-      releaseCanvas(canvas);
-      pdf.addImage(data, 'JPEG', 0, 0, pageWmm, imgHmm);
-    } else if (imgHmm <= pageHmm * FIT_TOL) {
-      ensurePage();
-      const s = pageHmm / imgHmm;
-      const w = pageWmm * s;
-      const data = canvas.toDataURL('image/jpeg', 0.92);
-      releaseCanvas(canvas);
-      pdf.addImage(data, 'JPEG', (pageWmm - w) / 2, 0, w, pageHmm);
-    } else {
-      const pageHpx = Math.floor((pageHmm / pageWmm) * canvas.width);
-      let y = 0;
-      while (y < canvas.height - 2) {
-        const limit = y + pageHpx;
-        let next = Math.min(limit, canvas.height);
-        if (limit < canvas.height) {
-          // آخر حد آمن (نهاية صف) قبل حافة الصفحة — وإذا ماكو حد مناسب نقص عند الحافة
-          const safe = cuts.filter((c) => c > y + pageHpx * 0.35 && c <= limit);
-          if (safe.length) next = safe[safe.length - 1];
-        }
-        const sliceH = next - y;
-        const slice = document.createElement('canvas');
-        slice.width = canvas.width;
-        slice.height = sliceH;
-        const ctx = slice.getContext('2d');
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, slice.width, slice.height);
-        ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+    // 2) ورقة العرض — وبالتقسيط ثلاث أوراق بنفس المسار بالضبط.
+    // الرسم يصير **ورقةً ورقة** وينتحرر كانفاسها قبل اللي بعدها: ثلاثة كانفاسات
+    // حيّة سوية تعيد نفس ضغط الذاكرة اللي كان يطيّح تبويب الآيفون.
+    for (const html of sheets) {
+      host.innerHTML = html;
+      const sheet = host.querySelector('.inv-sheet');
+      await ensureArabicFont(sheet);
+
+      // نجمع حدود العناصر (صفوف الجدول، الملاحظات، الترويسة...) قبل الرسم — حتى القص
+      // بين الصفحات يصير عند حدود الصفوف فقط ولا ينقص أي صف أو رقم من نصه
+      const sheetRect = sheet.getBoundingClientRect();
+      const domCuts = [];
+      sheet.querySelectorAll('tr, li, .title-bar, .header, .client-table, .bank-address, .notes-section h3, .footer').forEach((el) => {
+        const r = el.getBoundingClientRect();
+        domCuts.push(r.top - sheetRect.top, r.bottom - sheetRect.top);
+      });
+
+      const canvas = await renderSheet('رسم صفحة الفاتورة', sheet);
+      const domToCanvas = canvas.width / sheetRect.width;
+      const cuts = [...new Set(domCuts.map((v) => Math.round(v * domToCanvas)))]
+        .filter((v) => v > 0 && v < canvas.height)
+        .sort((a, b) => a - b);
+
+      const imgHmm = (canvas.height * pageWmm) / canvas.width;
+      // فائض بسيط (≤25%) نضغطه على صفحة واحدة حتى الملاحظات/التوقيع ما يطفحون لصفحة شبه فارغة
+      const FIT_TOL = 1.25;
+      if (imgHmm <= pageHmm) {
         ensurePage();
-        const sliceData = slice.toDataURL('image/jpeg', 0.92);
-        const sliceW = canvas.width;
-        releaseCanvas(slice); // شريحة لكل صفحة — بلا تحرير تتراكم صفحةً بصفحة
-        pdf.addImage(sliceData, 'JPEG', 0, 0, pageWmm, (sliceH * pageWmm) / sliceW);
-        y = next;
+        const data = canvas.toDataURL('image/jpeg', 0.92);
+        releaseCanvas(canvas);
+        pdf.addImage(data, 'JPEG', 0, 0, pageWmm, imgHmm);
+      } else if (imgHmm <= pageHmm * FIT_TOL) {
+        ensurePage();
+        const sc = pageHmm / imgHmm;
+        const w = pageWmm * sc;
+        const data = canvas.toDataURL('image/jpeg', 0.92);
+        releaseCanvas(canvas);
+        pdf.addImage(data, 'JPEG', (pageWmm - w) / 2, 0, w, pageHmm);
+      } else {
+        const pageHpx = Math.floor((pageHmm / pageWmm) * canvas.width);
+        let y = 0;
+        while (y < canvas.height - 2) {
+          const limit = y + pageHpx;
+          let next = Math.min(limit, canvas.height);
+          if (limit < canvas.height) {
+            // آخر حد آمن (نهاية صف) قبل حافة الصفحة — وإذا ماكو حد مناسب نقص عند الحافة
+            const safe = cuts.filter((c) => c > y + pageHpx * 0.35 && c <= limit);
+            if (safe.length) next = safe[safe.length - 1];
+          }
+          const sliceH = next - y;
+          const slice = document.createElement('canvas');
+          slice.width = canvas.width;
+          slice.height = sliceH;
+          const ctx = slice.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, slice.width, slice.height);
+          ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+          ensurePage();
+          const sliceData = slice.toDataURL('image/jpeg', 0.92);
+          const sliceW = canvas.width;
+          releaseCanvas(slice); // شريحة لكل صفحة — بلا تحرير تتراكم صفحةً بصفحة
+          pdf.addImage(sliceData, 'JPEG', 0, 0, pageWmm, (sliceH * pageWmm) / sliceW);
+          y = next;
+        }
+        releaseCanvas(canvas);
       }
-      releaseCanvas(canvas);
     }
 
     // إذا اكو مرفق تصميم (صورة/PDF) نلحقه بنهاية الملف

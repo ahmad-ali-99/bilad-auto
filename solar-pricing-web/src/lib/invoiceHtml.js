@@ -1,6 +1,6 @@
 // قالب فاتورة الموبايل — نفس تصميم نسخة سطح المكتب لكن بدون تضمين الخط
 // (الخط Cairo محمّل أصلاً بالتطبيق، وhtml2canvas يلتقطه من الـDOM مباشرة)
-import { installmentPlanLabel } from './installment.js';
+import { installmentPlanLabel, addressBankLabel } from './installment.js';
 
 function formatNumber(n) {
   return Math.round(n).toLocaleString('en-US');
@@ -35,7 +35,21 @@ function densityScale(itemCount) {
 }
 
 // يرجع HTML داخلي لعنصر بعرض 794px (A4 على 96dpi) جاهز للالتقاط بـhtml2canvas
-export function buildInvoiceInnerHtml({ quote, items, notes, company, installment = null }) {
+/**
+ * copy = أي نسخة من الثلاث:
+ *   'client' (الافتراضي) — العرض الفني للزبون: المجموع النقدي ومجموع التقسيط والقسط
+ *   'bank'               — نسخة رسمية معنونة للمصرف، بمبلغ النقد وحده
+ *   'cash'               — عرض تجاري نقدي باسم الزبون بلا عنونة، بمبلغ النقد وحده
+ *
+ * النسختان 'bank' و'cash' تتجاهلان صفوف التقسيط عمداً: المصرف يمنح على أساس
+ * المبلغ النقدي، وإظهار مبلغ التقسيط بورقة موجّهة له يخلط السعرين.
+ */
+export function buildInvoiceInnerHtml({ quote, items, notes, company, installment = null, copy = 'client', bank = 'nahrain' }) {
+  const cashOnly = copy === 'bank' || copy === 'cash';
+  const showInstallment = installment && !cashOnly;
+  // بالنسخ النقدية المجموع الكلي يظهر دائماً — «إخفاء المجموع» خيار للعرض
+  // اللي يبيع بالقسط، وإخفاؤه بورقة نقدية يخليها بلا سعر أصلاً
+  const showTotal = cashOnly || !installment?.hideTotal;
   const systemAmps = Math.max(quote.required_amp_day || 0, quote.required_amp_night || 0);
   // هوية العرض حسب نوع المنظومة (مستنتج من أرقام العرض نفسه):
   // نهار صفر = أوف جرد (انفيرتر وبطاريات بلا ألواح)، ليل صفر = نهارية بلا بطاريات
@@ -90,6 +104,12 @@ export function buildInvoiceInnerHtml({ quote, items, notes, company, installmen
 .inv-sheet .client-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
 .inv-sheet .client-table td { border: 1px solid #c7d2db; padding: ${cellPad}px 8px; font-size: 0.9em; }
 .inv-sheet .client-table .label { background: #eef3f8; font-weight: 700; color: #1a3a5c; width: 14%; }
+.inv-sheet .bank-address { border: 1px solid #c7d2db; border-inline-start: 4px solid #1a3a5c; border-radius: 3px; padding: 8px 10px; margin-bottom: 8px; }
+.inv-sheet .bank-address .to { font-weight: 700; color: #1a3a5c; font-size: 1.02em; }
+.inv-sheet .bank-address .subject { font-weight: 700; margin: 2px 0 4px; font-size: 0.92em; }
+.inv-sheet .bank-address .body { font-size: 0.85em; line-height: 1.65; text-align: justify; }
+.inv-sheet .bank-address .ltr { direction: ltr; unicode-bidi: isolate; }
+.inv-sheet .copy-tag { text-align: center; font-size: 0.78em; color: #6b7d90; margin-top: 6px; }
 .inv-sheet .title-bar { background: #1a3a5c; color: #fff; text-align: center; font-weight: 700; font-size: 1.05em; padding: 6px; margin-bottom: 8px; border-radius: 3px; }
 .inv-sheet .items-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
 .inv-sheet .items-table th { background: #1a3a5c; color: #fff; padding: ${cellPad}px 6px; font-size: 0.9em; border: 1px solid #1a3a5c; }
@@ -125,6 +145,17 @@ export function buildInvoiceInnerHtml({ quote, items, notes, company, installmen
       <div><b>التاريخ:</b> ${formatDate(quote.created_at || new Date())}</div>
     </div>
   </div>
+  ${copy === 'bank' ? `
+  <div class="bank-address">
+    <div class="to">إلى / ${escapeHtml(addressBankLabel(bank))} المحترم</div>
+    <div class="subject">م / عرض سعر منظومة طاقة شمسية</div>
+    <div class="body">
+      تحية طيبة… بناءً على طلب السيد/ة <b>${escapeHtml(quote.client_name || '—')}</b>${quote.client_phone ? ` — هاتف <span class="ltr">${escapeHtml(quote.client_phone)}</span>` : ''}${quote.location ? ` — ${escapeHtml(quote.location)}` : ''}،
+      نقدّم لكم أدناه عرض سعر تجهيز ونصب منظومة الطاقة الشمسية الموضّحة تفاصيلها،
+      وذلك لغرض استحصال الموافقة على التمويل. المبلغ المدرج أدناه هو <b>المبلغ النقدي</b>
+      شاملاً التجهيز والتركيب والتشغيل.
+    </div>
+  </div>` : ''}
   <table class="client-table">
     <tr>
       <td class="label">اسم العميل</td><td>${escapeHtml(quote.client_name || '-')}</td>
@@ -145,9 +176,9 @@ export function buildInvoiceInnerHtml({ quote, items, notes, company, installmen
     </thead>
     <tbody>
       ${rowsHtml}
-      ${installment?.hideTotal ? '' : `
-      <tr class="total-row"><td colspan="5">المجموع الكلي</td><td>${formatNumber(quote.total_price)}</td></tr>`}
-      ${installment ? `
+      ${showTotal ? `
+      <tr class="total-row"><td colspan="5">المجموع الكلي${cashOnly ? ' نقداً' : ''}</td><td>${formatNumber(cashOnly && installment ? installment.cashTotal : quote.total_price)}</td></tr>` : ''}
+      ${showInstallment ? `
       <tr class="inst-row"><td colspan="5">المجموع الكلي بالتقسيط — ${escapeHtml(installment.label || installmentPlanLabel(installment.plan))}</td><td>${formatNumber(installment.totalWithInterest)}</td></tr>
       <tr class="inst-row inst-monthly"><td colspan="5">القسط الشهري لمدة ${formatNumber(installment.months)} شهر</td><td>${formatNumber(installment.monthly)}</td></tr>` : ''}
     </tbody>

@@ -104,11 +104,18 @@ describe('مسار الطباعة يطلّع نفس صفحات المسار ال
     const fn = src.slice(src.indexOf('const printBlocks = async'));
     const body = fn.slice(0, fn.indexOf('\n  };'));
     const cover = body.indexOf('buildCoverHtml');
-    const invoice = body.indexOf('blocks.push(invoiceHtml)');
+    const invoice = body.indexOf('blocks.push(...sheets)');
     const attach = body.indexOf('attachmentPageHtml(attachment)');
     expect(cover).toBeGreaterThan(-1);
     expect(cover).toBeLessThan(invoice);
     expect(invoice).toBeLessThan(attach);
+  });
+
+  it('النسخ الثلاث تروح لمسار الطباعة مثل ما تروح لمسار الكانفاس', () => {
+    // نفس مصفوفة sheets تغذّي المسارين — بلا هيچي كان مسار الطباعة يطلّع
+    // نسخة وحدة ومسار الكانفاس ثلاثة، والفرق ما يبين إلا عند الزبون
+    expect(src).toContain('blocks.push(...sheets)');
+    expect(src).toMatch(/for \(const html of sheets\)/);
   });
 
   it('صفحة الغلاف تنبني بنفس المنطق للمسارين — ماكو نسختين تتفرقان', () => {

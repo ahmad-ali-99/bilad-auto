@@ -683,6 +683,9 @@ export const api = {
         rate: ownRate > 0 ? ownRate : (Number(cfg?.rate) > 0 ? Number(cfg.rate) : fallback.rate),
         months: ownMonths > 0 ? ownMonths : (Number(cfg?.months) > 0 ? Number(cfg.months) : fallback.months),
         hideTotal: input.hideTotalInPdf === true,
+        // المصرف اللي تنعنون له النسخة الرسمية بالتصدير — يمشي مع التقسيط
+        // نفسه لأنه ما إله معنى بلاه، فينحفظ ويرجع مع العرض بلا حقل زيادة
+        addressBank: input.installmentBank === 'ahli' ? 'ahli' : 'nahrain',
       };
     },
     // وسائط بناء العرض — نقطة واحدة يستعملها الجميع (المعاينة، الحفظ، تصدير PDF).

@@ -28,3 +28,13 @@
 .bank-choices { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
 .bank-choices .btn { flex: 1 1 200px; display: flex; flex-direction: column; gap: 2px; padding: 12px; }
 .bank-choices .btn small { font-weight: 400; opacity: 0.8; font-size: 0.78em; }
+
+/* ── اختيار المصرف المُعنون له بالتصدير ────────────────────────────────── */
+.bank-pick {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #d5e0ea;
+  border-radius: 6px;
+  background: #f7fafd;
+}
+.bank-pick-title { font-size: 0.82rem; line-height: 1.7; color: #2c4a6b; margin-bottom: 8px; }

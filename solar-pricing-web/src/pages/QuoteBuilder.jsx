@@ -95,7 +95,7 @@ const BLANK = {
   overrides: {},
   markupPercent: '', markupMode: 'visible', discountPercent: '',
   targetTotal: '', targetVisible: false,
-  installment: false, installmentPlan: 'company',
+  installment: false, installmentPlan: 'company', installmentBank: 'nahrain',
   installmentRate: '', installmentMonths: '',
   hideTotalInPdf: false,
   extraUnits: { panel: 0, battery: 0, inverter: 0, integrated: 0 },
@@ -219,6 +219,8 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   const [installment, setInstallment] = useState(savedDraft?.installment ?? false);
   // خطة التقسيط: 'company' = التقسيط عبر مصرف النهرين، 'cbi' = مبادرة البنك المركزي (26% لسبع سنوات)
   const [installmentPlan, setInstallmentPlan] = useState(savedDraft?.installmentPlan ?? 'company');
+  // المصرف اللي تنعنون له النسخة الرسمية بالتصدير
+  const [installmentBank, setInstallmentBank] = useState(savedDraft?.installmentBank ?? 'nahrain');
   // نسبة وأشهر خاصة بهذا العرض — فارغة تعني «خذها من الإعدادات العامة»
   const [installmentRate, setInstallmentRate] = useState(savedDraft?.installmentRate ?? '');
   const [installmentMonths, setInstallmentMonths] = useState(savedDraft?.installmentMonths ?? '');
@@ -372,7 +374,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   const draftState = {
     clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours,
     systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, targetTotal, targetVisible,
-    installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf,
+    installment, installmentPlan, installmentBank, installmentRate, installmentMonths, hideTotalInPdf,
     extraUnits, unitCounts, notes, pricingOpen, createdBy,
   };
   // مرجع حي للمسودة — يستعمله الحفظ الفوري عند مغادرة الصفحة
@@ -383,7 +385,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   useEffect(() => {
     const t = setTimeout(() => writeSavedDraft(draftStateRef.current), 500);
     return () => clearTimeout(t);
-  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, targetTotal, targetVisible, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts, notes, pricingOpen, createdBy]);
+  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, targetTotal, targetVisible, installment, installmentPlan, installmentBank, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts, notes, pricingOpen, createdBy]);
 
   // حفظ فوري عند مغادرة الصفحة أو إغلاق النافذة — بدونه آخر نص ثانية من الكتابة
   // تروح: المؤقت ينلغي مع فكّ الصفحة قبل ما يوصل للتخزين.
@@ -420,6 +422,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
     setTargetVisible(s.targetVisible ?? false);
     setInstallment(s.installment);
     setInstallmentPlan(s.installmentPlan);
+    setInstallmentBank(s.installmentBank ?? 'nahrain');
     setInstallmentRate(s.installmentRate);
     setInstallmentMonths(s.installmentMonths);
     setHideTotalInPdf(s.hideTotalInPdf);
@@ -484,6 +487,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
         targetVisible: a.targetVisible === true,
         installment: !!a.installment?.enabled,
         installmentPlan: a.installment?.plan === 'cbi' ? 'cbi' : 'company',
+        installmentBank: a.installment?.addressBank === 'ahli' ? 'ahli' : 'nahrain',
         brands: { ...emptyBrandPick(), ...(p.brands || {}) },
         panelSafetyFactor: Number(p.panelSafetyFactor) > 0 ? Number(p.panelSafetyFactor) : PANEL_SAFETY_FACTOR,
         batteryFactors: p.batteryFactors ?? null,
@@ -540,6 +544,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
       setTargetVisible(a.targetVisible === true);
       setInstallment(!!a.installment?.enabled);
       setInstallmentPlan(a.installment?.plan === 'cbi' ? 'cbi' : 'company');
+      setInstallmentBank(a.installment?.addressBank === 'ahli' ? 'ahli' : 'nahrain');
       if (p.brands) setBrands({ ...emptyBrandPick(), ...p.brands });
       if (Number(p.panelSafetyFactor) > 0) setPanelSafetyFactor(Number(p.panelSafetyFactor));
       setBatteryFactors(p.batteryFactors ?? null);
@@ -670,7 +675,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
 
   // useMemo ضروري: بدونه الكائن يتجدد بكل رندر → المؤقت ينعاد → حلقة إعادة حساب لا نهائية
   const inputs = useMemo(
-    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, targetTotal, targetVisible, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts }),
+    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, targetTotal, targetVisible, installment, installmentPlan, installmentBank, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts }),
     [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts]
   );
   const debouncedInputs = useDebouncedValue(inputs, 300);
@@ -717,6 +722,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
         },
         installment: debouncedInputs.installment,
         installmentPlan: debouncedInputs.installmentPlan,
+        installmentBank: debouncedInputs.installmentBank,
         installmentRate: debouncedInputs.installmentRate,
         installmentMonths: debouncedInputs.installmentMonths,
         extraUnits: debouncedInputs.extraUnits,
@@ -771,6 +777,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
       },
       installment,
       installmentPlan,
+      installmentBank,
       installmentRate,
       installmentMonths,
       hideTotalInPdf,
@@ -1228,6 +1235,27 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
             <input type="checkbox" checked={installment} onChange={(e) => setInstallment(e.target.checked)} />
             <span><b>🏦 إدراج التقسيط بالعرض</b></span>
           </label>
+          {/* بالتقسيط التصدير يطلّع ثلاث نسخ — وهذي الجهة اللي تنعنون لها الرسمية */}
+          {installment && (
+            <div className="bank-pick">
+              <div className="bank-pick-title">
+                📄 التصدير يطلّع <b>ثلاث نسخ</b>: رسمية للمصرف بمبلغ النقد، وفنية للزبون
+                بالقسط والنقد، وتجارية نقدية بلا عنونة. النسخة الرسمية تنعنون إلى:
+              </div>
+              <div className="tier-toggle" style={{ margin: 0 }}>
+                {[{ key: 'nahrain', label: 'مصرف النهرين' }, { key: 'ahli', label: 'المصرف الأهلي العراقي' }].map((bk) => (
+                  <button
+                    key={bk.key}
+                    type="button"
+                    className={installmentBank === bk.key ? 'active' : ''}
+                    onClick={() => setInstallmentBank(bk.key)}
+                  >
+                    {bk.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {/* خطتان: نظام الشركة المعتاد، أو مبادرة البنك المركزي (26% لسبع سنوات) */}
           {installment && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
