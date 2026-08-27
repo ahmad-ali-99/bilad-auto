@@ -44,12 +44,9 @@ function densityScale(itemCount) {
  * النسختان 'bank' و'cash' تتجاهلان صفوف التقسيط عمداً: المصرف يمنح على أساس
  * المبلغ النقدي، وإظهار مبلغ التقسيط بورقة موجّهة له يخلط السعرين.
  */
-export function buildInvoiceInnerHtml({ quote, items, notes, company, installment = null, copy = 'client', bank = 'nahrain' }) {
+export function buildInvoiceInnerHtml({ quote, items, notes, company, installment = null, copy = 'client' }) {
   const cashOnly = copy === 'bank' || copy === 'cash';
   const showInstallment = installment && !cashOnly;
-  // بالنسخ النقدية المجموع الكلي يظهر دائماً — «إخفاء المجموع» خيار للعرض
-  // اللي يبيع بالقسط، وإخفاؤه بورقة نقدية يخليها بلا سعر أصلاً
-  const showTotal = cashOnly || !installment?.hideTotal;
   const systemAmps = Math.max(quote.required_amp_day || 0, quote.required_amp_night || 0);
   // هوية العرض حسب نوع المنظومة (مستنتج من أرقام العرض نفسه):
   // نهار صفر = أوف جرد (انفيرتر وبطاريات بلا ألواح)، ليل صفر = نهارية بلا بطاريات
@@ -147,7 +144,7 @@ export function buildInvoiceInnerHtml({ quote, items, notes, company, installmen
   </div>
   ${copy === 'bank' ? `
   <div class="bank-address">
-    <div class="to">إلى / ${escapeHtml(addressBankLabel(bank))} المحترم</div>
+    <div class="to">إلى / ${escapeHtml(installment?.label || addressBankLabel(installment?.plan))} المحترم</div>
     <div class="subject">م / عرض سعر منظومة طاقة شمسية</div>
     <div class="body">
       تحية طيبة… بناءً على طلب السيد/ة <b>${escapeHtml(quote.client_name || '—')}</b>${quote.client_phone ? ` — هاتف <span class="ltr">${escapeHtml(quote.client_phone)}</span>` : ''}${quote.location ? ` — ${escapeHtml(quote.location)}` : ''}،
@@ -176,8 +173,7 @@ export function buildInvoiceInnerHtml({ quote, items, notes, company, installmen
     </thead>
     <tbody>
       ${rowsHtml}
-      ${showTotal ? `
-      <tr class="total-row"><td colspan="5">المجموع الكلي${cashOnly ? ' نقداً' : ''}</td><td>${formatNumber(cashOnly && installment ? installment.cashTotal : quote.total_price)}</td></tr>` : ''}
+      <tr class="total-row"><td colspan="5">المجموع الكلي${cashOnly ? ' نقداً' : ''}</td><td>${formatNumber(cashOnly && installment ? installment.cashTotal : quote.total_price)}</td></tr>
       ${showInstallment ? `
       <tr class="inst-row"><td colspan="5">المجموع الكلي بالتقسيط — ${escapeHtml(installment.label || installmentPlanLabel(installment.plan))}</td><td>${formatNumber(installment.totalWithInterest)}</td></tr>
       <tr class="inst-row inst-monthly"><td colspan="5">القسط الشهري لمدة ${formatNumber(installment.months)} شهر</td><td>${formatNumber(installment.monthly)}</td></tr>` : ''}

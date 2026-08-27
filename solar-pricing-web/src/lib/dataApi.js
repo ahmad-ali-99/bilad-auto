@@ -676,7 +676,9 @@ export const api = {
     // كل خطة نسبتها وأشهرها من الإعدادات المشتركة — والقيم هنا احتياط إذا ما انحفظت بعد.
     async _installment(input) {
       if (!input.installment) return null;
-      const plan = input.installmentPlan === 'cbi' ? 'cbi' : 'company';
+      const plan = ['cbi', 'ahli'].includes(input.installmentPlan) ? input.installmentPlan : 'company';
+      // الأهلي يمشي بنفس نسبة وأشهر الإعدادات العامة مثل النهرين — مبادرة
+      // البنك المركزي وحدها إلها إعدادها المستقل (26% لسبع سنوات)
       const key = plan === 'cbi' ? 'installment_cbi' : 'installment';
       const fallback = plan === 'cbi'
         ? { rate: 1.26, months: 84 }   // 26% لسبع سنوات
@@ -692,10 +694,6 @@ export const api = {
         label: installmentPlanLabel(plan),
         rate: ownRate > 0 ? ownRate : (Number(cfg?.rate) > 0 ? Number(cfg.rate) : fallback.rate),
         months: ownMonths > 0 ? ownMonths : (Number(cfg?.months) > 0 ? Number(cfg.months) : fallback.months),
-        hideTotal: input.hideTotalInPdf === true,
-        // المصرف اللي تنعنون له النسخة الرسمية بالتصدير — يمشي مع التقسيط
-        // نفسه لأنه ما إله معنى بلاه، فينحفظ ويرجع مع العرض بلا حقل زيادة
-        addressBank: input.installmentBank === 'ahli' ? 'ahli' : 'nahrain',
       };
     },
     // وسائط بناء العرض — نقطة واحدة يستعملها الجميع (المعاينة، الحفظ، تصدير PDF).
@@ -901,7 +899,6 @@ export const api = {
               distributed: false,
               // قرار البياع: هل يشوف الزبون المبلغ الكلي بالملف؟ ينحفظ مع العرض
               // حتى إعادة الطباعة بعد شهر تطلع بنفس الشكل بلا ما ينضبط من جديد
-              hideTotal: a.installment.hideTotal === true,
             }
             : null,
           // الزيادة/النقصان اليدوي بالوحدات — يرجع بوضع التعديل
@@ -1230,7 +1227,6 @@ export const api = {
           monthly: Math.round(totalWithInterest / months),
           plan, label: installmentPlanLabel(plan),
           cashTotal: distributed ? Math.round(quote.total_price / rate) : quote.total_price,
-          hideTotal: inst.hideTotal === true,
         };
       }
       // قدرة المنظومة لعرض محفوظ: تُعاد من بنوده (عدد وسعة البطاريات والانفيرترات)

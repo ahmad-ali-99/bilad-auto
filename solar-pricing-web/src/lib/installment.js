@@ -2,20 +2,15 @@
 // وتُشتق من نوع الخطة لا من نص محفوظ، حتى تغيير الاسم ينسحب على العروض القديمة أيضاً.
 export const INSTALLMENT_PLANS = {
   company: 'مصرف النهرين',
+  ahli: 'المصرف الأهلي العراقي',
   cbi: 'مبادرة البنك المركزي',
 };
 
 export function installmentPlanLabel(plan) {
-  return INSTALLMENT_PLANS[plan === 'cbi' ? 'cbi' : 'company'];
+  return INSTALLMENT_PLANS[plan] || INSTALLMENT_PLANS.company;
 }
 
-// المصارف اللي تنعنون لها النسخة الرسمية بالتصدير — الاسم بمكان واحد حتى
-// يتغيّر بسطر ويلحق كل العروض القديمة والجديدة سوية
-export const ADDRESS_BANKS = {
-  nahrain: 'مصرف النهرين',
-  ahli: 'المصرف الأهلي العراقي',
-};
-
-export function addressBankLabel(bank) {
-  return ADDRESS_BANKS[bank] || ADDRESS_BANKS.nahrain;
-}
+// الجهة اللي تنعنون لها النسخة الرسمية = **خطة التقسيط نفسها**.
+// كان أكو مبدّل منفصل للعنونة، وهو تكرار: المصرف اللي يقسّط عليه الزبون هو
+// المصرف اللي ينقدّم له العرض، فاختياران لشي واحد يفتحون باب التناقض.
+export const addressBankLabel = installmentPlanLabel;

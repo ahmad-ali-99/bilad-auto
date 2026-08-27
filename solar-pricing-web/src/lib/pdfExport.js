@@ -595,7 +595,7 @@ export async function exportInvoicePdf({ quote, items, notes, company, fileName,
   // ورقة وحدة تنرسل كلها أو تنطبع منها الصفحة المطلوبة.
   const sheets = installment
     ? [
-        buildInvoiceInnerHtml({ quote, items, notes, company, installment, copy: 'bank', bank: installment.addressBank || 'nahrain' }),
+        buildInvoiceInnerHtml({ quote, items, notes, company, installment, copy: 'bank' }),
         buildInvoiceInnerHtml({ quote, items, notes, company, installment, copy: 'client' }),
         buildInvoiceInnerHtml({ quote, items, notes, company, installment, copy: 'cash' }),
       ]

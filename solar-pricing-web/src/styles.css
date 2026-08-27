@@ -1992,3 +1992,17 @@ h2.page-title::before {
   background: #f7fafd;
 }
 .bank-pick-title { font-size: 0.82rem; line-height: 1.7; color: #2c4a6b; margin-bottom: 8px; }
+
+/* ملاحظة النسخ الثلاث تحت خطط التقسيط — تشرح شنو يطلع بالتصدير وإلى منو
+   تنعنون الرسمية، بدل مبدّل ثانٍ يكرر اختياراً موجود */
+.copies-note {
+  margin-top: 10px;
+  padding: 9px 11px;
+  background: #f7fafd;
+  border: 1px solid #dbe3ec;
+  border-inline-start: 3px solid var(--navy, #1a3a5c);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  line-height: 1.75;
+  color: #2c4a6b;
+}

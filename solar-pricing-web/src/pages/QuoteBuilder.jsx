@@ -95,9 +95,8 @@ const BLANK = {
   overrides: {},
   markupPercent: '', markupMode: 'visible', discountPercent: '',
   targetTotal: '', targetVisible: false,
-  installment: false, installmentPlan: 'company', installmentBank: 'nahrain',
+  installment: false, installmentPlan: 'company',
   installmentRate: '', installmentMonths: '',
-  hideTotalInPdf: false,
   extraUnits: { panel: 0, battery: 0, inverter: 0, integrated: 0 },
   unitCounts: {},
   createdBy: '',
@@ -219,13 +218,10 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   const [installment, setInstallment] = useState(savedDraft?.installment ?? false);
   // خطة التقسيط: 'company' = التقسيط عبر مصرف النهرين، 'cbi' = مبادرة البنك المركزي (26% لسبع سنوات)
   const [installmentPlan, setInstallmentPlan] = useState(savedDraft?.installmentPlan ?? 'company');
-  // المصرف اللي تنعنون له النسخة الرسمية بالتصدير
-  const [installmentBank, setInstallmentBank] = useState(savedDraft?.installmentBank ?? 'nahrain');
   // نسبة وأشهر خاصة بهذا العرض — فارغة تعني «خذها من الإعدادات العامة»
   const [installmentRate, setInstallmentRate] = useState(savedDraft?.installmentRate ?? '');
   const [installmentMonths, setInstallmentMonths] = useState(savedDraft?.installmentMonths ?? '');
   // إخفاء المجموع الكلي من ملف الزبون — الأسعار والقسط الشهري يبقون
-  const [hideTotalInPdf, setHideTotalInPdf] = useState(savedDraft?.hideTotalInPdf ?? false);
   // زيادة/نقصان يدوي بالوحدات (لوح ±2، بطارية وانفيرتر ±1) — للمستخدمين الرئيسيين فقط
   const [extraUnits, setExtraUnits] = useState(savedDraft?.extraUnits ?? { panel: 0, battery: 0, inverter: 0, integrated: 0 });
   // العدد اللي يثبّته البياع بيده — **رقم نهائي** مو فرقاً عن الحساب التلقائي.
@@ -374,7 +370,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   const draftState = {
     clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours,
     systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, targetTotal, targetVisible,
-    installment, installmentPlan, installmentBank, installmentRate, installmentMonths, hideTotalInPdf,
+    installment, installmentPlan, installmentRate, installmentMonths,
     extraUnits, unitCounts, notes, pricingOpen, createdBy,
   };
   // مرجع حي للمسودة — يستعمله الحفظ الفوري عند مغادرة الصفحة
@@ -385,7 +381,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   useEffect(() => {
     const t = setTimeout(() => writeSavedDraft(draftStateRef.current), 500);
     return () => clearTimeout(t);
-  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, targetTotal, targetVisible, installment, installmentPlan, installmentBank, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts, notes, pricingOpen, createdBy]);
+  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, targetTotal, targetVisible, installment, installmentPlan, installmentRate, installmentMonths, extraUnits, unitCounts, notes, pricingOpen, createdBy]);
 
   // حفظ فوري عند مغادرة الصفحة أو إغلاق النافذة — بدونه آخر نص ثانية من الكتابة
   // تروح: المؤقت ينلغي مع فكّ الصفحة قبل ما يوصل للتخزين.
@@ -422,10 +418,8 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
     setTargetVisible(s.targetVisible ?? false);
     setInstallment(s.installment);
     setInstallmentPlan(s.installmentPlan);
-    setInstallmentBank(s.installmentBank ?? 'nahrain');
     setInstallmentRate(s.installmentRate);
     setInstallmentMonths(s.installmentMonths);
-    setHideTotalInPdf(s.hideTotalInPdf);
     setExtraUnits(s.extraUnits);
     setUnitCounts(s.unitCounts);
     setCreatedBy(s.createdBy);
@@ -487,13 +481,11 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
         targetVisible: a.targetVisible === true,
         installment: !!a.installment?.enabled,
         installmentPlan: a.installment?.plan === 'cbi' ? 'cbi' : 'company',
-        installmentBank: a.installment?.addressBank === 'ahli' ? 'ahli' : 'nahrain',
         brands: { ...emptyBrandPick(), ...(p.brands || {}) },
         panelSafetyFactor: Number(p.panelSafetyFactor) > 0 ? Number(p.panelSafetyFactor) : PANEL_SAFETY_FACTOR,
         batteryFactors: p.batteryFactors ?? null,
         installmentRate: a.installment?.rate ? String(a.installment.rate) : '',
         installmentMonths: a.installment?.months ? String(a.installment.months) : '',
-        hideTotalInPdf: a.installment?.hideTotal === true,
         extraUnits: {
           panel: Number(x.panel) || 0, battery: Number(x.battery) || 0,
           inverter: Number(x.inverter) || 0, integrated: Number(x.integrated) || 0,
@@ -544,13 +536,11 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
       setTargetVisible(a.targetVisible === true);
       setInstallment(!!a.installment?.enabled);
       setInstallmentPlan(a.installment?.plan === 'cbi' ? 'cbi' : 'company');
-      setInstallmentBank(a.installment?.addressBank === 'ahli' ? 'ahli' : 'nahrain');
       if (p.brands) setBrands({ ...emptyBrandPick(), ...p.brands });
       if (Number(p.panelSafetyFactor) > 0) setPanelSafetyFactor(Number(p.panelSafetyFactor));
       setBatteryFactors(p.batteryFactors ?? null);
       setInstallmentRate(a.installment?.rate ? String(a.installment.rate) : '');
       setInstallmentMonths(a.installment?.months ? String(a.installment.months) : '');
-      setHideTotalInPdf(a.installment?.hideTotal === true);
       const x = p.extraUnits || a.extraUnits || {};
       setExtraUnits({ panel: Number(x.panel) || 0, battery: Number(x.battery) || 0, inverter: Number(x.inverter) || 0, integrated: Number(x.integrated) || 0 });
       setUnitCounts(p.unitCounts || a.unitCounts || {});
@@ -675,8 +665,8 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
 
   // useMemo ضروري: بدونه الكائن يتجدد بكل رندر → المؤقت ينعاد → حلقة إعادة حساب لا نهائية
   const inputs = useMemo(
-    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, targetTotal, targetVisible, installment, installmentPlan, installmentBank, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts }),
-    [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts]
+    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, targetTotal, targetVisible, installment, installmentPlan, installmentRate, installmentMonths, extraUnits, unitCounts }),
+    [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, extraUnits, unitCounts]
   );
   const debouncedInputs = useDebouncedValue(inputs, 300);
 
@@ -722,7 +712,6 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
         },
         installment: debouncedInputs.installment,
         installmentPlan: debouncedInputs.installmentPlan,
-        installmentBank: debouncedInputs.installmentBank,
         installmentRate: debouncedInputs.installmentRate,
         installmentMonths: debouncedInputs.installmentMonths,
         extraUnits: debouncedInputs.extraUnits,
@@ -777,10 +766,8 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
       },
       installment,
       installmentPlan,
-      installmentBank,
       installmentRate,
       installmentMonths,
-      hideTotalInPdf,
       extraUnits,
       // الأعداد اللي ثبّتها البياع بيده — بدونها الحفظ وملف الـPDF يرجعون للحساب
       // التلقائي ويطلع رقم غير اللي كتبه بالشاشة
@@ -1235,32 +1222,15 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
             <input type="checkbox" checked={installment} onChange={(e) => setInstallment(e.target.checked)} />
             <span><b>🏦 إدراج التقسيط بالعرض</b></span>
           </label>
-          {/* بالتقسيط التصدير يطلّع ثلاث نسخ — وهذي الجهة اللي تنعنون لها الرسمية */}
+          {/* الجهة المختارة هنا هي **نفسها** اللي تنعنون لها النسخة الرسمية
+              بالتصدير — ماكو اختيار ثانٍ. كان أكو مبدّل منفصل للعنونة، وهو
+              تكرار: المصرف اللي يقسّط عليه هو المصرف اللي ينقدّم له العرض. */}
           {installment && (
-            <div className="bank-pick">
-              <div className="bank-pick-title">
-                📄 التصدير يطلّع <b>ثلاث نسخ</b>: رسمية للمصرف بمبلغ النقد، وفنية للزبون
-                بالقسط والنقد، وتجارية نقدية بلا عنونة. النسخة الرسمية تنعنون إلى:
-              </div>
-              <div className="tier-toggle" style={{ margin: 0 }}>
-                {[{ key: 'nahrain', label: 'مصرف النهرين' }, { key: 'ahli', label: 'المصرف الأهلي العراقي' }].map((bk) => (
-                  <button
-                    key={bk.key}
-                    type="button"
-                    className={installmentBank === bk.key ? 'active' : ''}
-                    onClick={() => setInstallmentBank(bk.key)}
-                  >
-                    {bk.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {/* خطتان: نظام الشركة المعتاد، أو مبادرة البنك المركزي (26% لسبع سنوات) */}
-          {installment && (
+            <>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
               {[
                 { key: 'company', label: 'مصرف النهرين', hint: 'نسبة وأشهر التقسيط من الإعدادات' },
+                { key: 'ahli', label: 'المصرف الأهلي العراقي', hint: 'بنفس نسبة وأشهر الإعدادات' },
                 { key: 'cbi', label: 'مبادرة البنك المركزي', hint: 'فائدة 26% لمدة 7 سنوات' },
               ].map((pl) => (
                 <button
@@ -1281,27 +1251,17 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
                 </button>
               ))}
             </div>
+            <div className="copies-note">
+              📄 التصدير يطلّع <b>ثلاث نسخ</b>: رسمية معنونة إلى
+              <b> {installmentPlan === 'ahli' ? 'المصرف الأهلي العراقي' : installmentPlan === 'cbi' ? 'مبادرة البنك المركزي' : 'مصرف النهرين'}</b> بمبلغ
+              النقد، وفنية للزبون بالقسط والنقد، وتجارية نقدية بلا عنونة.
+            </div>
+            </>
           )}
           {/* نسبة المصرف وأشهره تجي من الإعدادات لكل خطة — كانت هنا خانتان فارغتان
               «من الإعدادات» ما ينكتب بيهن شي بالعادة، فانشالن. والعرض المحفوظ يخزن
               النسبة والأشهر اللي انحسب بيهن فعلاً، فيرجع بنفس المجموع مهما تغيّرت
               الإعدادات بعدين. */}
-          {installment && (
-            <label className="opt-line" style={{ marginTop: 10 }}>
-              <input
-                type="checkbox"
-                checked={hideTotalInPdf}
-                onChange={(e) => setHideTotalInPdf(e.target.checked)}
-              />
-              <span>
-                <b>إخفاء المجموع الكلي من ملف الزبون</b>
-                <small className="muted">
-                  أسعار البنود تبقى مثل ما هي بالمخزون، ونسبة المصرف تنضرب على المجموع بس.
-                  بالتأشير ينشال سطر «المجموع الكلي» من الملف ويبقى مجموع التقسيط والقسط الشهري.
-                </small>
-              </span>
-            </label>
-          )}
           </div>
           </>
           )}

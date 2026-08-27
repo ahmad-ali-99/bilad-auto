@@ -169,53 +169,25 @@ describe('النسبة والأشهر يوصلون لكل مسار — مو بس
 // ==== إخفاء المجموع الكلي من ملف الزبون ====
 // كانت بالشاشة خانتان فارغتان (نسبة وأشهر خاصة بالعرض) نادراً ما تنكتبان، وانشالن.
 // محلهن خانة تأشير وحدة: الزبون يشوف القسط الشهري بلا المبلغ الكلي.
-describe('خانة إخفاء المجموع الكلي', () => {
-  const company = { company_name: 'بلاد اوتو' };
-  const quote = { quote_number: 7401, client_name: 'زبون', total_price: 20000000, created_at: '2026-08-17' };
-  const items = [{ description: 'ألواح', unit: 'عدد', quantity: 8, unit_price: 250000, subtotal: 2000000 }];
-  const html = (installment) => buildInvoiceInnerHtml({ quote, items, notes: [], company, installment });
-
-  it('بالوضع الاعتيادي يطلع المجموع الكلي ومجموع التقسيط والقسط', () => {
-    const h = html({ rate: 1.35, months: 60, totalWithInterest: 27000000, monthly: 450000, plan: 'company' });
-    expect(h).toMatch(/>المجموع الكلي<\/td>/);
-    expect(h).toContain('المجموع الكلي بالتقسيط');
-    expect(h).toContain('القسط الشهري لمدة');
+// خانة «إخفاء المجموع الكلي» **انشالت** بطلب المستخدم: ما عاد إلها حاجة
+// بعد ما صار التصدير يطلّع ثلاث نسخ، والنسخة النقدية تحمل المجموع دائماً.
+describe('إخفاء المجموع الكلي انشال', () => {
+  it('ماكو أثر إله بأي طبقة', async () => {
+    const fs = await import('node:fs');
+    for (const f of ['src/pages/QuoteBuilder.jsx', 'src/lib/dataApi.js', 'src/lib/quoteService.js', 'src/lib/invoiceHtml.js']) {
+      const src = fs.readFileSync(new URL('../' + f, import.meta.url), 'utf8');
+      expect(src, f).not.toContain('hideTotal');
+    }
   });
 
-  it('مع التأشير ينشال سطر المجموع الكلي بس — التقسيط والقسط يبقون', () => {
-    const h = html({ rate: 1.35, months: 60, totalWithInterest: 27000000, monthly: 450000, plan: 'company', hideTotal: true });
-    expect(h, 'سطر الكاش لازم ينشال').not.toMatch(/>المجموع الكلي<\/td>/);
-    expect(h).toContain('المجموع الكلي بالتقسيط');
-    expect(h).toContain('القسط الشهري لمدة');
-    expect(h).toContain('450,000');
-    expect(h, 'رقم الكاش ما ينطبع أبداً').not.toContain('20,000,000');
-  });
-
-  it('بلا تقسيط ما تتأثر الفاتورة بالخانة', () => {
-    expect(html(null)).toContain('المجموع الكلي');
-  });
-
-  it('القرار يوصل من المسودة للفاتورة', () => {
-    expect(draft(inst({ hideTotal: true })).installment.hideTotal).toBe(true);
-    expect(draft(inst()).installment.hideTotal).toBe(false);
-  });
-
-  it('الخانتان الفارغتان انشالن من الشاشة', () => {
-    expect(builder).not.toContain('نسبة المصرف لهذا العرض');
-    expect(builder).not.toContain('عدد الأشهر لهذا العرض');
-  });
-
-  it('القرار ينحفظ مع العرض ويرجع عند فتحه — بلا ضبط من جديد', () => {
-    expect(builder).toContain('hideTotalInPdf');
-    expect(builder).toContain('setHideTotalInPdf(a.installment?.hideTotal === true)');
-    expect(dataApi).toContain('hideTotal: input.hideTotalInPdf === true');
-    expect(dataApi).toContain('hideTotal: a.installment.hideTotal === true');   // لقطة الحفظ
-    expect(dataApi).toContain('hideTotal: inst.hideTotal === true');            // إعادة البناء
-  });
-
-  it('الخانة داخل مجموعة «التقسيط» المعنونة — مو مرمية بالهوسة', () => {
-    expect(builder).toContain('opt-group-title');
-    expect(builder).toMatch(/opt-group-title">التقسيط/);
-    expect(builder).toMatch(/opt-group-title">الزيادة والخصم/);
+  it('والمجموع الكلي يطلع دائماً بملف الزبون', () => {
+    const html = buildInvoiceInnerHtml({
+      quote: { quote_number: 300, client_name: 'زبون', total_price: 10000000, created_at: '2026-08-16' },
+      items: [{ description: 'لوح', unit: 'عدد', quantity: 10, unit_price: 250000, subtotal: 2500000 }],
+      notes: [], company: { company_name: 'بلاد اوتو' },
+      installment: { plan: 'company', label: 'مصرف النهرين', months: 60, rate: 1.35,
+        cashTotal: 10000000, totalWithInterest: 13500000, monthly: 225000 },
+    });
+    expect(html).toMatch(/>المجموع الكلي<\/td>/);
   });
 });

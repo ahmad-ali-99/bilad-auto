@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import { buildInvoiceInnerHtml } from '../src/lib/invoiceHtml.js';
-import { ADDRESS_BANKS, addressBankLabel } from '../src/lib/installment.js';
+import { INSTALLMENT_PLANS, addressBankLabel } from '../src/lib/installment.js';
 
 const QUOTE = { quote_number: 431, created_at: '2026-08-26', client_name: 'علي حسن',
   client_phone: '07701234567', location: 'بغداد', required_amp_day: 105, required_amp_night: 20,
@@ -10,12 +10,13 @@ const ITEMS = [{ description: 'ألواح', unit: 'عدد', quantity: 50, unit_p
 const COMPANY = { company_name: 'بلاد اوتو', manager_name: 'حيدر' };
 const INST = { plan: 'company', label: 'مصرف النهرين', months: 60, rate: 1.35,
   cashTotal: 50000000, totalWithInterest: 67500000, monthly: 1125000 };
-const html = (copy, extra = {}) => buildInvoiceInnerHtml({
-  quote: QUOTE, items: ITEMS, notes: [], company: COMPANY, installment: INST, copy, ...extra });
+// الجهة المُعنون لها تجي من **خطة التقسيط نفسها** — ماكو اختيار ثانٍ
+const html = (copy, inst = INST) => buildInvoiceInnerHtml({
+  quote: QUOTE, items: ITEMS, notes: [], company: COMPANY, installment: inst, copy });
 
 describe('النسخة الرسمية للمصرف', () => {
-  it('معنونة للمصرف المختار وباسم الزبون وتفاصيله', () => {
-    const h = html('bank', { bank: 'ahli' });
+  it('معنونة للجهة المختارة بالتقسيط وباسم الزبون وتفاصيله', () => {
+    const h = html('bank', { ...INST, plan: 'ahli', label: 'المصرف الأهلي العراقي' });
     expect(h).toContain('إلى / المصرف الأهلي العراقي المحترم');
     expect(h).toContain('علي حسن');
     expect(h).toContain('07701234567');
@@ -24,8 +25,13 @@ describe('النسخة الرسمية للمصرف', () => {
 
   it('النهرين هو الافتراض', () => {
     expect(html('bank')).toContain('إلى / مصرف النهرين المحترم');
-    expect(addressBankLabel(undefined)).toBe(ADDRESS_BANKS.nahrain);
+    expect(addressBankLabel(undefined)).toBe(INSTALLMENT_PLANS.company);
     expect(addressBankLabel('ahli')).toBe('المصرف الأهلي العراقي');
+  });
+
+  it('الخطط الثلاث كلها تنعنون بأسمائها — ماكو خطة بلا عنوان', () => {
+    for (const [plan, label] of Object.entries(INSTALLMENT_PLANS))
+      expect(html('bank', { ...INST, plan, label }), plan).toContain(`إلى / ${label} المحترم`);
   });
 
   it('بمبلغ النقد وحده — ماكو قسط ولا مجموع تقسيط', () => {
@@ -36,10 +42,8 @@ describe('النسخة الرسمية للمصرف', () => {
     expect(h).not.toContain('القسط الشهري');
   });
 
-  it('«إخفاء المجموع» ما ينطبق عليها — ورقة بلا سعر ما تنفع للمصرف', () => {
-    const h = buildInvoiceInnerHtml({ quote: QUOTE, items: ITEMS, notes: [], company: COMPANY,
-      installment: { ...INST, hideTotal: true }, copy: 'bank' });
-    expect(h).toContain('50,000,000');
+  it('المجموع النقدي يطلع دائماً — ورقة بلا سعر ما تنفع للمصرف', () => {
+    expect(html('bank')).toContain('50,000,000');
   });
 });
 
@@ -90,7 +94,8 @@ describe('الثلاث نسخ توصل للمسارين', () => {
     expect((loop.match(/releaseCanvas\(canvas\)/g) || []).length).toBeGreaterThanOrEqual(3);
   });
 
-  it('المصرف ينمرّر جوّا كائن التقسيط لا كوسيط منفصل', () => {
-    expect(src).toContain("bank: installment.addressBank || 'nahrain'");
+  it('ماكو وسيط مصرف منفصل — الجهة تجي من خطة التقسيط', () => {
+    expect(src).toContain("copy: 'bank' }");
+    expect(src).not.toContain('addressBank');
   });
 });
