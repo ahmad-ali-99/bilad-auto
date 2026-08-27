@@ -218,6 +218,15 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   const [installment, setInstallment] = useState(savedDraft?.installment ?? false);
   // خطة التقسيط: 'company' = التقسيط عبر مصرف النهرين، 'cbi' = مبادرة البنك المركزي (26% لسبع سنوات)
   const [installmentPlan, setInstallmentPlan] = useState(savedDraft?.installmentPlan ?? 'company');
+  // **لازم يتعرّف هنا مع بقية حالات التقسيط لا بأسفل المكوّن**: يُستعمل
+  // بالمدخلات المؤجّلة وبحمولة الحفظ اللي فوقه، وتعريفه تحتهن يخليه بمنطقة
+  // ميتة زمنياً — فشاشة العرض (وهي الافتراضية) تنهار بـReferenceError
+  // وتطلع صفحة بيضاء فور الدخول.
+  //
+  // ومنفصل عن «مبلغ الوصول» وبلا فحص صلاحية: التقسيط مفتوح لكل البياعين
+  // بينما مبلغ الوصول محصور بصلاحية التسعير، فكان الزر يكتب بحقل محصور
+  // فتنرمى القيمة بصمت. التقريب مطلب مصرف لا خصماً تقديرياً.
+  const [bankRound, setBankRound] = useState(savedDraft?.bankRound ?? '');
   // نسبة وأشهر خاصة بهذا العرض — فارغة تعني «خذها من الإعدادات العامة»
   const [installmentRate, setInstallmentRate] = useState(savedDraft?.installmentRate ?? '');
   const [installmentMonths, setInstallmentMonths] = useState(savedDraft?.installmentMonths ?? '');
@@ -828,12 +837,6 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   // نوقف التصدير ونخيّر صاحب الحساب: يزيد لأقرب مليون أو ينقص أو يصدّر مثل
   // ما هو. الاختيار ينكتب بـ«مبلغ الوصول» فينزل بأسعار البنود بهدوء.
   const [bankAsk, setBankAsk] = useState(null);
-  // المبلغ المقرّب لأقرب مليون. **منفصل عن «مبلغ الوصول» وبلا فحص صلاحية**:
-  // التقسيط مفتوح لكل البياعين، بينما مبلغ الوصول محصور بصلاحية التسعير —
-  // فكان البياع يضغط «زيادة لأقرب مليون» والقيمة تنكتب بحقل محصور عليه
-  // فتنرمى بصمت، ويشوف إن الزر ما يسوي شي. التقريب مطلب مصرف لا خصماً
-  // تقديرياً، فيمر لكل حساب.
-  const [bankRound, setBankRound] = useState('');
 
   function bankCheck() {
     if (!installment) return null;
