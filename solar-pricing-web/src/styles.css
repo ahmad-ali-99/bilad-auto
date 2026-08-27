@@ -1883,3 +1883,47 @@ h2.page-title::before {
    و!important يغلب أي تخصيص مهما كبر. بدون هذا السطر الرمز ينكتب تحت
    الأيقونة — مقيس: padding-right = 14px بدل 46px. */
 .login-staff .code-wrap input { padding-inline-start: 46px !important; }
+
+/* ── إدارة الحسابات والصلاحيات ─────────────────────────────────────────── */
+.staff-manager .staff-new {
+  display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;
+  padding: 12px; margin-bottom: 14px;
+  background: #f7fafd; border: 1px solid #dbe3ec; border-radius: 10px;
+}
+.staff-manager .staff-new .field { flex: 1 1 200px; margin: 0; }
+.staff-rows { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.staff-row {
+  border: 1px solid #dbe3ec; border-radius: 12px; padding: 12px;
+  background: #fff; box-shadow: 0 1px 3px rgba(18, 41, 67, 0.05);
+}
+.staff-row-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap; margin-bottom: 10px;
+}
+.staff-row-head b { color: var(--navy, #1a3a5c); font-size: 1rem; }
+.staff-presets { display: flex; gap: 6px; flex-wrap: wrap; }
+.staff-presets .btn { padding: 5px 10px; font-size: 0.78rem; }
+.staff-caps { display: flex; flex-wrap: wrap; gap: 6px 10px; }
+.staff-caps .cap {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.8rem; color: #4a5c70;
+  background: #f2f5f9; border: 1px solid #e2e8f0; border-radius: 8px;
+  padding: 6px 9px; cursor: pointer; min-height: 36px;
+}
+.staff-caps .cap.on { background: #e8f2ff; border-color: #a9c8ea; color: #1a3a5c; font-weight: 600; }
+.staff-caps .cap input { width: 17px; height: 17px; cursor: pointer; }
+.staff-caps .cap-markup input { width: 66px; height: auto; padding: 4px 6px; }
+.staff-reset {
+  margin-top: 14px; padding: 12px;
+  border: 1px solid #f0d9a8; background: #fffaf0; border-radius: 10px;
+}
+.staff-sql {
+  background: #12263f; color: #d8e6f5; border-radius: 8px;
+  padding: 10px 12px; font-size: 0.76rem; line-height: 1.6;
+  overflow-x: auto; white-space: pre; margin: 8px 0;
+}
+@media (max-width: 560px) {
+  .staff-manager .staff-new { flex-direction: column; align-items: stretch; }
+  .staff-manager .staff-new .btn { width: 100%; }
+  .staff-caps .cap { flex: 1 1 100%; }
+}

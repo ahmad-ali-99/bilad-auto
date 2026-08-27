@@ -110,6 +110,19 @@ export default function App() {
     };
   }, []);
 
+  // سجل الصلاحيات ينحمّل مرة وحدة عند بدء الجلسة، ويُحطّ بطبقة الصلاحيات
+  // قبل ما ترسم أي شاشة. **متزامن بعده**: دوال الصلاحيات تنندى أثناء الرسم
+  // فما ينفع تكون async، فالحمل غير المتزامن يصير هنا مرة وحدة.
+  const [rolesReady, setRolesReady] = useState(false);
+  useEffect(() => {
+    if (!session) { setRolesReady(false); return; }
+    let alive = true;
+    window.api?.staff?.load?.()
+      .catch(() => {})   // فشل القراءة = الافتراضات القديمة تبقى شغّالة
+      .finally(() => { if (alive) setRolesReady(true); });
+    return () => { alive = false; };
+  }, [session]);
+
   // جلسة حساب مو موظف — بقايا التسجيل العام قبل ما ينشال. نطلّعها بهدوء
   // بدل ما تبقى معلّقة بشاشة ماكو إلها محتوى. (بإفكت لا أثناء الرسم.)
   useEffect(() => {
@@ -233,6 +246,19 @@ export default function App() {
 
   if (recovery) {
     return <ResetPasswordScreen onDone={() => setRecovery(false)} />;
+  }
+
+  // بلا انتظار السجل، أول رسمة تطلع بالافتراضات القديمة وبعدها تنقلب —
+  // تبويبات تظهر ثم تختفي قدّام عين المستخدم
+  if (!rolesReady) {
+    return (
+      <div className="splash-overlay">
+        <div className="splash-center">
+          <img src="logo.png" alt="بلاد اوتو" className="splash-brand-logo" />
+          <p style={{ color: '#fff' }}>جاري التحميل...</p>
+        </div>
+      </div>
+    );
   }
 
   // زبون (دخول Google): حاسبة تسعير مبسطة فقط — بلا تنقل ولا أدوات إدارية ولا مساعد

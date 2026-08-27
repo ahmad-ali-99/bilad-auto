@@ -11,6 +11,41 @@
 // ملاحظة: الاسم هنا لازم يطابق الاسم المخزون بـraw_user_meta_data->>'username'
 // بقاعدة البيانات — هو اللي يوصل للتطبيق بالجلسة.
 import { isAdminName } from './agent.js';
+import { CAPABILITY_KEYS, normName } from './staffRoles.js';
+
+// ── سجل الصلاحيات المحفوظ ───────────────────────────────────────────────────
+// يجي من app_config (مفتاح staff_roles) وينحمّل مرة وحدة عند بدء الجلسة.
+// **متزامن عمداً**: كل دوال الصلاحيات تنندى أثناء الرسم، فما ينفع تكون async.
+// الحمل غير المتزامن يصير مرة وحدة بـApp.jsx ويحطّ النتيجة هنا.
+let ROLES = {};
+
+/** يحطّ السجل المحمّل — ينندى مرة وحدة عند بدء الجلسة */
+export function applyStaffRoles(roles) {
+  ROLES = roles && typeof roles === 'object' ? roles : {};
+}
+
+export function staffRoles() {
+  return ROLES;
+}
+
+/** صف الحساب إن وُجد بالسجل — وإلا null فترجع الافتراضات القديمة */
+function roleOf(username) {
+  return ROLES[normName(username)] || null;
+}
+
+/**
+ * قيمة صلاحية: السجل يسبق، وإذا ماكو صف يرجع الافتراض القديم.
+ *
+ * **ماكو تجاوز عام للمشرفين هنا عمداً**: مو كل صلاحية كانت للمشرفين أصلاً —
+ * مبدّل الماركة مثلاً كان لبكر وأحمد بس، وحوراء مشرفة وما تشوفه. تجاوز عام
+ * كان يفتحه لها ويغيّر سلوكاً قائماً بلا ما أحد يطلب. التجاوز الوحيد
+ * بـcanEditSettings أدناه — باب الخروج من سجل مكتوب غلط.
+ */
+function cap(username, key, fallback) {
+  const r = roleOf(username);
+  if (r && CAPABILITY_KEYS.includes(key)) return r[key] === true;
+  return fallback;
+}
 
 // **ينسجّل كل شكل ممكن للاسم**: المطابقة تفشل مفتوحة — اسم مو باللائحة يعني
 // حساب بصلاحيات كاملة بلا ما ننتبه. فالموظف اللي وراه جهة ينكتب باسمه لحاله
@@ -69,6 +104,8 @@ const HIDDEN_MARKUP_ACCOUNTS = [
 
 /** نسبة الزيادة المخفية لهذا الحساب (0 = بلا زيادة) */
 export function hiddenMarkupPercentFor(username) {
+  const r = roleOf(username);
+  if (r) return Number(r.hiddenMarkupPercent) > 0 ? Number(r.hiddenMarkupPercent) : 0;
   const u = norm(username);
   return HIDDEN_MARKUP_ACCOUNTS.some((n) => norm(n) === u) ? HIDDEN_MARKUP_PERCENT : 0;
 }
@@ -82,13 +119,13 @@ export function isRestrictedUser(username) {
 
 // تعديل المخزون كاملاً (كل المواد والأجور والاستيراد) — الحسابات غير المقيّدة
 export function canEditInventory(username) {
-  return !isRestrictedUser(username);
+  return cap(username, 'editInventory', !isRestrictedUser(username));
 }
 
 // حساب يضيف مواد جديدة ويملك اللي يضيفه
 export function isInventoryContributor(username) {
   const u = norm(username);
-  return INVENTORY_CONTRIBUTORS.some((r) => norm(r) === u);
+  return cap(username, 'addMaterial', INVENTORY_CONTRIBUTORS.some((r) => norm(r) === u));
 }
 
 // هل يقدر يضيف مادة جديدة للمخزون؟
@@ -116,7 +153,7 @@ const BRAND_PICKERS = ['بكر', 'أحمد'];
 
 export function canPickBrand(username) {
   const u = norm(username);
-  return BRAND_PICKERS.some((r) => norm(r) === u);
+  return cap(username, 'pickBrand', BRAND_PICKERS.some((r) => norm(r) === u));
 }
 
 // الاستيراد من إكسل: مفتوح لحساب الإضافة هم — بس بحدود.
@@ -130,12 +167,12 @@ export function canImportInventory(username) {
 
 /** هل يقدر الاستيراد يحدّث مواد موجودة؟ (لا لحساب الإضافة) */
 export function canImportUpdates(username) {
-  return canEditInventory(username);
+  return cap(username, 'importUpdates', canEditInventory(username));
 }
 
 // أجور العمل تبقى للحسابات الكاملة — أسعار مشتركة تمس عروض الفريق كله
 export function canEditLabor(username) {
-  return canEditInventory(username);
+  return cap(username, 'editLabor', canEditInventory(username));
 }
 
 // تعديل إعدادات الحساب وملف الشركة والملاحظات الافتراضية — للمشرفين حصراً
@@ -145,12 +182,17 @@ export function canEditLabor(username) {
 const PRICE_ADJUST_USERS = ['بكر'];
 
 export function canPriceAdjust(username) {
-  if (isAdminName(username)) return true;
-  return PRICE_ADJUST_USERS.some((u) => norm(u) === norm(username));
+  // الافتراض القديم: المشرفون + الأسماء المسمّاة. لازم يبقى كما هو حرفياً —
+  // إسقاط شق المشرفين منه كان يقفل الزيادة والخصم على حوراء وحيدر
+  const before = isAdminName(username) || PRICE_ADJUST_USERS.some((u) => norm(u) === norm(username));
+  return cap(username, 'priceAdjust', before);
 }
 
 export function canEditSettings(username) {
-  return isAdminName(username);
+  // المشرف يوصل الإعدادات دائماً — بدونها سجل صلاحيات مكتوب غلط يقفل
+  // الشاشة اللي تصلّحه، وما يبقى مخرج إلا SQL بقاعدة البيانات
+  if (isAdminName(username)) return true;
+  return cap(username, 'editSettings', false);
 }
 
 // حساب المالك (أحمد) — صلاحيات فردية مو إدارية عامة: سجل الحركات، وتفريغ سلة
@@ -163,7 +205,7 @@ export function isOwnerAccount(username) {
 // الاطلاع على عروض *الفريق كلها* — للمشرفين حصراً.
 // البياع الاعتيادي يفتح صفحة العروض عادي لكن يشوف عروضه هو فقط (فلترة بـdataApi).
 export function canViewQuotes(username) {
-  return isAdminName(username);
+  return cap(username, 'viewAllQuotes', isAdminName(username));
 }
 
 // صلاحيات المشرفين كما هي (تبويب الطلبات، أدوات المساعد الإدارية)

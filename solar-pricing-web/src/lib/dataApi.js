@@ -1,13 +1,15 @@
 // طبقة البيانات السحابية — تعطي نفس شكل window.api القديم لكن فوق Supabase
 // كل الدوال async؛ الصفحات المشتركة تناديها بنفس الطريقة بدون تعديل يُذكر.
-import { supabase } from './supabase.js';
+import { supabase, usernameToEmail } from './supabase.js';
 import * as quoteService from './quoteService.js';
 import * as calc from './calc.js';
 import * as excelImport from './excelImport.js';
 import { exportInvoicePdf, quoteFileName } from './pdfExport.js';
 import { logActivity } from './activityLog.js';
 import { UNDO, DRAFT } from './activityUndo.js';
-import { isRestrictedUser, canEditSettings, canAddMaterial, canEditMaterial, canEditInventory, canImportInventory, canImportUpdates, canEditLabor, hiddenMarkupPercentFor } from './permissions.js';
+import { isRestrictedUser, canEditSettings, canAddMaterial, canEditMaterial, canEditInventory, canImportInventory, canImportUpdates, canEditLabor, hiddenMarkupPercentFor, applyStaffRoles } from './permissions.js';
+import { parseRoles, serializeRoles, normName as normStaffName } from './staffRoles.js';
+import { createClient } from '@supabase/supabase-js';
 import { canAccessQuote, visibleQuotes, canAttributeQuote, accessDeniedMessage } from './quoteAccess.js';
 import { installmentPlanLabel } from './installment.js';
 import { imageKey, isImageKey } from './materialImages.js';
@@ -166,6 +168,7 @@ async function withIntegratedKw(rows) {
 // ولا تنستعمل بالعروض. المفتاح قائمة معرّفات بـapp_config — بلا عمود جديد بالقاعدة،
 // ولهذا العروض المحفوظة اللي فيها مادة انخفت لاحقاً تبقى مثل ما هي (بنودها لقطات).
 const MATERIALS_DISABLED_KEY = 'materials_disabled';
+const STAFF_ROLES_KEY = 'staff_roles';
 
 async function withActive(rows) {
   try {
@@ -220,6 +223,13 @@ async function assertCanWriteConfig(key) {
   // على أي حساب ما يعدّل المخزون كاملاً.
   if (k === MATERIALS_DISABLED_KEY && !canEditInventory(await currentUsername())) {
     throw new Error('إخفاء وإظهار مواد المخزون محصور بحسابات الإدارة');
+  }
+
+  // سجل الصلاحيات نفسه: **هو بيانات الصلاحية**، فمن يكتبه يكتب صلاحيات
+  // الجميع بضمنها صلاحياته. محصور بمن يعدّل الإعدادات — ولازم يمر من هنا
+  // لأن app_config مفتوح للكتابة لأي حساب مسجّل
+  if (k === STAFF_ROLES_KEY && !canEditSettings(await currentUsername())) {
+    throw new Error('تعديل صلاحيات الحسابات محصور بحسابات الإدارة');
   }
 }
 
@@ -1421,6 +1431,99 @@ export const api = {
   },
 
   // إعدادات مشتركة خفيفة (key/value بجدول app_config) — مثل الثانوية الافتراضية الدائمة
+  // ── الحسابات والصلاحيات ─────────────────────────────────────────────────
+  staff: {
+    /** يحمّل السجل ويحطّه بطبقة الصلاحيات — ينندى مرة وحدة عند بدء الجلسة */
+    async load() {
+      const roles = parseRoles(await api.config.get(STAFF_ROLES_KEY));
+      applyStaffRoles(roles);
+      return roles;
+    },
+
+    async list() {
+      return parseRoles(await api.config.get(STAFF_ROLES_KEY));
+    },
+
+    /** يحفظ صفوف الشاشة كسجل — الحارس بـassertCanWriteConfig */
+    async save(rows) {
+      const before = await api.config.get(STAFF_ROLES_KEY);
+      const roles = serializeRoles(rows);
+      await api.config.set(STAFF_ROLES_KEY, roles);
+      applyStaffRoles(parseRoles(roles));
+      logActivity('تعديل صلاحيات الحسابات', 'الإعدادات', {
+        'عدد الحسابات': Object.keys(roles).length,
+        [UNDO]: {
+          kind: 'config', key: STAFF_ROLES_KEY, before,
+          label: 'إرجاع الصلاحيات السابقة',
+          confirm: 'إرجاع صلاحيات كل الحسابات مثل ما كانت قبل هذا التعديل',
+        },
+      });
+      return roles;
+    },
+
+    /**
+     * ينشئ حساب موظف.
+     *
+     * **بعميل ثانٍ منفصل عمداً**: `signUp` يبدّل جلسة العميل اللي ينناديه —
+     * يعني المشرف اللي ينشئ الحساب يطلع من حسابه ويدخل بحساب الموظف الجديد.
+     * العميل الثاني بلا حفظ جلسة وبمخزن خاص، فجلسة المشرف ما تنلمس أصلاً.
+     *
+     * يشتغل بلا أي مفتاح سري لأن تأكيد الإيميل مطفي بإعدادات المشروع —
+     * الحساب ينخلق مؤكداً وجاهزاً للدخول فوراً.
+     */
+    async create({ username, code }) {
+      if (!canEditSettings(await currentUsername())) {
+        throw new Error('إنشاء الحسابات محصور بحسابات الإدارة');
+      }
+      const name = String(username || '').trim().replace(/\s+/g, ' ');
+      if (!name) throw new Error('اكتب اسم المستخدم');
+      if (String(code || '').length < 6) throw new Error('الرمز 6 أحرف على الأقل');
+
+      const url = import.meta.env.VITE_SUPABASE_URL;
+      const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const tmp = createClient(url, key, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'biladauto-signup-tmp' },
+      });
+      const { data, error } = await tmp.auth.signUp({
+        email: usernameToEmail(name),
+        password: code,
+        options: { data: { username: name } },
+      });
+      if (error) {
+        throw new Error(/registered|exists/i.test(error.message)
+          ? `الاسم «${name}» موجود مسبقاً — اختر اسماً ثانياً`
+          : 'تعذر إنشاء الحساب: ' + error.message);
+      }
+      // الجلسة المؤقتة تنقفل فوراً — ما نخليها حيّة بذاكرة المتصفح
+      try { await tmp.auth.signOut({ scope: 'local' }); } catch { /* مؤقتة أصلاً */ }
+
+      logActivity('إنشاء حساب موظف', 'الإعدادات', {
+        'الحساب': name,
+        // حذف حساب يحتاج مفتاح الخدمة، وحطّه بالتطبيق يفتح القاعدة كلها —
+        // فالاسترجاع يصير بحذف الحساب من لوحة Supabase
+        [UNDO]: { kind: 'none', why: 'حذف الحسابات يصير من لوحة Supabase — التطبيق ينشئ ولا يحذف' },
+      });
+      return { ok: true, username: name, confirmed: !!data?.user?.confirmed_at || !!data?.session };
+    },
+
+    /**
+     * سطر SQL يبدّل رمز حساب.
+     *
+     * تبديل رمز حساب **ثانٍ** مستحيل من المتصفح: `updateUser` يبدّل رمز
+     * الحساب الحالي وحده، وتبديل رمز غيره يحتاج مفتاح الخدمة — وحطّه
+     * بالتطبيق يعني أي واحد يفتح الكود يملك القاعدة كلها. فنطلّع الأمر
+     * جاهزاً ينلصق بمحرر SQL بدل ما نفتح هذا الباب.
+     */
+    resetCodeSql(username, code) {
+      const mail = usernameToEmail(String(username || '').trim().replace(/\s+/g, ' ')).toLowerCase();
+      const safe = String(code || '').replace(/'/g, "''");
+      return `update auth.users\n`
+        + `set encrypted_password = extensions.crypt('${safe}', extensions.gen_salt('bf')),\n`
+        + `    updated_at = now()\n`
+        + `where email = '${mail}';`;
+    },
+  },
+
   config: {
     async get(key) {
       try {

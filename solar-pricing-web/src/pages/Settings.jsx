@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { getAgentKey, setAgentKey, SHARE_KEY_SQL } from '../lib/agent.js';
 import { getCurrentUsername } from '../lib/agent.js';
 import { canEditSettings, isOwnerAccount } from '../lib/permissions.js';
+import StaffManager from '../components/StaffManager.jsx';
 import { EXPORT_METHODS, getExportMethod, setExportMethod } from '../lib/exportMethod.js';
 
 const SETTINGS_FIELDS = [
@@ -22,9 +23,17 @@ export default function Settings() {
   // خيار محرك التصدير محصور بحساب أحمد — الباقي ياخذ الافتراضي بلا ما يشوف
   // الخيار أصلاً (قرار المستخدم بعد ما تثبّت المحرك الخفيف عنده)
   const [isOwner, setIsOwner] = useState(false);
+  // تبديل الرموز وإنشاء الحسابات: حيدر وأحمد حصراً (قرار المستخدم) — بقية
+  // المشرفين يعدّلون الصلاحيات بس
+  const [mayManageCodes, setMayManageCodes] = useState(false);
   useEffect(() => {
     getCurrentUsername()
-      .then((n) => { setCanEdit(canEditSettings(n)); setIsOwner(isOwnerAccount(n)); })
+      .then((n) => {
+        setCanEdit(canEditSettings(n));
+        setIsOwner(isOwnerAccount(n));
+        const norm = String(n || '').trim().replace(/\s+/g, ' ').replace(/[أإآ]/g, 'ا');
+        setMayManageCodes(norm === 'احمد' || norm === 'حيدر');
+      })
       .catch(() => {});
   }, []);
   const [settings, setSettings] = useState(null);
@@ -148,6 +157,8 @@ export default function Settings() {
           👁 هذا الحساب للاطلاع فقط — يمكنك رؤية الإعدادات لكن التعديل محصور بحسابات الإدارة.
         </div>
       )}
+      {canEdit && <StaffManager canManageCodes={mayManageCodes} />}
+
       {/* تفضيل هذا الجهاز — برّا fieldset المعطّل عمداً: مو إعداداً مشتركاً يمس
           الفريق، بل خيار محلي. ومحصور بحساب أحمد: بقية الحسابات تاخذ المحرك
           الافتراضي بلا ما تشوف الخيار ولا تحتاجه. */}
