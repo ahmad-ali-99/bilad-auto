@@ -131,71 +131,80 @@ function roundAdjustedPrice(p) {
   return Math.round(p / 50) * 50;
 }
 
-// ═══ الزيادة المخفية ═══════════════════════════════════════════════════════
-// المجموع يطلع أعلى بالنسبة المطلوبة، والزيادة كلها تتوزع على أسعار البنود
-// **ما عدا الألواح** — سعر اللوح يبقى مثل المخزون بالضبط.
+// يوزّع فرقاً على أسعار البنود حتى المجموع يوصل الهدف — بلا أي سطر ظاهر.
+// excludeMaterialId: بند يبقى بسعره الأصلي ولا يحمل شيئاً من الفرق.
 //
-// الحساب: خلي T المجموع قبل، وP مجموع بنود الألواح، وR = T − P (البنود
-// الحاملة). المطلوب مجموع جديد = T×(1+n). الزيادة كلها لازم تنزل على R،
-// فمعاملها = (R + n×T) ÷ R — يعني البنود الحاملة تزيد أكثر من النسبة
-// المطلوبة بكثير كل ما كانت حصة الألواح أكبر، وهذا مقصود.
-//
-// ملاحظة: الأسعار تنقرّب لأرقام طبيعية (roundAdjustedPrice) حتى ما تطلع
-// أرقام شاذة تفضح الزيادة، فالمجموع النهائي يقرب من الهدف ولا يطابقه بالضبط.
-// المطابقة التامة تتطلب أسعاراً بكسور، وهي أوضح للعين من فرق بسيط بالمجموع.
-function applyHiddenMarkup(items, total, percent, panelMaterialId) {
-  if (!(percent > 0) || total <= 0) return { total, applied: 0 };
-  const target = Math.round(total * (1 + percent / 100));
+// الأسعار تنقرّب لأرقام طبيعية (roundAdjustedPrice) حتى ما تطلع أرقام شاذة
+// تفضح التعديل، والفرق الباقي من التقريب ينزل على أكبر بند حامل **عبر سعر
+// وحدته** — حتى يبقى (الكمية × سعر الوحدة = المجموع) صحيحاً بالعين على ورقة
+// العرض. رقم ما يطلع بالضرب أوضح من أي سطر خصم.
+function spreadToTarget(items, total, target, excludeMaterialId = null) {
+  if (!(total > 0) || !(target > 0) || target === total) return total;
 
-  // البنود الحاملة: كل شي عدا الألواح. إذا ماكو (عرض ألواح فقط) ما نلمس شي —
-  // توزيعها على الألواح يخالف الشرط، والسطر العلني يفضح الزيادة.
-  const carriers = items.filter((i) => !(panelMaterialId != null && i.material_id === panelMaterialId));
+  const carriers = items.filter((i) => !(excludeMaterialId != null && i.material_id === excludeMaterialId));
   const base = carriers.reduce((sum, i) => sum + i.subtotal, 0);
-  if (carriers.length === 0 || base <= 0) return { total, applied: 0 };
+  if (carriers.length === 0 || base <= 0) return total;
 
   const factor = (base + (target - total)) / base;
+  if (factor <= 0) return total; // الهدف أوطأ من قيمة البنود المستثناة — ما ننزل لسالب
   for (const item of carriers) {
     item.unit_price = roundAdjustedPrice(item.unit_price * factor);
     item.subtotal = Math.round(item.quantity * item.unit_price);
   }
 
-  // فرق التقريب ينزل على أكبر بند حامل — عبر سعر وحدته، حتى يبقى
-  // (الكمية × سعر الوحدة = المجموع) صحيحاً بالعين على ورقة العرض
   let newTotal = items.reduce((sum, i) => sum + i.subtotal, 0);
   const drift = target - newTotal;
   if (drift !== 0) {
-    const biggest = carriers.reduce((a, b) => (b.subtotal > a.subtotal ? b : a));
-    const q = Math.max(1, biggest.quantity);
-    const adjusted = roundAdjustedPrice(biggest.unit_price + drift / q);
+    // الفرق الباقي ينزل على بند **كميته واحد** إن وجد (الأجور، البنود القطعية):
+    // هناك سعر الوحدة يستوعب الفرق كاملاً بلا كسور ويبقى رقماً نظيفاً.
+    // بدونها كان الفرق ينضرب بالكمية ويضيع بالتقريب الخشن — سعر فوق 100 ألف
+    // يتقرّب لأقرب ألف، فأي فرق أصغر من نص ألف ما يقدر ينكتب أصلاً وينحرف
+    // المجموع عن المطلوب (مقيس: 22,001,000 بدل 22,000,000).
+    const lumps = carriers.filter((i) => Math.max(1, i.quantity) === 1);
+    const pool = lumps.length ? lumps : carriers;
+    const pick = pool.reduce((a, b) => (b.subtotal > a.subtotal ? b : a));
+    const q = Math.max(1, pick.quantity);
+    const adjusted = pick.unit_price + Math.round(drift / q);
     if (adjusted > 0) {
-      biggest.unit_price = adjusted;
-      biggest.subtotal = Math.round(q * adjusted);
+      pick.unit_price = adjusted;
+      pick.subtotal = Math.round(q * adjusted);
       newTotal = items.reduce((sum, i) => sum + i.subtotal, 0);
     }
   }
-  return { total: newTotal, applied: newTotal - total };
+  return newTotal;
+}
+
+// ═══ الزيادة المخفية ═══════════════════════════════════════════════════════
+// المجموع يطلع أعلى بالنسبة المطلوبة، والزيادة كلها تتوزع على أسعار البنود
+// **ما عدا الألواح** — سعر اللوح يبقى سعر المخزون بالضبط.
+//
+// الحساب: خلي T المجموع قبل وP بنود الألواح وR = T − P (البنود الحاملة).
+// الزيادة كلها لازم تنزل على R، فمعاملها (R + n×T) ÷ R — يعني البنود الحاملة
+// تزيد أكثر من النسبة المطلوبة كل ما كانت حصة الألواح أكبر، وهذا مقصود.
+function applyHiddenMarkup(items, total, percent, panelMaterialId) {
+  if (!(percent > 0) || total <= 0) return total;
+  return spreadToTarget(items, total, Math.round(total * (1 + percent / 100)), panelMaterialId);
 }
 
 function formatPercent(p) {
   return String(Math.round(p * 100) / 100);
 }
 
-// نسبة الزيادة/الخصم على المسودة — adjustments: { markupPercent, markupMode, discountPercent }
-// markupMode: 'visible' = سطر علني بالعرض، 'distributed' = تتوزع على أسعار البنود نفسها.
-// الخصم دائماً سطر علني يُطرح من المجموع النهائي.
+// نسبة الزيادة/الخصم على المسودة —
+// adjustments: { markupPercent, markupMode, discountPercent, discountMode }
+// الوضع: 'visible' = سطر علني بالعرض، 'distributed' = يتوزع على أسعار البنود نفسها.
+// الخصم إله نفس الوضعين: بلا التوزيع ما كان ينفع «مبلغ الوصول» ينزل بالسعر
+// بهدوء — كان لازم يطلع سطر خصم يفضح إن السعر انخفض عن المحسوب.
 function applyAdjustments(items, total, adjustments) {
   const markupPercent = Number(adjustments?.markupPercent) || 0;
   const discountPercent = Number(adjustments?.discountPercent) || 0;
   const markupMode = adjustments?.markupMode === 'distributed' ? 'distributed' : 'visible';
-  const summary = { markupPercent, markupMode, discountPercent, markupAmount: 0, discountAmount: 0, subtotal: total };
+  const discountMode = adjustments?.discountMode === 'distributed' ? 'distributed' : 'visible';
+  const summary = { markupPercent, markupMode, discountPercent, discountMode, markupAmount: 0, discountAmount: 0, subtotal: total };
 
   if (markupPercent > 0) {
     if (markupMode === 'distributed') {
-      for (const item of items) {
-        item.unit_price = roundAdjustedPrice(item.unit_price * (1 + markupPercent / 100));
-        item.subtotal = Math.round(item.quantity * item.unit_price);
-      }
-      const newTotal = items.reduce((s, i) => s + i.subtotal, 0);
+      const newTotal = spreadToTarget(items, total, Math.round(total * (1 + markupPercent / 100)));
       summary.markupAmount = newTotal - total;
       total = newTotal;
     } else {
@@ -207,10 +216,17 @@ function applyAdjustments(items, total, adjustments) {
   }
 
   if (discountPercent > 0) {
-    const amount = Math.round((total * discountPercent) / 100);
-    items.push({ material_id: null, description: `خصم ${formatPercent(discountPercent)}%`, unit: 'قطعي', quantity: 1, unit_price: -amount, subtotal: -amount });
-    summary.discountAmount = amount;
-    total -= amount;
+    if (discountMode === 'distributed') {
+      const target = Math.round(total * (1 - discountPercent / 100));
+      const after = spreadToTarget(items, total, target);
+      summary.discountAmount = total - after;
+      total = after;
+    } else {
+      const amount = Math.round((total * discountPercent) / 100);
+      items.push({ material_id: null, description: `خصم ${formatPercent(discountPercent)}%`, unit: 'قطعي', quantity: 1, unit_price: -amount, subtotal: -amount });
+      summary.discountAmount = amount;
+      total -= amount;
+    }
   }
 
   // التقسيط المصرفي: نسبة المصرف (معامل ضرب مثل 1.35 بدون جمع 1) تنضرب على
