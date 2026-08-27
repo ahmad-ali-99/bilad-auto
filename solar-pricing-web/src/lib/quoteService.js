@@ -149,7 +149,12 @@ function spreadToTarget(items, total, target, excludeMaterialId = null) {
   const factor = (base + (target - total)) / base;
   if (factor <= 0) return total; // الهدف أوطأ من قيمة البنود المستثناة — ما ننزل لسالب
   for (const item of carriers) {
-    item.unit_price = roundAdjustedPrice(item.unit_price * factor);
+    // أرضية 50 ديناراً: بهدف أوطأ بكثير من المجموع، التقريب ينزل بأسعار
+    // البنود الرخيصة لصفر — وبند بسعر صفر بورقة عرض يعني «مجاناً» ويخرب
+    // الجدول كله. القاعدة نفسها بروندAdjustedPrice تقرّب لأقرب 50، فهي
+    // أصغر خطوة ممكنة أصلاً.
+    const scaled = roundAdjustedPrice(item.unit_price * factor);
+    item.unit_price = item.unit_price > 0 ? Math.max(50, scaled) : scaled;
     item.subtotal = Math.round(item.quantity * item.unit_price);
   }
 
@@ -257,7 +262,10 @@ function applyAdjustments(items, total, adjustments) {
     if (rate > 0) {
       const cashTotal = total;
       const totalWithInterest = Math.round(cashTotal * rate);
-      const plan = inst.plan === 'cbi' ? 'cbi' : 'company';
+      // **لازم تمر الخطط الثلاث**: كانت أي خطة مو 'cbi' تنسحق لـ'company'،
+      // فالأهلي يطلع بعنوان «مصرف النهرين» بالنسخة الرسمية — ورقة معنونة
+      // لمصرف غير اللي يقسّط عليه الزبون
+      const plan = ['cbi', 'ahli'].includes(inst.plan) ? inst.plan : 'company';
       summary.installment = {
         rate, months, plan, label: installmentPlanLabel(plan),
         totalWithInterest,

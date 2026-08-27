@@ -95,7 +95,7 @@ const BLANK = {
   overrides: {},
   markupPercent: '', markupMode: 'visible', discountPercent: '',
   targetTotal: '', targetVisible: false,
-  installment: false, installmentPlan: 'company',
+  installment: false, installmentPlan: 'company', bankRound: '',
   installmentRate: '', installmentMonths: '',
   extraUnits: { panel: 0, battery: 0, inverter: 0, integrated: 0 },
   unitCounts: {},
@@ -370,7 +370,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   const draftState = {
     clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours,
     systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, targetTotal, targetVisible,
-    installment, installmentPlan, installmentRate, installmentMonths,
+    installment, installmentPlan, installmentRate, installmentMonths, bankRound,
     extraUnits, unitCounts, notes, pricingOpen, createdBy,
   };
   // مرجع حي للمسودة — يستعمله الحفظ الفوري عند مغادرة الصفحة
@@ -381,7 +381,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   useEffect(() => {
     const t = setTimeout(() => writeSavedDraft(draftStateRef.current), 500);
     return () => clearTimeout(t);
-  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, targetTotal, targetVisible, installment, installmentPlan, installmentRate, installmentMonths, extraUnits, unitCounts, notes, pricingOpen, createdBy]);
+  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, targetTotal, targetVisible, installment, installmentPlan, installmentRate, installmentMonths, bankRound, extraUnits, unitCounts, notes, pricingOpen, createdBy]);
 
   // حفظ فوري عند مغادرة الصفحة أو إغلاق النافذة — بدونه آخر نص ثانية من الكتابة
   // تروح: المؤقت ينلغي مع فكّ الصفحة قبل ما يوصل للتخزين.
@@ -418,6 +418,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
     setTargetVisible(s.targetVisible ?? false);
     setInstallment(s.installment);
     setInstallmentPlan(s.installmentPlan);
+    setBankRound(s.bankRound ?? '');
     setInstallmentRate(s.installmentRate);
     setInstallmentMonths(s.installmentMonths);
     setExtraUnits(s.extraUnits);
@@ -665,7 +666,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
 
   // useMemo ضروري: بدونه الكائن يتجدد بكل رندر → المؤقت ينعاد → حلقة إعادة حساب لا نهائية
   const inputs = useMemo(
-    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, targetTotal, targetVisible, installment, installmentPlan, installmentRate, installmentMonths, extraUnits, unitCounts }),
+    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, targetTotal, targetVisible, installment, installmentPlan, installmentRate, installmentMonths, bankRound, extraUnits, unitCounts }),
     [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, extraUnits, unitCounts]
   );
   const debouncedInputs = useDebouncedValue(inputs, 300);
@@ -707,7 +708,9 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
           markupPercent: mayPriceAdjust ? Number(debouncedInputs.markupPercent) || 0 : 0,
           markupMode: debouncedInputs.markupMode,
           discountPercent: mayPriceAdjust ? Number(debouncedInputs.discountPercent) || 0 : 0,
-          targetTotal: mayPriceAdjust ? Number(debouncedInputs.targetTotal) || 0 : 0,
+          targetTotal: Number(debouncedInputs.bankRound) > 0
+            ? Number(debouncedInputs.bankRound)
+            : (mayPriceAdjust ? Number(debouncedInputs.targetTotal) || 0 : 0),
           targetVisible: debouncedInputs.targetVisible === true,
         },
         installment: debouncedInputs.installment,
@@ -742,7 +745,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
     setOverrides((o) => ({ ...o, [category]: materialId ? Number(materialId) : undefined }));
   }
 
-  function buildBaseInput() {
+  function buildBaseInput(bankRoundOverride = null) {
     return {
       clientName,
       clientPhone,
@@ -761,7 +764,9 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
         markupPercent: mayPriceAdjust ? Number(markupPercent) || 0 : 0,
         markupMode,
         discountPercent: mayPriceAdjust ? Number(discountPercent) || 0 : 0,
-        targetTotal: mayPriceAdjust ? Number(targetTotal) || 0 : 0,
+        targetTotal: Number(bankRoundOverride ?? bankRound) > 0
+          ? Number(bankRoundOverride ?? bankRound)
+          : (mayPriceAdjust ? Number(targetTotal) || 0 : 0),
         targetVisible: targetVisible === true,
       },
       installment,
@@ -823,6 +828,12 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   // نوقف التصدير ونخيّر صاحب الحساب: يزيد لأقرب مليون أو ينقص أو يصدّر مثل
   // ما هو. الاختيار ينكتب بـ«مبلغ الوصول» فينزل بأسعار البنود بهدوء.
   const [bankAsk, setBankAsk] = useState(null);
+  // المبلغ المقرّب لأقرب مليون. **منفصل عن «مبلغ الوصول» وبلا فحص صلاحية**:
+  // التقسيط مفتوح لكل البياعين، بينما مبلغ الوصول محصور بصلاحية التسعير —
+  // فكان البياع يضغط «زيادة لأقرب مليون» والقيمة تنكتب بحقل محصور عليه
+  // فتنرمى بصمت، ويشوف إن الزر ما يسوي شي. التقريب مطلب مصرف لا خصماً
+  // تقديرياً، فيمر لكل حساب.
+  const [bankRound, setBankRound] = useState('');
 
   function bankCheck() {
     if (!installment) return null;
@@ -830,15 +841,19 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
     return bankRoundOptions(cash);
   }
 
-  async function handleExportPdf() {
-    const ask = bankCheck();
-    if (ask && !bankAsk) { setBankAsk(ask); return; }
+  async function handleExportPdf(roundTo = null) {
+    // التقريب ينمرّر صريحاً للحمولة بدل ما ننتظر المعاينة المؤجّلة ترجع —
+    // بدونه كان لازم ضغطة تصدير ثانية، والأولى تطلّع نفس النافذة من جديد
+    if (!roundTo) {
+      const ask = bankCheck();
+      if (ask) { setBankAsk(ask); return; }
+    }
     setBankAsk(null);
     setSaving(true);
     setSaveMessage('');
     try {
       const result = await withTimeout(
-        window.api.quotes.exportDraftPdf(buildBaseInput()),
+        window.api.quotes.exportDraftPdf(buildBaseInput(roundTo)),
         EXPORT_TIMEOUT_MS,
         'التصدير طوّل أكثر من اللازم',
       );
@@ -860,15 +875,14 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
     }
   }
 
-  // قرار المستخدم بتنبيه المصرف: التقريب ينكتب بمبلغ الوصول ثم يكمل التصدير
+  // قرار المستخدم بتنبيه المصرف: يثبّت المبلغ بالشاشة **ويصدّر فوراً** بنفس
+  // المبلغ صراحةً — بلا انتظار المعاينة المؤجّلة وبلا ضغطة ثانية
   function resolveBank(amount) {
-    if (amount) setTargetTotal(String(amount));
     setBankAsk(null);
-    // المعاينة تنبني بمدخلات مؤجّلة، فالتصدير يصير بالنقرة الجاية بعد ما
-    // ينزل المبلغ الجديد على البنود — نخبّر المستخدم بدل ما نصدّر رقماً قديماً
-    setSaveMessage(amount
-      ? `انضبط المجموع على ${Number(amount).toLocaleString('en-US')} دينار — اضغط «تصدير PDF» مرة ثانية`
-      : '');
+    if (!amount) return;
+    setBankRound(String(amount));
+    setSaveMessage(`انضبط المجموع على ${Number(amount).toLocaleString('en-US')} دينار`);
+    handleExportPdf(amount);
   }
 
   const draft = preview?.draft;
@@ -1219,7 +1233,11 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
           <div className="opt-group">
           <div className="opt-group-title">التقسيط</div>
           <label className="opt-line">
-            <input type="checkbox" checked={installment} onChange={(e) => setInstallment(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={installment}
+              onChange={(e) => { setInstallment(e.target.checked); if (!e.target.checked) setBankRound(''); }}
+            />
             <span><b>🏦 إدراج التقسيط بالعرض</b></span>
           </label>
           {/* الجهة المختارة هنا هي **نفسها** اللي تنعنون لها النسخة الرسمية

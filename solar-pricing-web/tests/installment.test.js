@@ -136,7 +136,7 @@ describe('النسبة والأشهر يوصلون لكل مسار — مو بس
   });
 
   it('مدخلات الحفظ والتصدير تمررهما هم', () => {
-    const fn = builder.slice(builder.indexOf('function buildBaseInput()'));
+    const fn = builder.slice(builder.indexOf('function buildBaseInput('));
     const body = fn.slice(0, fn.indexOf('\n  }'));
     expect(body).toMatch(/installmentRate/);
     expect(body).toMatch(/installmentMonths/);

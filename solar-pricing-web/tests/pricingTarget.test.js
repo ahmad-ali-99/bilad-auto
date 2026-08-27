@@ -173,3 +173,37 @@ describe('مبلغ الوصول يُحسب داخل المحرك — بلا دو
     expect(d.total).toBe(31000000);
   });
 });
+
+describe('أسعار البنود ما تنزل صفراً مهما نزل الهدف', () => {
+  const tiny = (t) => make({ targetTotal: t });
+  for (const target of [5000000, 1000000, 100000, 10000, 1000]) {
+    it(`هدف ${target.toLocaleString('en-US')} — ماكو بند بسعر صفر`, () => {
+      const d = tiny(target);
+      const zero = d.items.filter((i) => i.material_id != null && !(i.unit_price > 0));
+      expect(zero.map((i) => i.description)).toEqual([]);
+      // وكل بند يبقى (الكمية × السعر = المجموع)
+      for (const i of d.items) expect(i.subtotal).toBe(Math.round(i.quantity * i.unit_price));
+    });
+  }
+});
+
+describe('خطط التقسيط الثلاث توصل كما هي', () => {
+  it('الأهلي ما ينسحق لـ«النهرين»', () => {
+    const d = make({ installment: { enabled: true, plan: 'ahli', rate: 1.35, months: 60 } });
+    expect(d.adjustments.installment.plan).toBe('ahli');
+    expect(d.adjustments.installment.label).toBe('المصرف الأهلي العراقي');
+  });
+
+  it('والنهرين والمركزي كما هما', () => {
+    for (const [plan, label] of [['company', 'مصرف النهرين'], ['cbi', 'مبادرة البنك المركزي']]) {
+      const d = make({ installment: { enabled: true, plan, rate: 1.35, months: 60 } });
+      expect(d.adjustments.installment.plan, plan).toBe(plan);
+      expect(d.adjustments.installment.label, plan).toBe(label);
+    }
+  });
+
+  it('وخطة غريبة ترجع للنهرين بدل ما تكسر', () => {
+    const d = make({ installment: { enabled: true, plan: 'مو موجودة', rate: 1.35, months: 60 } });
+    expect(d.adjustments.installment.plan).toBe('company');
+  });
+});
