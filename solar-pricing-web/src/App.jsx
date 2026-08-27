@@ -110,6 +110,16 @@ export default function App() {
     };
   }, []);
 
+  // جلسة حساب مو موظف — بقايا التسجيل العام قبل ما ينشال. نطلّعها بهدوء
+  // بدل ما تبقى معلّقة بشاشة ماكو إلها محتوى. (بإفكت لا أثناء الرسم.)
+  useEffect(() => {
+    if (!session) return;
+    const staff = String(session.user?.email || '').endsWith('@biladauto.local');
+    if (staff) return;
+    supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+    setSession(null);
+  }, [session]);
+
   // كلك أيمن نسخ/لصق: أغلفة سطح المكتب (Electron) والموبايل (Capacitor) ما عندها
   // قائمة سياق أصلاً — نبني قائمة صغيرة تشتغل بحقول الإدخال وبأي نص محدد.
   // بالمتصفح العادي نترك قائمة المتصفح الأصلية مثل ما هي.
@@ -200,6 +210,12 @@ export default function App() {
     };
   }, []);
 
+  // ── واجهة الزبون: **مخفية مؤقتاً** ──────────────────────────────────────
+  // التسجيل العام ودخول Google انشالوا من شاشة الدخول، فما عاد أكو طريق
+  // يوصل هذي الشاشة. الكود باقٍ لأنه راح ينرجعله بالتحسين — بس ما ينعرض،
+  // والجلسات القديمة تنطلع بدل ما تشوف شاشة نص شغّالة بلا مخرج.
+  const CUSTOMER_VIEW_ENABLED = false;
+
   if (loading) {
     return (
       <div className="splash-overlay">
@@ -221,6 +237,11 @@ export default function App() {
 
   // زبون (دخول Google): حاسبة تسعير مبسطة فقط — بلا تنقل ولا أدوات إدارية ولا مساعد
   const isStaff = String(session.user?.email || '').endsWith('@biladauto.local');
+  if (!isStaff && !CUSTOMER_VIEW_ENABLED) {
+    // بقايا حساب زبون (Google أو إيميل) — نرجّعه لشاشة الدخول، والخروج
+    // الفعلي يصير بالإفكت أدناه حتى ما ننادي جانباً أثناء الرسم
+    return <Login onLoggedIn={() => {}} />;
+  }
   if (!isStaff) {
     return (
       <div className="mobile-shell">

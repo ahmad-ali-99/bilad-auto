@@ -43,3 +43,21 @@ describe('تصميم الجوال', () => {
     expect(css).toContain('.login-staff .code-wrap input { padding-inline-start: 46px !important; }');
   });
 });
+
+describe('واجهة الزبون مخفية مؤقتاً — والكود باقٍ', () => {
+  const app = fs.readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
+
+  it('محكومة بمفتاح واحد مطفي', () => {
+    expect(app).toContain('const CUSTOMER_VIEW_ENABLED = false;');
+    expect(app).toContain('if (!isStaff && !CUSTOMER_VIEW_ENABLED)');
+  });
+
+  it('الكود ما انحذف — راح ينرجعله بالتحسين', () => {
+    expect(app).toContain('<CustomerView user={session.user} />');
+    expect(app).toContain("import CustomerView from './pages/CustomerView.jsx'");
+  });
+
+  it('الجلسات القديمة تنطلع بإفكت لا أثناء الرسم', () => {
+    expect(app).toMatch(/useEffect\(\(\) => \{[\s\S]{0,320}signOut\(\{ scope: 'local' \}\)[\s\S]{0,80}setSession\(null\);[\s\S]{0,40}\}, \[session\]\);/);
+  });
+});
