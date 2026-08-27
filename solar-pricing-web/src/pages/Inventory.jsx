@@ -4,7 +4,6 @@ import LaborTable from '../components/LaborTable.jsx';
 import ImportPreviewModal from '../components/ImportPreviewModal.jsx';
 import { getCurrentUsername } from '../lib/agent.js';
 import { canEditInventory, canAddMaterial, canEditMaterial, canImportInventory, canEditLabor } from '../lib/permissions.js';
-import { useMediaQuery, PHONE } from '../lib/useMediaQuery.js';
 import { formatIp, hasIp, parseIp, IP_RANGE_ERROR } from '../lib/materialSpecs.js';
 
 const TABS = [
@@ -181,7 +180,6 @@ function MaterialCard({ m, capacityLabel, canEdit, owner, onToggle, onEdit, onDe
 }
 
 export default function Inventory({ initialSearch }) {
-  const isPhone = useMediaQuery(PHONE);
   const [tab, setTab] = useState('panel');
   // حسابات مقيّدة: تشوف المخزون والأسعار كاملة بس بلا أي تعديل
   const [canEdit, setCanEdit] = useState(true);
@@ -353,9 +351,14 @@ export default function Inventory({ initialSearch }) {
             )}
           </div>
 
-          {isPhone ? (
-            // الموبايل: بطاقات بالصفحة نفسها — بلا صندوق تمرير داخلي، فالصفحة
-            // تتمرر عادي وتوصل لكل مادة، وبلا تمرير أفقي أصلاً
+          {/* بطاقات بكل المقاسات — بالجوال عمود واحد وبالحاسوب شبكة تتوسّع
+              حسب العرض. الجدول انشال: بثمانية أعمدة كان يحتاج تمريراً أفقياً
+              بالجوال، وبالحاسوب كان يصفّ الأسعار والأزرار بصفوف متلاصقة
+              تصعّب تمييز مادة عن اللي بعدها. */}
+          {/* بطاقات بكل المقاسات — بالجوال عمود واحد وبالحاسوب شبكة تتوسّع
+              حسب العرض. الجدول انشال: بثمانية أعمدة كان يحتاج تمريراً أفقياً
+              بالجوال، وبالحاسوب كان يصفّ الأسعار والأزرار بصفوف متلاصقة
+              تصعّب تمييز مادة عن اللي بعدها. */}
             <div className="inv-cards">
               {filtered.map((m) => (
                 <MaterialCard
@@ -375,81 +378,6 @@ export default function Inventory({ initialSearch }) {
                 </div>
               )}
             </div>
-          ) : (
-          <div className="table-scroll">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th title="المؤشّرة فقط تنعرض وتنستعمل بالعروض">بالعروض</th>
-                <th>الرقم</th>
-                <th>الماركة / الموديل</th>
-                <th>الوحدة</th>
-                <th>{capacityLabel(tab)}</th>
-                <th title="عليها ينبني مستوى الانفيرتر — الناقصة تنحسب بأدنى درجة">الحماية</th>
-                <th>السعر (دينار)</th>
-                <th>الضمان (شهر)</th>
-                {canAdd && <th>إجراءات</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((m) => (
-                <tr key={m.id} style={m.active === false ? { opacity: 0.55, background: '#fbfbfc' } : undefined}>
-                  <td style={{ textAlign: 'center' }}>
-                    <input
-                      type="checkbox"
-                      checked={m.active !== false}
-                      disabled={!mayEdit(m)}
-                      onChange={() => toggleActive(m)}
-                      title={m.active === false ? 'مخفية من العروض — أشّر عليها لتستعملها' : 'مفعّلة — شيل التأشير لتخفيها من العروض'}
-                      style={{ width: 18, height: 18, cursor: mayEdit(m) ? 'pointer' : 'default' }}
-                    />
-                  </td>
-                  <td className="muted">{m.id}</td>
-                  <td>
-                    <b>{m.brand}</b> {m.model}
-                    {m.active === false && <span className="muted" style={{ fontSize: '0.78em' }}> — مخفية</span>}
-                  </td>
-                  <td>{m.unit}</td>
-                  <td>
-                    {formatIp(m.ip_rating) || (
-                      <span className="ip-missing" title="ماكتوبة درجة الحماية — المادة تنحسب بأدنى درجة بالمستويات">
-                        ناقصة
-                      </span>
-                    )}
-                  </td>
-                  <td>{Number(m.price).toLocaleString('en-US')}</td>
-                  <td>{m.warranty_months ?? '-'}</td>
-                  {canAdd && (
-                    <td>
-                      {mayEdit(m) ? (
-                        <>
-                          <button className="btn btn-secondary btn-sm" onClick={() => openEditForm(m)}>
-                            تعديل
-                          </button>{' '}
-                          <button className="btn btn-danger btn-sm" onClick={() => handleDelete(m.id)}>
-                            حذف
-                          </button>
-                        </>
-                      ) : (
-                        <span className="muted" style={{ fontSize: '0.78rem' }}>
-                          {owners[m.id] ? `أضافها ${owners[m.id]}` : 'مخزون قديم'}
-                        </span>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={canAdd ? 8 : 7} className="muted" style={{ textAlign: 'center', padding: 20 }}>
-                    لا توجد مواد بهذه الفئة بعد
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-          </div>
-          )}
         </>
       )}
 

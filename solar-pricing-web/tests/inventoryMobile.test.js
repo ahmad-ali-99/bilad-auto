@@ -6,12 +6,15 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const inventory = fs.readFileSync(path.join(HERE, '../src/pages/Inventory.jsx'), 'utf8');
 const styles = fs.readFileSync(path.join(HERE, '../src/styles.css'), 'utf8');
-const hook = fs.readFileSync(path.join(HERE, '../src/lib/useMediaQuery.js'), 'utf8');
+
 
 // جسم بطاقة المادة — شكل الموبايل
 const card = inventory.slice(inventory.indexOf('function MaterialCard('), inventory.indexOf('export default function Inventory'));
 
-describe('المخزون بالموبايل: بطاقات مو جدول بثمانية أعمدة', () => {
+// البطاقات صارت المسار الوحيد بكل المقاسات — الجدول انشال، فما عاد أكو
+// فرع موبايل يتفحّص. اللي يبقى مهماً: البطاقة تحمل كل شي، وتعيد استعمال
+// منطق الصفحة نفسه، وأهداف اللمس تبقى بحجم الإصبع.
+describe('المخزون: بطاقة المادة تحمل كل شي كان برّا الشاشة بالجدول', () => {
   it('البطاقة تحمل السعر وأزرار التعديل والحذف والتأشير — كلها كانت برّا الشاشة بالجدول', () => {
     expect(card).toMatch(/inv-card-price/);
     expect(card).toMatch(/Number\(m\.price\)\.toLocaleString/);
@@ -20,26 +23,17 @@ describe('المخزون بالموبايل: بطاقات مو جدول بثما
     expect(card, 'جيك بوكس بالعروض').toMatch(/type="checkbox"[\s\S]{0,200}onToggle\(m\)/);
   });
 
-  it('مسار الموبايل بلا صندوق تمرير داخلي — الصفحة تتمرر عادي فتوصل لآخر مادة', () => {
-    const branch = inventory.slice(inventory.indexOf('{isPhone ? ('), inventory.indexOf('<div className="table-scroll">'));
-    expect(branch).toMatch(/inv-cards/);
-    expect(branch, 'ماكو table-scroll بمسار الموبايل').not.toMatch(/table-scroll/);
-    // الجدول باقٍ للكومبيوتر
-    expect(inventory).toMatch(/<div className="table-scroll">/);
+  it('بلا صندوق تمرير داخلي — الصفحة تتمرر عادي فتوصل لآخر مادة', () => {
+    expect(inventory).not.toMatch(/table-scroll/);
+    expect(inventory).toMatch(/inv-cards/);
   });
 
   it('البطاقات تعيد استعمال منطق الصفحة نفسه — ماكو نسخة ثانية من الفلترة أو الحفظ', () => {
-    const branch = inventory.slice(inventory.indexOf('{isPhone ? ('), inventory.indexOf('<div className="table-scroll">'));
-    expect(branch).toMatch(/filtered\.map/);
-    expect(branch).toMatch(/onToggle=\{toggleActive\}/);
-    expect(branch).toMatch(/onEdit=\{openEditForm\}/);
-    expect(branch).toMatch(/onDelete=\{handleDelete\}/);
-  });
-
-  it('حدّ الموبايل مصدر واحد يطابق الـmedia queries بالتنسيقات', () => {
-    expect(hook).toMatch(/export const PHONE = '\(max-width: 700px\)'/);
-    expect(inventory).toMatch(/useMediaQuery\(PHONE\)/);
-    expect(styles).toMatch(/@media \(max-width: 700px\)/);
+    const list = inventory.slice(inventory.indexOf('className="inv-cards"'));
+    expect(list).toMatch(/filtered\.map/);
+    expect(list).toMatch(/onToggle=\{toggleActive\}/);
+    expect(list).toMatch(/onEdit=\{openEditForm\}/);
+    expect(list).toMatch(/onDelete=\{handleDelete\}/);
   });
 
   it('أهداف اللمس بالبطاقة ٤٠ بكسل على الأقل', () => {
