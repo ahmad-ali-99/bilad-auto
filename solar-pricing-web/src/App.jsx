@@ -117,10 +117,18 @@ export default function App() {
   useEffect(() => {
     if (!session) { setRolesReady(false); return; }
     let alive = true;
-    window.api?.staff?.load?.()
+    const done = () => { if (alive) setRolesReady(true); };
+    // **مهلة قصوى ٢.٥ ثانية**: هذا التطبيق PWA يشتغل أوفلاين بالكامل بعد أول
+    // فتح، وكانت قراءة السجل تحجز الشاشة كلها بلا مهلة — فأي شبكة واقفة أو
+    // بطيئة تخلي المستخدم على «جاري التحميل...» للأبد والتطبيق يبان ميّتاً.
+    // بانتهاء المهلة نكمل بالافتراضات، والسجل يلحق لما يوصل.
+    const timer = setTimeout(done, 2500);
+    // Promise.resolve يلف النتيجة: لو النداء ما رجّع وعداً (نسخة مخزّنة قديمة
+    // بلا api.staff) كان `.catch` على undefined يرمي ويطيح التطبيق كله
+    Promise.resolve(window.api?.staff?.load?.())
       .catch(() => {})   // فشل القراءة = الافتراضات القديمة تبقى شغّالة
-      .finally(() => { if (alive) setRolesReady(true); });
-    return () => { alive = false; };
+      .finally(() => { clearTimeout(timer); done(); });
+    return () => { alive = false; clearTimeout(timer); };
   }, [session]);
 
   // جلسة حساب مو موظف — بقايا التسجيل العام قبل ما ينشال. نطلّعها بهدوء

@@ -208,5 +208,28 @@ export function canViewQuotes(username) {
   return cap(username, 'viewAllQuotes', isAdminName(username));
 }
 
+/**
+ * الصلاحيات **الفعّالة** لحساب — السجل إن وُجد، وإلا الافتراضات القديمة.
+ *
+ * تبنيها شاشة الإدارة حتى تعرض الوضع القائم فعلاً. بدونها كانت الشاشة تبدي
+ * كل حساب بلا صف بالسجل **بصفر صلاحيات**، فمجرد فتح الشاشة وضغط «حفظ» يقلب
+ * «امشِ بالافتراضات» إلى «كل شي مقفل» — وهذا اللي صار: حوراء انقفلت كلياً.
+ */
+export function effectiveRole(username) {
+  return {
+    editInventory: canEditInventory(username),
+    addMaterial: isInventoryContributor(username),
+    importUpdates: canImportUpdates(username),
+    editLabor: canEditLabor(username),
+    editSettings: canEditSettings(username),
+    priceAdjust: canPriceAdjust(username),
+    pickBrand: canPickBrand(username),
+    viewAllQuotes: canViewQuotes(username),
+    attributeQuotes: isAdminName(username),
+    viewHistory: isOwnerAccount(username),
+    hiddenMarkupPercent: hiddenMarkupPercentFor(username),
+  };
+}
+
 // صلاحيات المشرفين كما هي (تبويب الطلبات، أدوات المساعد الإدارية)
 export { isAdminName };

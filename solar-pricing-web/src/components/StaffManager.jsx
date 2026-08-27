@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { CAPABILITIES, CAPABILITY_KEYS, emptyRole, adminRole } from '../lib/staffRoles.js';
+import { effectiveRole } from '../lib/permissions.js';
 
 // أسماء تظهر بالسجل حتى لو ما انحفظ إلها صف بعد — حتى المشرف يشوف الفريق
 // كله بنظرة بدل ما يتذكر الأسماء ويكتبها بيده. الصلاحيات الفعلية لهذي
@@ -10,8 +11,12 @@ const KNOWN = [
   'حسين انوار المدينه', 'محمد يعقوب كربلاء 42',
 ];
 
+// **يبدأ من الصلاحيات الفعّالة لا من الصفر**: الحساب اللي ماكو له صف بالسجل
+// يمشي بالافتراضات، فلو عرضناه بصفر صلاحيات صار مجرد فتح الشاشة وضغط «حفظ»
+// يقلب «امشِ بالافتراضات» إلى «كل شي مقفل» — وهذا اللي قفل حوراء كلياً وفتح
+// «الاستيراد يحدّث» لحسابات مقيّدة ونشر الزيادة المخفية على حسابات ما إلها.
 function rowFrom(username, role) {
-  return { username, ...emptyRole(), hiddenMarkupPercent: 0, ...(role || {}), username };
+  return { username, ...emptyRole(), ...effectiveRole(username), ...(role || {}), username };
 }
 
 export default function StaffManager({ canManageCodes }) {
@@ -83,9 +88,18 @@ export default function StaffManager({ canManageCodes }) {
     } finally { setBusy(false); }
   }
 
-  const sql = resetFor && resetCode.length >= 6
-    ? window.api.staff.resetCodeSql(resetFor, resetCode)
-    : '';
+  // **لازم يمر بحالة**: `wrapBusy` يلف كل دوال الـapi بـasync، فحتى الدالة
+  // المتزامنة ترجع **وعداً** — وعرض وعد داخل JSX يرمي «Objects are not valid
+  // as a React child» ويطيح شاشة الإعدادات كلها
+  const [sql, setSql] = useState('');
+  useEffect(() => {
+    if (!resetFor || resetCode.length < 6) { setSql(''); return; }
+    let alive = true;
+    Promise.resolve(window.api.staff.resetCodeSql(resetFor, resetCode))
+      .then((t) => { if (alive) setSql(String(t || '')); })
+      .catch(() => { if (alive) setSql(''); });
+    return () => { alive = false; };
+  }, [resetFor, resetCode]);
 
   return (
     <div className="card staff-manager">
