@@ -96,11 +96,11 @@ export default function StaffManager({ canManageCodes }) {
         <form className="staff-new" onSubmit={createAccount}>
           <div className="field">
             <label>حساب جديد — الاسم</label>
-            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="مثال: كرار مكتب الرشيد" />
+            <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="مثال: كرار مكتب الرشيد" />
           </div>
           <div className="field">
             <label>الرمز</label>
-            <input value={newCode} onChange={(e) => setNewCode(e.target.value)} placeholder="6 أحرف فأكثر" />
+            <input type="text" value={newCode} onChange={(e) => setNewCode(e.target.value)} placeholder="6 أحرف فأكثر" />
           </div>
           <button className="btn btn-primary" type="submit" disabled={busy}>+ إنشاء</button>
         </form>
@@ -156,7 +156,7 @@ export default function StaffManager({ canManageCodes }) {
           </p>
           <div className="field">
             <label>الرمز الجديد</label>
-            <input value={resetCode} onChange={(e) => { setResetCode(e.target.value); setCopied(false); }} placeholder="6 أحرف فأكثر" />
+            <input type="text" value={resetCode} onChange={(e) => { setResetCode(e.target.value); setCopied(false); }} placeholder="6 أحرف فأكثر" />
           </div>
           {sql && (
             <>

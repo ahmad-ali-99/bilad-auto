@@ -179,11 +179,13 @@ input[type=text], input[type=number], input[type=tel], select, textarea {
 
 textarea { resize: vertical; min-height: 70px; }
 
-.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+/* ٤ بكسل بين العنوان والخانة كانت تلزق النص بالإطار — والعناوين تنقرا
+   كأنها تتبع الخانة اللي فوكها مو اللي تحتها */
+.field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 16px; }
 .field label { font-size: 0.85rem; color: var(--muted); font-weight: 600; }
 
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
 /* عمود واحد — كتلة «الخصم» لحساب بلا صلاحية زيادة */
 .grid-1 { display: grid; grid-template-columns: 1fr; gap: 14px; }
 
@@ -1016,10 +1018,17 @@ h2.page-title::before {
 
 /* لمسات موبايل جدية */
 @media (max-width: 700px) {
-  .mobile-content { padding: 10px 10px 4px !important; }
-  .card { padding: 12px !important; margin-bottom: 10px !important; }
+  /* الحشوة انرفعت: 10/12 كانت تلزق الحقول بحد البطاقة وبحد الشاشة سوية،
+     فالشاشة تنقرا ككتلة وحدة مضغوطة. (بـ!important لأن الأصل هنا هيچي.) */
+  .mobile-content { padding: 14px 14px 10px !important; }
+  .card { padding: 16px !important; margin-bottom: 14px !important; }
   /* 16px بالحقول = ما يكبر الآيفون الصفحة من الكتابة */
   input, select, textarea { font-size: 16px !important; }
+  /* والحشوة معها: بـ8/10 كان ارتفاع الخانة ٣٦ بكسل — أقصر من هدف اللمس
+     المعتمد (٤٤)، فالإصبع يخطيها ويضغط اللي جنبها. (مقيس بالمتصفح.) */
+  input[type=text], input[type=number], input[type=tel], input[type=password], select {
+    padding: 11px 12px !important;
+  }
   .big-inputs .field input { font-size: 17px !important; font-weight: 700; }
   /* أهداف لمس أكبر */
   .btn { min-height: 42px; }
@@ -1523,19 +1532,28 @@ h2.page-title::before {
 /* ═══ مجموعات خيارات التسعير — «زيادة/خصم» و«تقسيط» ═══
    كانت الخيارات مرصوفة ورا بعض بلا فاصل ولا عنوان، فتقرأ كهوسة وحدة. */
 .opt-group {
-  margin-top: 10px;
-  padding: 10px 12px;
+  /* الفاصل بين مجموعة وأختها كان ١٠ بكسل والحشوة ١٠ — بنفس ترتيب المسافات
+     الداخلية، فالحدود تضيع والمجموعتان تنقران كتلة وحدة. الفاصل صار ضعف
+     الحشوة حتى تبان كل مجموعة قائمة بنفسها. */
+  margin-top: 20px;
+  padding: 16px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: #fbfcfe;
 }
+.opt-group:first-of-type { margin-top: 12px; }
 .opt-group-title {
   font-weight: 800;
   color: var(--navy);
-  font-size: 0.88rem;
-  margin-bottom: 8px;
+  font-size: 0.92rem;
+  /* خط فاصل تحت العنوان: يفصل «شنو هذي المجموعة» عن محتواها بلا زيادة ارتفاع */
+  padding-bottom: 8px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid #e4eaf1;
 }
+/* الحقول جوّا الشبكات تاخذ فراغها من gap الشبكة، وبرّاها تحتاج فاصلها هي */
 .opt-group .field { margin-bottom: 0; }
+.opt-group > .field { margin-bottom: 14px; }
 .opt-group .tier-toggle { margin-bottom: 0; }
 /* سطر خيار: مربع تأشير + عنوان + شرح تحته — بمحاذاة أعلى حتى ما يزحف المربع */
 .opt-line {
@@ -1927,3 +1945,50 @@ h2.page-title::before {
   .staff-manager .staff-new .btn { width: 100%; }
   .staff-caps .cap { flex: 1 1 100%; }
 }
+
+
+/* ═══ نُقلت من index.css ═══════════════════════════════════════════════════
+   `src/index.css` **مو مستورد بأي مكان** — main.jsx يستورد styles.css وحده.
+   فكل ما انكتب هناك ما وصل للبناء أصلاً: صندوق «مبلغ الوصول»، وأزرار تنبيه
+   المصرف، ومربع اختيار المصرف — كلها كانت تشتغل وظيفياً وتطلع بلا تنسيق.
+   (مقيس: صفر تطابق لـtarget-note وbank-pick بملف CSS المبني.) */
+
+/* ── مبلغ الوصول بقسم التسعير ─────────────────────────────────────────── */
+.target-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.target-row .field { flex: 1 1 220px; margin: 0; }
+.target-switch { flex: 0 0 auto; margin: 0 0 6px; white-space: nowrap; }
+.target-note {
+  background: #eef5ff;
+  border-inline-start: 3px solid #1a3a5c;
+  border-radius: 4px;
+  padding: 7px 10px;
+  margin-bottom: 12px;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: #2c4a6b;
+}
+@media (max-width: 640px) {
+  .target-row { gap: 8px; }
+  .target-switch { margin-bottom: 2px; }
+}
+
+/* ── تنبيه تقريب مبلغ المصرف ──────────────────────────────────────────── */
+.bank-choices { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.bank-choices .btn { flex: 1 1 200px; display: flex; flex-direction: column; gap: 2px; padding: 12px; }
+.bank-choices .btn small { font-weight: 400; opacity: 0.8; font-size: 0.78em; }
+
+/* ── اختيار المصرف المُعنون له بالتصدير ────────────────────────────────── */
+.bank-pick {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #d5e0ea;
+  border-radius: 6px;
+  background: #f7fafd;
+}
+.bank-pick-title { font-size: 0.82rem; line-height: 1.7; color: #2c4a6b; margin-bottom: 8px; }
