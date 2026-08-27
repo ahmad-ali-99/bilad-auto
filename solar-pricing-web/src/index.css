@@ -1,0 +1,30 @@
+
+/* ── مبلغ الوصول بقسم التسعير ─────────────────────────────────────────── */
+.target-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.target-row .field { flex: 1 1 220px; margin: 0; }
+.target-switch { flex: 0 0 auto; margin: 0 0 6px; white-space: nowrap; }
+.target-note {
+  background: #eef5ff;
+  border-inline-start: 3px solid #1a3a5c;
+  border-radius: 4px;
+  padding: 7px 10px;
+  margin-bottom: 12px;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: #2c4a6b;
+}
+@media (max-width: 640px) {
+  .target-row { gap: 8px; }
+  .target-switch { margin-bottom: 2px; }
+}
+
+/* ── تنبيه تقريب مبلغ المصرف ──────────────────────────────────────────── */
+.bank-choices { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.bank-choices .btn { flex: 1 1 200px; display: flex; flex-direction: column; gap: 2px; padding: 12px; }
+.bank-choices .btn small { font-weight: 400; opacity: 0.8; font-size: 0.78em; }

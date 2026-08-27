@@ -137,3 +137,39 @@ describe('مبلغ الوصول على عرض حقيقي', () => {
     expect(bankRoundOptions(d.total)).toBe(null);
   });
 });
+
+describe('مبلغ الوصول يُحسب داخل المحرك — بلا دوران بالشاشة', () => {
+  it('تمرير targetTotal لحاله كافٍ: المجموع يطلع الرقم بالضبط', () => {
+    const d = make({ targetTotal: 31000000 });
+    expect(d.total).toBe(31000000);
+    expect(d.adjustments.targetTotal).toBe(31000000);
+  });
+
+  it('والملخّص يرجّع النسبة المشتقة حتى تعرضها الشاشة بلا ما تعيد حسابها', () => {
+    const base = make(null).total;
+    const d = make({ targetTotal: 31000000 });
+    expect(d.adjustments.markupPercent).toBeCloseTo(percentToReach(base, 31000000).percent, 6);
+    expect(d.adjustments.markupMode).toBe('distributed');
+    expect(d.adjustments.targetVisible).toBe(false);
+  });
+
+  it('مبلغ الوصول يطغى على النسبة اليدوية', () => {
+    const d = make({ markupPercent: 50, markupMode: 'visible', targetTotal: 28000000 });
+    expect(d.total).toBe(28000000);
+    expect(d.items.some((i) => /نسبة زيادة/.test(i.description))).toBe(false);
+  });
+
+  it('بلا مبلغ وصول تبقى النسبة اليدوية شغّالة مثل قبل', () => {
+    const base = make(null).total;
+    const d = make({ markupPercent: 10, markupMode: 'visible' });
+    expect(d.items.some((i) => /نسبة زيادة/.test(i.description))).toBe(true);
+    expect(d.total).toBe(base + Math.round(base * 0.1));
+  });
+
+  it('السويج العلني ينطبق على مبلغ الوصول', () => {
+    const d = make({ targetTotal: 31000000, targetVisible: true });
+    expect(d.adjustments.markupMode).toBe('visible');
+    expect(d.items.some((i) => /نسبة زيادة/.test(i.description))).toBe(true);
+    expect(d.total).toBe(31000000);
+  });
+});

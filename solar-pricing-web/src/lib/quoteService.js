@@ -3,6 +3,7 @@
 import * as calc from './calc.js';
 import { isDcProtectionBoard } from './secondaryDefaults.js';
 import { installmentPlanLabel } from './installment.js';
+import { adjustmentsForTarget } from './pricingTarget.js';
 
 const CATEGORY_LABELS_AR = {
   panel: 'الألواح',
@@ -196,11 +197,27 @@ function formatPercent(p) {
 // الخصم إله نفس الوضعين: بلا التوزيع ما كان ينفع «مبلغ الوصول» ينزل بالسعر
 // بهدوء — كان لازم يطلع سطر خصم يفضح إن السعر انخفض عن المحسوب.
 function applyAdjustments(items, total, adjustments) {
-  const markupPercent = Number(adjustments?.markupPercent) || 0;
-  const discountPercent = Number(adjustments?.discountPercent) || 0;
-  const markupMode = adjustments?.markupMode === 'distributed' ? 'distributed' : 'visible';
-  const discountMode = adjustments?.discountMode === 'distributed' ? 'distributed' : 'visible';
-  const summary = { markupPercent, markupMode, discountPercent, discountMode, markupAmount: 0, discountAmount: 0, subtotal: total };
+  // **مبلغ الوصول**: البياع يكتب المجموع اللي يريده والنسبة تنحسب هنا — بالمحرك
+  // لا بالشاشة. لو انحسبت بالشاشة كان يصير دوران: النسبة تحتاج مجموع البنود،
+  // والمجموع يحتاج النسبة. هنا المجموع قبل النِسَب موجود أصلاً فالحساب مباشر
+  // ومضبوط، ونفس الرقم يطلع بالمعاينة والحفظ وملف الـPDF بلا تكرار معادلة.
+  const targetTotal = Number(adjustments?.targetTotal) || 0;
+  const derived = targetTotal > 0 && total > 0
+    ? adjustmentsForTarget(total, targetTotal, { visible: adjustments?.targetVisible === true })
+    : null;
+
+  const markupPercent = derived ? derived.markupPercent : Number(adjustments?.markupPercent) || 0;
+  const discountPercent = derived ? derived.discountPercent : Number(adjustments?.discountPercent) || 0;
+  const modeOf = (v) => (v === 'distributed' ? 'distributed' : 'visible');
+  const markupMode = derived ? derived.markupMode || 'distributed' : modeOf(adjustments?.markupMode);
+  const discountMode = derived ? derived.discountMode || 'distributed' : modeOf(adjustments?.discountMode);
+  const summary = {
+    markupPercent, markupMode, discountPercent, discountMode,
+    markupAmount: 0, discountAmount: 0, subtotal: total,
+    // الشاشة تعرض المبلغ المطلوب والنسبة المشتقة منه بدل ما تعيد حسابها
+    targetTotal: targetTotal > 0 ? targetTotal : 0,
+    targetVisible: adjustments?.targetVisible === true,
+  };
 
   if (markupPercent > 0) {
     if (markupMode === 'distributed') {

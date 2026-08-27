@@ -10,6 +10,8 @@ import { detectSceneType } from '../lib/sceneType.js';
 import { getIsAdmin, getCurrentUsername, ADMIN_USERS } from '../lib/agent.js';
 import { canAttributeQuote } from '../lib/quoteAccess.js';
 import { canPickBrand, canPriceAdjust } from '../lib/permissions.js';
+import { bankRoundOptions } from '../lib/pricingTarget.js';
+import ModalPortal from '../components/ModalPortal.jsx';
 import {
   brandSectionsFor, emptyBrandPick, pruneBrandPick, BRAND_SECTION_LABELS,
 } from '../lib/brandPick.js';
@@ -92,6 +94,7 @@ const BLANK = {
   batteryFactors: null,
   overrides: {},
   markupPercent: '', markupMode: 'visible', discountPercent: '',
+  targetTotal: '', targetVisible: false,
   installment: false, installmentPlan: 'company',
   installmentRate: '', installmentMonths: '',
   hideTotalInPdf: false,
@@ -208,6 +211,10 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   const [markupPercent, setMarkupPercent] = useState(savedDraft?.markupPercent ?? '');
   const [markupMode, setMarkupMode] = useState(savedDraft?.markupMode ?? 'visible');
   const [discountPercent, setDiscountPercent] = useState(savedDraft?.discountPercent ?? '');
+  // مبلغ الوصول: البياع يكتب المجموع اللي يريده والنسبة تنحسب بالمحرك.
+  // غير علني افتراضاً دائماً — الفرق ينزل بأسعار البنود بلا سطر ظاهر.
+  const [targetTotal, setTargetTotal] = useState(savedDraft?.targetTotal ?? '');
+  const [targetVisible, setTargetVisible] = useState(savedDraft?.targetVisible ?? false);
   // التقسيط المصرفي: جيك بوينت — النسبة والأشهر من الإعدادات، والمعادلة: المجموع × النسبة ÷ الأشهر
   const [installment, setInstallment] = useState(savedDraft?.installment ?? false);
   // خطة التقسيط: 'company' = التقسيط عبر مصرف النهرين، 'cbi' = مبادرة البنك المركزي (26% لسبع سنوات)
@@ -364,7 +371,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   // اللي محله ذاكرة الجلسة). أي حقل جديد يُضاف هنا وبـBLANK سوية.
   const draftState = {
     clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours,
-    systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent,
+    systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, targetTotal, targetVisible,
     installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf,
     extraUnits, unitCounts, notes, pricingOpen, createdBy,
   };
@@ -376,7 +383,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   useEffect(() => {
     const t = setTimeout(() => writeSavedDraft(draftStateRef.current), 500);
     return () => clearTimeout(t);
-  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts, notes, pricingOpen, createdBy]);
+  }, [clientName, clientPhone, location, roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, targetTotal, targetVisible, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts, notes, pricingOpen, createdBy]);
 
   // حفظ فوري عند مغادرة الصفحة أو إغلاق النافذة — بدونه آخر نص ثانية من الكتابة
   // تروح: المؤقت ينلغي مع فكّ الصفحة قبل ما يوصل للتخزين.
@@ -409,6 +416,8 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
     setMarkupPercent(s.markupPercent);
     setMarkupMode(s.markupMode);
     setDiscountPercent(s.discountPercent);
+    setTargetTotal(s.targetTotal ?? '');
+    setTargetVisible(s.targetVisible ?? false);
     setInstallment(s.installment);
     setInstallmentPlan(s.installmentPlan);
     setInstallmentRate(s.installmentRate);
@@ -471,6 +480,8 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
         markupPercent: Number(a.markupPercent) > 0 ? String(a.markupPercent) : '',
         markupMode: a.markupMode === 'distributed' ? 'distributed' : 'visible',
         discountPercent: Number(a.discountPercent) > 0 ? String(a.discountPercent) : '',
+        targetTotal: Number(a.targetTotal) > 0 ? String(a.targetTotal) : '',
+        targetVisible: a.targetVisible === true,
         installment: !!a.installment?.enabled,
         installmentPlan: a.installment?.plan === 'cbi' ? 'cbi' : 'company',
         brands: { ...emptyBrandPick(), ...(p.brands || {}) },
@@ -525,6 +536,8 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
       setMarkupPercent(Number(a.markupPercent) > 0 ? String(a.markupPercent) : '');
       setMarkupMode(a.markupMode === 'distributed' ? 'distributed' : 'visible');
       setDiscountPercent(Number(a.discountPercent) > 0 ? String(a.discountPercent) : '');
+      setTargetTotal(Number(a.targetTotal) > 0 ? String(a.targetTotal) : '');
+      setTargetVisible(a.targetVisible === true);
       setInstallment(!!a.installment?.enabled);
       setInstallmentPlan(a.installment?.plan === 'cbi' ? 'cbi' : 'company');
       if (p.brands) setBrands({ ...emptyBrandPick(), ...p.brands });
@@ -657,7 +670,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
 
   // useMemo ضروري: بدونه الكائن يتجدد بكل رندر → المؤقت ينعاد → حلقة إعادة حساب لا نهائية
   const inputs = useMemo(
-    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts }),
+    () => ({ roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, targetTotal, targetVisible, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts }),
     [roofAreaM2, ampDay, ampNight, nightSupplyHours, systemType, tier, brands, panelSafetyFactor, batteryFactors, overrides, secondarySel, markupPercent, markupMode, discountPercent, installment, installmentPlan, installmentRate, installmentMonths, hideTotalInPdf, extraUnits, unitCounts]
   );
   const debouncedInputs = useDebouncedValue(inputs, 300);
@@ -699,6 +712,8 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
           markupPercent: mayPriceAdjust ? Number(debouncedInputs.markupPercent) || 0 : 0,
           markupMode: debouncedInputs.markupMode,
           discountPercent: mayPriceAdjust ? Number(debouncedInputs.discountPercent) || 0 : 0,
+          targetTotal: mayPriceAdjust ? Number(debouncedInputs.targetTotal) || 0 : 0,
+          targetVisible: debouncedInputs.targetVisible === true,
         },
         installment: debouncedInputs.installment,
         installmentPlan: debouncedInputs.installmentPlan,
@@ -751,6 +766,8 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
         markupPercent: mayPriceAdjust ? Number(markupPercent) || 0 : 0,
         markupMode,
         discountPercent: mayPriceAdjust ? Number(discountPercent) || 0 : 0,
+        targetTotal: mayPriceAdjust ? Number(targetTotal) || 0 : 0,
+        targetVisible: targetVisible === true,
       },
       installment,
       installmentPlan,
@@ -807,7 +824,22 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
     }
   }
 
+  // ── تنبيه المصرف ────────────────────────────────────────────────────────
+  // المصرف ما يقبل إلا مبالغ بملايين كاملة. لما التقسيط مفعّل والمجموع كسري
+  // نوقف التصدير ونخيّر صاحب الحساب: يزيد لأقرب مليون أو ينقص أو يصدّر مثل
+  // ما هو. الاختيار ينكتب بـ«مبلغ الوصول» فينزل بأسعار البنود بهدوء.
+  const [bankAsk, setBankAsk] = useState(null);
+
+  function bankCheck() {
+    if (!installment) return null;
+    const cash = draft?.installment?.cashTotal ?? draft?.total ?? 0;
+    return bankRoundOptions(cash);
+  }
+
   async function handleExportPdf() {
+    const ask = bankCheck();
+    if (ask && !bankAsk) { setBankAsk(ask); return; }
+    setBankAsk(null);
     setSaving(true);
     setSaveMessage('');
     try {
@@ -832,6 +864,17 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
     } finally {
       setSaving(false);
     }
+  }
+
+  // قرار المستخدم بتنبيه المصرف: التقريب ينكتب بمبلغ الوصول ثم يكمل التصدير
+  function resolveBank(amount) {
+    if (amount) setTargetTotal(String(amount));
+    setBankAsk(null);
+    // المعاينة تنبني بمدخلات مؤجّلة، فالتصدير يصير بالنقرة الجاية بعد ما
+    // ينزل المبلغ الجديد على البنود — نخبّر المستخدم بدل ما نصدّر رقماً قديماً
+    setSaveMessage(amount
+      ? `انضبط المجموع على ${Number(amount).toLocaleString('en-US')} دينار — اضغط «تصدير PDF» مرة ثانية`
+      : '');
   }
 
   const draft = preview?.draft;
@@ -1095,7 +1138,44 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
           {mayPriceAdjust && (
           <div className="opt-group">
           <div className="opt-group-title">الزيادة والخصم</div>
-          <div className="grid-3">
+
+          {/* مبلغ الوصول: يطغى على النسبة اليدوية، وغير علني افتراضاً */}
+          <div className="target-row">
+            <div className={fieldClass('targetTotal')}>
+              <label>🎯 أوصل المجموع إلى</label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={targetTotal}
+                onChange={(e) => setTargetTotal(e.target.value)}
+                placeholder="اكتب المبلغ النهائي"
+              />
+            </div>
+            <label className="opt-line target-switch" title="بالتأشير يطلع سطر زيادة أو خصم واضح بجدول العرض">
+              <input
+                type="checkbox"
+                checked={targetVisible}
+                onChange={(e) => setTargetVisible(e.target.checked)}
+                disabled={!(Number(targetTotal) > 0)}
+              />
+              <span>أظهرها كسطر بالعرض</span>
+            </label>
+          </div>
+          {Number(targetTotal) > 0 && draft?.adjustments && (
+            <div className="target-note">
+              {draft.adjustments.markupPercent > 0
+                ? `زيادة ${Number(draft.adjustments.markupPercent).toFixed(2)}%`
+                : draft.adjustments.discountPercent > 0
+                  ? `خصم ${Number(draft.adjustments.discountPercent).toFixed(2)}%`
+                  : 'بلا تغيير'}
+              {' — '}
+              {targetVisible ? 'تطلع سطراً بالعرض' : 'موزّعة على الأسعار، ما يبين منها شي'}
+              {'. '}النسبة اليدوية أدناه ما تنطبق طالما هذا المبلغ مكتوب.
+            </div>
+          )}
+
+          <div className="grid-3" style={{ opacity: Number(targetTotal) > 0 ? 0.45 : 1 }}>
             <div className={fieldClass('markupPercent')}>
               <label>نسبة الزيادة %</label>
               <input
@@ -1510,6 +1590,40 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
               {calculating ? '⏳' : '💰'} {fmt(draft.total)} <small>دينار</small>
             </span>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+      {bankAsk && (
+        <ModalPortal>
+          <div className="modal-overlay">
+            <div className="modal">
+              <div className="modal-body">
+                <h3 style={{ marginTop: 0, color: '#1a3a5c' }}>🏦 المصرف ما يقبل مبالغ كسرية</h3>
+                <p style={{ lineHeight: 1.8 }}>
+                  مجموع النقد بهذا العرض{' '}
+                  <b>{bankAsk.current.toLocaleString('en-US')}</b> دينار — والمصرف
+                  ما يقبل إلا مبالغ بملايين كاملة. اختر الزيادة أو النقصان قبل التصدير.
+                </p>
+                <div className="bank-choices">
+                  <button type="button" className="btn btn-primary" onClick={() => resolveBank(bankAsk.up)}>
+                    ⬆ زيادة إلى {bankAsk.up.toLocaleString('en-US')}
+                    <small>+{bankAsk.upDiff.toLocaleString('en-US')}</small>
+                  </button>
+                  {bankAsk.down && (
+                    <button type="button" className="btn btn-primary" onClick={() => resolveBank(bankAsk.down)}>
+                      ⬇ نقصان إلى {bankAsk.down.toLocaleString('en-US')}
+                      <small>−{bankAsk.downDiff.toLocaleString('en-US')}</small>
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="toolbar modal-footer" style={{ flexWrap: 'wrap', gap: 8 }}>
+                <button type="button" className="btn btn-secondary" onClick={handleExportPdf}>
+                  صدّر مثل ما هو
+                </button>
+                <button type="button" className="btn" onClick={() => setBankAsk(null)}>إلغاء</button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
               <button className="btn btn-secondary" disabled={saving || hasBlockingErrors} onClick={handleExportPdf}>
                 📄 PDF
               </button>
