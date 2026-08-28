@@ -2,6 +2,7 @@
 // طبقة البيانات السحابية (dataApi.js) تجلب الصفوف من Supabase ثم تنادي هذه الدوال.
 import * as calc from './calc.js';
 import { isDcProtectionBoard } from './secondaryDefaults.js';
+import { dcCableMeters, isDcCable, pickDcCable } from './dcCable.js';
 import { installmentPlanLabel } from './installment.js';
 import { adjustmentsForTarget } from './pricingTarget.js';
 
@@ -436,16 +437,31 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
   }
 
   const panelCount = panelCombo ? panelCombo.units : 0;
+  // كيبل الألواح ينحسب تلقائياً بقاعدة الشركة: كل ٩ ألواح ٥٠ متر، والمقطع
+  // يتبع واطية اللوح (٤ ملم لـ٦٥٠ واط، وأكثر ٦ ملم). كان يُدخل بالإيد لكل
+  // عرض — رقم ينتسى بسهولة ويطلع العرض بلا كيبل أصلاً.
+  const autoCable = panelCombo
+    ? pickDcCable(secondary, panelCombo.material.watt_or_capacity)
+    : null;
+  const autoCableMeters = autoCable ? dcCableMeters(panelCount) : 0;
+
   for (const material of secondary) {
     let quantity;
+    let manualQuantity = false; // اختيار صريح من المستخدم يتقدّم على الحساب التلقائي
     if (secondarySelections != null) {
       const sel = secondarySelections[material.id];
       if (!sel) continue; // غير محددة => ما تنضاف للعرض
       const manualQty = sel.qty === '' || sel.qty == null ? null : Number(sel.qty);
       if (manualQty != null && manualQty > 0) {
         quantity = manualQty;
+        manualQuantity = true;
       } else if (material.unit === 'متر') {
-        continue; // مادة متر بدون أمتار محددة => ما تنضاف
+        // كيبل الألواح المطابق يتعبّى لحاله؛ وبقية مواد المتر تبقى يدوية
+        if (autoCable && material.id === autoCable.id && autoCableMeters > 0) {
+          quantity = autoCableMeters;
+        } else {
+          continue; // مادة متر بدون أمتار محددة => ما تنضاف
+        }
       } else {
         // عرض بلا ألواح: بوردة الحماية DC (جهة الألواح) ما تنضاف تلقائياً — الكمية اليدوية تبقى محترمة
         if (!panelCombo && isDcProtectionBoard(material)) continue;
@@ -454,12 +470,21 @@ function buildQuoteDraft(options, { tier, overrides = {}, cableMeters = {}, seco
       if (quantity <= 0) continue;
     } else if (material.unit === 'متر') {
       quantity = Number(cableMeters[material.id]) || 0;
+      if (quantity > 0) {
+        manualQuantity = true;
+      } else if (autoCable && material.id === autoCable.id) {
+        // بلا أمتار مُدخلة: كيبل الألواح المطابق ياخذ الحساب التلقائي
+        quantity = autoCableMeters;
+      }
       if (quantity <= 0) continue;
     } else {
       if (!panelCombo && isDcProtectionBoard(material)) continue;
       quantity = secondaryUnitQuantity(material, panelCount);
       if (quantity <= 0) continue;
     }
+    // مقطع كيبل ألواح مو المطابق لواطية اللوح ما ينضاف تلقائياً — وإلا طلع
+    // بالعرض مقطعان للشغلة الوحدة. الإدخال اليدوي يبقى محترماً.
+    if (!manualQuantity && isDcCable(material) && autoCable && material.id !== autoCable.id) continue;
     const subtotal = quantity * material.price;
     items.push({ material_id: material.id, description: cleanDescriptionOf(material), unit: material.unit, quantity, unit_price: material.price, subtotal });
     total += subtotal;

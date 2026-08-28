@@ -239,11 +239,14 @@ describe('الزيادة/النقصان اليدوي بالوحدات (لوح/ب
 
   // السلوك المطلوب من المستخدم: النقصان يوصل صفر والفئة تنشال من العرض كلياً
   it('النقصان لصفر يشيل الفئة من بنود العرض', () => {
+    // **بمعرّف المادة لا بنص الوصف**: وصف كيبل الألواح يحمل كلمة «الانفيرتر»
+    // («من الألواح إلى الانفيرتر»)، فمطابقة النص تلگيه وتظن الانفيرتر باقياً
+    const invId = MATERIALS.find((m) => m.category === 'inverter').id;
     const plain = buildQuoteDraft(base(), { tier: 'economy', cableMeters: {} });
-    const invPrice = plain.items.find((i) => i.description.includes('انفيرتر')).subtotal;
+    const invPrice = plain.items.find((i) => i.material_id === invId).subtotal;
     const draft = buildQuoteDraft(base(), { tier: 'economy', cableMeters: {}, extraUnits: { inverter: -99 } });
     expect(draft.counts.inverter).toBe(0);
-    expect(draft.items.some((i) => i.description.includes('انفيرتر'))).toBe(false);
+    expect(draft.items.some((i) => i.material_id === invId)).toBe(false);
     expect(draft.total).toBe(plain.total - invPrice);
   });
 
@@ -382,8 +385,9 @@ describe('حاسبة الزبون: الثانوية الافتراضية فقط 
       { id: 35, category: 'secondary', model: 'كيبل 6مم', unit: 'متر', price: 2000, qty_per_panel: null },
     ];
     const defaults = computeSecondaryDefaults(secondary, null);
-    // الافتراضيات: هيكل + صبات (لكل لوح) + بوردة DC فقط
-    expect(Object.keys(defaults).map(Number).sort()).toEqual([30, 31, 32]);
+    // الافتراضيات: هيكل + صبات (لكل لوح) + بوردة DC + كيبل الألواح (35) —
+    // الكيبل صار تلقائياً بقاعدة «كل ٩ ألواح ٥٠ متر»
+    expect(Object.keys(defaults).map(Number).sort()).toEqual([30, 31, 32, 35]);
 
     const materials = [
       { id: 1, category: 'panel', model: 'JINKO 650', full_description: 'ألواح 650', unit: 'عدد', watt_or_capacity: 650, price: 185000, qty_per_panel: null },
@@ -394,7 +398,7 @@ describe('حاسبة الزبون: الثانوية الافتراضية فقط 
     const options = buildOptions({ materials, laborTiers: [{ id: 1, system_amps: 30, price: 400000 }], settingsRow: SETTINGS_ROW, roofAreaM2: 40, ampDay: 10, ampNight: 10, nightSupplyHours: 4 });
     const draft = buildQuoteDraft(options, { tier: 'economy', secondarySelections: defaults });
     const secondaryItems = draft.items.filter((i) => [30, 31, 32, 33, 34, 35].includes(i.material_id));
-    expect(secondaryItems.map((i) => i.material_id).sort()).toEqual([30, 31, 32]);
+    expect(secondaryItems.map((i) => i.material_id).sort()).toEqual([30, 31, 32, 35]);
     // ومن دون التمرير: كل مواد العدد تنضاف (السلوك القديم للموظفين قبل الاختيار)
     const draftAll = buildQuoteDraft(options, { tier: 'economy' });
     expect(draftAll.items.filter((i) => [33, 34].includes(i.material_id)).length).toBe(2);

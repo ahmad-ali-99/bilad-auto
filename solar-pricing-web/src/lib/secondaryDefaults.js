@@ -1,6 +1,8 @@
 // الافتراضيات المشتركة للمواد الثانوية — تستخدمها شاشة الموظفين وحاسبة الزبون:
 // القائمة الدائمة المحفوظة بالإعدادات (secondary_defaults) إن وجدت، وإلا الأساسيات
 // المرتبطة بالألواح (هيكل + صبات) + بوردة الحماية DC.
+import { isDcCable } from './dcCable.js';
+
 // بوردة الحماية DC (جهة الألواح) — تُستثنى تلقائياً من العروض بلا ألواح
 export function isDcProtectionBoard(m) {
   const name = `${m.model || ''} ${m.brand || ''}`;
@@ -13,6 +15,13 @@ export function isDcProtectionBoard(m) {
 // أوف جرد (انفيرتر وبطاريات بلا ألواح ولا هيكل)، فتُستثنى من الافتراضيات ومن النافذة
 export function isPanelSideMaterial(m) {
   return (m.qty_per_panel && m.qty_per_panel > 0) || isDcProtectionBoard(m);
+}
+
+// كيبلات الألواح تنضاف افتراضياً بأي عرض بيه ألواح — أمتارها تنحسب بالمحرك
+// (كل ٩ ألواح ٥٠ متر) والمقطع غير المطابق لواطية اللوح يُسقط هناك، فتأشير
+// كل المقاطع هنا آمن ويخلي القاعدة تشتغل بلا ما يتذكرها البياع.
+function addDcCableDefaults(secondaryMaterials, defaults) {
+  for (const m of secondaryMaterials) if (isDcCable(m)) defaults[m.id] = { qty: '' };
 }
 
 export function computeSecondaryDefaults(secondaryMaterials, savedIds, systemType = 'full') {
@@ -28,6 +37,7 @@ export function computeSecondaryDefaults(secondaryMaterials, savedIds, systemTyp
       if (offgrid && isPanelSideMaterial(m)) continue; // القائمة الدائمة تُنقّى بوضع الأوف جرد
       defaults[id] = { qty: '' };
     }
+    if (!offgrid) addDcCableDefaults(secondaryMaterials, defaults);
     return defaults;
   }
   if (offgrid) return defaults; // بلا ألواح = بلا افتراضيات جهة الألواح؛ البياع يختار الأسلاك وبقية التفاصيل
@@ -36,5 +46,6 @@ export function computeSecondaryDefaults(secondaryMaterials, savedIds, systemTyp
   }
   const dcBoard = secondaryMaterials.find(isDcProtectionBoard);
   if (dcBoard) defaults[dcBoard.id] = { qty: '' };
+  addDcCableDefaults(secondaryMaterials, defaults);
   return defaults;
 }
