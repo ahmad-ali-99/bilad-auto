@@ -46,7 +46,7 @@ export default function Settings() {
   // المصرف الأهلي العراقي: نسبته وأشهره مستقلة — كان يستعير إعداد النهرين
   // فيطلع عرضه بـ35% بدل نسبته هو
   const [ahliRate, setAhliRate] = useState('1.25');
-  const [ahliMonths, setAhliMonths] = useState('60');
+  const [ahliMonths, setAhliMonths] = useState('84');
   const [ahliMsg, setAhliMsg] = useState('');
   // مبادرة البنك المركزي: فائدة 26% لسبع سنوات (قابلة للتعديل إذا تغيّرت شروط المبادرة)
   const [cbiRate, setCbiRate] = useState('1.26');
@@ -275,7 +275,7 @@ export default function Settings() {
           </div>
           <div className="field">
             <label>عدد أشهر التقسيط</label>
-            <input type="number" min="1" value={ahliMonths} onChange={(e) => setAhliMonths(e.target.value)} placeholder="60" />
+            <input type="number" min="1" value={ahliMonths} onChange={(e) => setAhliMonths(e.target.value)} placeholder="84" />
           </div>
         </div>
         <button className="btn btn-primary" type="submit">

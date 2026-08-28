@@ -201,9 +201,9 @@ describe('لكل مصرف مفتاح إعداداته ونسبته', () => {
     expect(dataApi).toMatch(/ahli:\s*'installment_ahli'/);
   });
 
-  it('والافتراضات ثلاثة منفصلة: النهرين 1.35 والأهلي 1.25 والمبادرة 1.26', () => {
+  it('والافتراضات ثلاثة منفصلة: النهرين 1.35×60 والأهلي 1.25×84 والمبادرة 1.26×84', () => {
     expect(dataApi).toMatch(/cbi:\s*\{\s*rate:\s*1\.26,\s*months:\s*84\s*\}/);
-    expect(dataApi).toMatch(/ahli:\s*\{\s*rate:\s*1\.25,\s*months:\s*60\s*\}/);
+    expect(dataApi).toMatch(/ahli:\s*\{\s*rate:\s*1\.25,\s*months:\s*84\s*\}/);
     expect(dataApi).toMatch(/\|\|\s*\{\s*rate:\s*1\.35,\s*months:\s*60\s*\}/);
   });
 
@@ -225,18 +225,23 @@ describe('لكل مصرف مفتاح إعداداته ونسبته', () => {
 
 describe('أرقام عرض 464 نفسها', () => {
   const CASH = 10396000;
-  const withRate = (rate, months = 60) => ({
+  const withRate = (rate, months) => ({
     total: Math.round(CASH * rate), monthly: Math.round((CASH * rate) / months),
   });
 
-  it('بنسبة النهرين 1.35 يطلع 14,034,600 — وهذا اللي صار غلطاً', () => {
-    expect(withRate(1.35)).toEqual({ total: 14034600, monthly: 233910 });
+  it('بنسبة النهرين 1.35 لستين شهراً يطلع 14,034,600 — وهذا اللي صار غلطاً', () => {
+    expect(withRate(1.35, 60)).toEqual({ total: 14034600, monthly: 233910 });
   });
 
-  it('وبنسبة الأهلي 1.25 يطلع ≈13 مليون مثل ما ينتظره المستخدم', () => {
-    const r = withRate(1.25);
+  it('وبنسبة الأهلي 1.25 لأربعة وثمانين شهراً يطلع ≈13 مليون مثل ما ينتظره المستخدم', () => {
+    const r = withRate(1.25, 84);
     expect(r.total).toBe(12995000);
-    expect(r.monthly).toBe(216583);
+    expect(r.monthly).toBe(154702);
     expect(Math.round(r.total / 1e6)).toBe(13);
+  });
+
+  it('**الأشهر تغيّر القسط لا المجموع**: نفس النسبة بـ60 وبـ84 مجموعها واحد', () => {
+    expect(withRate(1.25, 84).total).toBe(withRate(1.25, 60).total);
+    expect(withRate(1.25, 84).monthly).toBeLessThan(withRate(1.25, 60).monthly);
   });
 });

@@ -693,7 +693,7 @@ export const api = {
       const key = { cbi: 'installment_cbi', ahli: 'installment_ahli' }[plan] || 'installment';
       const fallback = {
         cbi: { rate: 1.26, months: 84 },    // مبادرة البنك المركزي: 26% لسبع سنوات
-        ahli: { rate: 1.25, months: 60 },   // المصرف الأهلي العراقي: 25% لخمس سنوات
+        ahli: { rate: 1.25, months: 84 },   // المصرف الأهلي العراقي: 25% لسبع سنوات
       }[plan] || { rate: 1.35, months: 60 };  // مصرف النهرين
       const cfg = await api.config.get(key);
       // نسبة وأشهر خاصة بهذا العرض تتقدّم على الإعدادات العامة — حتى يقسّط على
