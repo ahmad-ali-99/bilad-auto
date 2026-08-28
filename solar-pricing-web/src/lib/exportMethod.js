@@ -1,10 +1,15 @@
-// طريقة توليد ملف العرض — **تفضيل لهذا الجهاز وحده**، مو إعداداً مشتركاً.
+// طريقة توليد ملف العرض — **تفضيل يخص الحساب**، يمشي معه على أي جهاز.
 //
 // ليش موجود: مسار الرسم بالكانفاس يشتغل طبيعي بأندرويد وبالديسكتوب وبأغلب
 // الأجهزة، بس بجهاز واحد بالضبط (آيفون، وبكل المتصفحات لأنهن كلهن على محرك
 // سفاري) يعلّق الرسم أو يطيح التبويب قبل ما يخلص. السبب بجهاز المستخدم نفسه
 // وما ينقاس من هنا — فبدل ما نغيّر الآلية على الكل (وهم راضين بيها)، نخلي
-// الجهاز المتعثّر يبدّلها لنفسه.
+// المتعثّر يبدّلها لنفسه.
+//
+// **مخزون بالحساب لا بالمتصفح**: ينحفظ بقاعدة البيانات (app_config بمفتاح
+// يحمل اسم الحساب) فيمشي معه لأي جهاز يدخل منه، وما يمس أي حساب ثاني.
+// وذاكرة المتصفح تبقى **مرآة** لا مصدراً: تخلي الاختيار شغّالاً أوفلاين
+// (والتطبيق PWA) وتمنع ومضة الخيار الغلط قبل ما توصل القراءة.
 //
 // الطريقتان تطلّعن **نفس الملف بنفس الصفحات ونفس الشكل** (تأكدنا بمقارنة
 // صفحةً بصفحة: الفرق حواف الحروف فقط). الفرق بالآلية لا بالنتيجة:
@@ -15,6 +20,11 @@
 //   • الطباعة   — طباعة المتصفح نفسها. آخر حل: بلا ملف وبلا خيارات مشاركة،
 //                 الحفظ يصير من شاشة الطباعة مال النظام.
 const KEY = 'export_method';
+
+// القيمة الفعّالة بالجلسة الحالية. **متزامنة عمداً**: تنقرا أثناء الرسم
+// وبمسار التصدير، فما ينفع تكون async — القراءة من القاعدة تصير مرة وحدة
+// عند بدء الجلسة وتحطّ هنا.
+let CURRENT = null;
 
 // المحرك الافتراضي للكل. صار **الخفيف** بعد ما تأكد المستخدم إنه يشتغل عنده
 // مثل القديم بالضبط (نفس نافذة المشاركة والتنزيل)، وهو أصلاً أخف ذاكرةً بـ97%
@@ -39,23 +49,42 @@ export const EXPORT_METHODS = [
   },
 ];
 
+const isValid = (v) => EXPORT_METHODS.some((m) => m.key === v);
+
+/** يحطّ القيمة اللي انقرأت من حساب المستخدم — تنندى مرة وحدة عند بدء الجلسة */
+export function applyExportMethod(value) {
+  CURRENT = isValid(value) ? value : DEFAULT_METHOD;
+  mirror(CURRENT);
+}
+
+/** تصفير عند الخروج — حتى الحساب الجاي ما يرث اختيار اللي قبله */
+export function clearExportMethod() {
+  CURRENT = null;
+  try { localStorage.removeItem(KEY); } catch { /* محجوب */ }
+}
+
+function mirror(value) {
+  try {
+    if (value && value !== DEFAULT_METHOD && isValid(value)) localStorage.setItem(KEY, value);
+    else localStorage.removeItem(KEY);
+  } catch { /* التخزين المحلي محجوب (تصفح خاص) — نكتفي بالقيمة بالذاكرة */ }
+}
+
 export function getExportMethod() {
+  if (CURRENT) return CURRENT;
+  // المرآة المحلية: تشتغل أوفلاين وقبل ما توصل قراءة الحساب
   try {
     const v = localStorage.getItem(KEY);
-    return EXPORT_METHODS.some((m) => m.key === v) ? v : DEFAULT_METHOD;
+    return isValid(v) ? v : DEFAULT_METHOD;
   } catch {
-    return DEFAULT_METHOD; // التخزين المحلي محجوب (تصفح خاص) — الافتراضي
+    return DEFAULT_METHOD;
   }
 }
 
+/** تبديل محلي فوري — الحفظ بالحساب يصير بطبقة البيانات */
 export function setExportMethod(value) {
-  try {
-    if (value && value !== DEFAULT_METHOD && EXPORT_METHODS.some((m) => m.key === value)) {
-      localStorage.setItem(KEY, value);
-    } else {
-      localStorage.removeItem(KEY);
-    }
-  } catch { /* ما ينحفظ التفضيل — يبقى الافتراضي */ }
+  CURRENT = isValid(value) ? value : DEFAULT_METHOD;
+  mirror(CURRENT);
 }
 
 export function prefersPrintExport() {

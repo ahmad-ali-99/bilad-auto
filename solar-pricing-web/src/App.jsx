@@ -14,6 +14,7 @@ import { supabase } from './lib/supabase.js';
 import { isAdminName } from './lib/agent.js';
 import { isOwnerAccount } from './lib/permissions.js';
 import { forceUpdateApp } from './lib/appUpdate.js';
+import { clearExportMethod } from './lib/exportMethod.js';
 import { startFitTables } from './lib/fitTables.js';
 
 const PAGES = [
@@ -115,7 +116,11 @@ export default function App() {
   // فما ينفع تكون async، فالحمل غير المتزامن يصير هنا مرة وحدة.
   const [rolesReady, setRolesReady] = useState(false);
   useEffect(() => {
-    if (!session) { setRolesReady(false); return; }
+    if (!session) {
+      setRolesReady(false);
+      clearExportMethod();   // الحساب الجاي ما يرث اختيار اللي قبله
+      return;
+    }
     let alive = true;
     const done = () => { if (alive) setRolesReady(true); };
     // **مهلة قصوى ٢.٥ ثانية**: هذا التطبيق PWA يشتغل أوفلاين بالكامل بعد أول
@@ -125,9 +130,11 @@ export default function App() {
     const timer = setTimeout(done, 2500);
     // Promise.resolve يلف النتيجة: لو النداء ما رجّع وعداً (نسخة مخزّنة قديمة
     // بلا api.staff) كان `.catch` على undefined يرمي ويطيح التطبيق كله
-    Promise.resolve(window.api?.staff?.load?.())
-      .catch(() => {})   // فشل القراءة = الافتراضات القديمة تبقى شغّالة
-      .finally(() => { clearTimeout(timer); done(); });
+    Promise.all([
+      Promise.resolve(window.api?.staff?.load?.()).catch(() => {}),
+      // تفضيل محرك التصدير يخص الحساب — ينقرا معه بنفس الجولة
+      Promise.resolve(window.api?.exportPref?.load?.()).catch(() => {}),
+    ]).finally(() => { clearTimeout(timer); done(); });
     return () => { alive = false; clearTimeout(timer); };
   }, [session]);
 

@@ -9,6 +9,7 @@ import { logActivity } from './activityLog.js';
 import { UNDO, DRAFT } from './activityUndo.js';
 import { isRestrictedUser, canEditSettings, canAddMaterial, canEditMaterial, canEditInventory, canImportInventory, canImportUpdates, canEditLabor, hiddenMarkupPercentFor, applyStaffRoles } from './permissions.js';
 import { parseRoles, serializeRoles, normName as normStaffName } from './staffRoles.js';
+import { applyExportMethod, setExportMethod, getExportMethod } from './exportMethod.js';
 import { createClient } from '@supabase/supabase-js';
 import { canAccessQuote, visibleQuotes, canAttributeQuote, accessDeniedMessage } from './quoteAccess.js';
 import { installmentPlanLabel } from './installment.js';
@@ -169,6 +170,8 @@ async function withIntegratedKw(rows) {
 // ولهذا العروض المحفوظة اللي فيها مادة انخفت لاحقاً تبقى مثل ما هي (بنودها لقطات).
 const MATERIALS_DISABLED_KEY = 'materials_disabled';
 const STAFF_ROLES_KEY = 'staff_roles';
+// تفضيل محرك التصدير لكل حساب — مفتاح باسمه المُوحّد
+const exportPrefKey = (name) => `export_method_${normStaffName(name)}`;
 
 async function withActive(rows) {
   try {
@@ -230,6 +233,13 @@ async function assertCanWriteConfig(key) {
   // لأن app_config مفتوح للكتابة لأي حساب مسجّل
   if (k === STAFF_ROLES_KEY && !canEditSettings(await currentUsername())) {
     throw new Error('تعديل صلاحيات الحسابات محصور بحسابات الإدارة');
+  }
+
+  // تفضيل محرك التصدير: **كل حساب يكتب مفتاحه هو بس**. app_config مفتوح
+  // للكتابة لأي حساب مسجّل، فبلا هذا الحارس يقدر أي واحد يبدّل محرك تصدير
+  // غيره — وهو تفضيل شخصي ما إله علاقة بأحد ثانٍ.
+  if (k.startsWith('export_method_') && k !== exportPrefKey(await currentUsername())) {
+    throw new Error('تفضيل محرك التصدير يخص كل حساب بنفسه');
   }
 }
 
@@ -1427,6 +1437,35 @@ export const api = {
   },
 
   // إعدادات مشتركة خفيفة (key/value بجدول app_config) — مثل الثانوية الافتراضية الدائمة
+  // ── تفضيل محرك التصدير (يخص الحساب لا الجهاز) ───────────────────────────
+  exportPref: {
+    /** يقرأ تفضيل الحساب ويحطّه بالوحدة — ينندى عند بدء الجلسة */
+    async load() {
+      const me = await currentUsername();
+      if (!me) { applyExportMethod(null); return null; }
+      const v = await api.config.get(exportPrefKey(me));
+      applyExportMethod(typeof v === 'string' ? v : v?.method);
+      return getExportMethod();
+    },
+
+    async set(value) {
+      const me = await currentUsername();
+      if (!me) throw new Error('لازم تكون داخلاً بحساب');
+      setExportMethod(value);              // فوري بالشاشة
+      const before = await api.config.get(exportPrefKey(me));
+      await api.config.set(exportPrefKey(me), getExportMethod());
+      logActivity('تبديل محرك التصدير', 'الإعدادات', {
+        'المحرك': getExportMethod(),
+        [UNDO]: {
+          kind: 'config', key: exportPrefKey(me), before,
+          label: 'إرجاع المحرك السابق',
+          confirm: 'إرجاع محرك التصدير لاختيارك السابق',
+        },
+      });
+      return getExportMethod();
+    },
+  },
+
   // ── الحسابات والصلاحيات ─────────────────────────────────────────────────
   staff: {
     /** يحمّل السجل ويحطّه بطبقة الصلاحيات — ينندى مرة وحدة عند بدء الجلسة */

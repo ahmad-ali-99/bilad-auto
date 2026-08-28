@@ -3,7 +3,7 @@ import { getAgentKey, setAgentKey, SHARE_KEY_SQL } from '../lib/agent.js';
 import { getCurrentUsername } from '../lib/agent.js';
 import { canEditSettings } from '../lib/permissions.js';
 import StaffManager from '../components/StaffManager.jsx';
-import { EXPORT_METHODS, getExportMethod, setExportMethod } from '../lib/exportMethod.js';
+import { EXPORT_METHODS, getExportMethod } from '../lib/exportMethod.js';
 
 const SETTINGS_FIELDS = [
   { key: 'system_voltage', label: 'فولتية النظام (لتحويل الأمبير لواط)' },
@@ -20,6 +20,8 @@ export default function Settings() {
   const [canEdit, setCanEdit] = useState(true);
   // طريقة التصدير: تفضيل محلي لهذا الجهاز (مو بقاعدة البيانات)
   const [exportMethod, setExportMethodState] = useState(getExportMethod);
+  // القيمة تجي من الحساب عند بدء الجلسة، فنعيد المزامنة عند فتح الشاشة
+  useEffect(() => { setExportMethodState(getExportMethod()); }, []);
   // تبديل الرموز وإنشاء الحسابات: حيدر وأحمد حصراً (قرار المستخدم) — بقية
   // المشرفين يعدّلون الصلاحيات بس
   const [mayManageCodes, setMayManageCodes] = useState(false);
@@ -174,8 +176,13 @@ export default function Settings() {
                 name="export-method"
                 checked={exportMethod === m.key}
                 onChange={() => {
-                  setExportMethod(m.key);
+                  // الحفظ يمر بطبقة البيانات: ينحفظ **بالحساب** لا بالمتصفح،
+                  // فيمشي معه لأي جهاز يدخل منه. والشاشة تتحدث فوراً بلا انتظار.
                   setExportMethodState(m.key);
+                  window.api.exportPref.set(m.key).catch((err) => {
+                    setMessage('ما انحفظ التفضيل بالحساب: ' + err.message);
+                    setExportMethodState(getExportMethod());
+                  });
                   setMessage(`طريقة التصدير بهذا الجهاز: ${m.label} ✔`);
                 }}
               />

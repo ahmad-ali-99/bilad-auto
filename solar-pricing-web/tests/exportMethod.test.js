@@ -7,6 +7,8 @@ import { getExportMethod, setExportMethod, prefersPrintExport, prefersSvgRender,
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const src = fs.readFileSync(path.join(HERE, '../src/lib/pdfExport.js'), 'utf8');
 const src2 = fs.readFileSync(path.join(HERE, '../src/lib/exportMethod.js'), 'utf8');
+const api = fs.readFileSync(path.join(HERE, '../src/lib/dataApi.js'), 'utf8');
+const app = fs.readFileSync(path.join(HERE, '../src/App.jsx'), 'utf8');
 const settings = fs.readFileSync(path.join(HERE, '../src/pages/Settings.jsx'), 'utf8');
 const structure = fs.readFileSync(path.join(HERE, '../src/lib/structure3d.js'), 'utf8');
 
@@ -20,7 +22,7 @@ function fakeStorage() {
   return map;
 }
 
-describe('طريقة التصدير — تفضيل هذا الجهاز', () => {
+describe('طريقة التصدير — تفضيل يخص الحساب', () => {
   beforeEach(() => fakeStorage());
 
   // الافتراضي للكل صار **الخفيف** بعد ما تأكد المستخدم إنه يشتغل عنده مثل
@@ -72,12 +74,32 @@ describe('طريقة التصدير — تفضيل هذا الجهاز', () => {
     expect(settings).not.toContain('isOwnerAccount');
   });
 
-  it('وتفضيل محلي لهذا الجهاز — ما ينحفظ بقاعدة البيانات ولا يمس حساباً ثانياً', () => {
-    // التخزين بذاكرة المتصفح: كل جهاز يدير طريقته وما يتغيّر للكل
-    expect(src2).toContain('localStorage.getItem(KEY)');
-    expect(src2).toContain('localStorage.setItem(KEY, value)');
-    expect(src2).not.toMatch(/supabase|app_config|api\.config/);
-    // والبطاقة برّا الـfieldset المعطّل — تشتغل حتى للحسابات اللي ما تعدّل إعدادات
+  it('التفضيل يخص **الحساب** — ينحفظ بالقاعدة بمفتاح باسمه', () => {
+    expect(api).toContain('const exportPrefKey = (name)');
+    expect(api).toContain('export_method_');
+    expect(api).toMatch(/exportPref: \{[\s\S]{0,900}api\.config\.set\(exportPrefKey\(me\)/);
+  });
+
+  it('وكل حساب يكتب مفتاحه هو بس — ماكو واحد يبدّل محرك غيره', () => {
+    // app_config مفتوح للكتابة لأي حساب مسجّل، فبلا الحارس يقدر أي واحد
+    // يبدّل تفضيل غيره
+    expect(api).toMatch(/k\.startsWith\('export_method_'\) && k !== exportPrefKey\(await currentUsername\(\)\)/);
+  });
+
+  it('وذاكرة المتصفح مرآة لا مصدر — تخلي الاختيار شغّالاً أوفلاين', () => {
+    expect(src2).toContain('let CURRENT = null');
+    expect(src2).toContain('export function applyExportMethod');
+    expect(src2).toMatch(/function mirror\(value\)/);
+    // القراءة تفضّل قيمة الحساب على المرآة
+    expect(src2).toMatch(/if \(CURRENT\) return CURRENT;/);
+  });
+
+  it('والخروج يصفّرها — الحساب الجاي ما يرث اختيار اللي قبله', () => {
+    expect(src2).toContain('export function clearExportMethod');
+    expect(app).toContain('clearExportMethod();');
+  });
+
+  it('والبطاقة برّا المقطع المعطّل — تشتغل للحسابات اللي ما تعدّل إعدادات', () => {
     const card = settings.indexOf('محرك تصدير ملف العرض');
     const fieldset = settings.indexOf('<fieldset disabled={!canEdit}');
     expect(card).toBeLessThan(fieldset);
