@@ -191,3 +191,52 @@ describe('إخفاء المجموع الكلي انشال', () => {
     expect(html).toMatch(/>المجموع الكلي<\/td>/);
   });
 });
+
+// ═══ لكل مصرف نسبته ═══
+// عرض 464 (المصرف الأهلي): نقداً 10,396,000 وطلع بالتقسيط 14,034,600 —
+// يعني 1.35، وهي **نسبة النهرين** مو نسبة الأهلي. السبب: الأهلي كان يقرا
+// مفتاح إعدادات النهرين نفسه، وما بالإعدادات قسم للأهلي حتى يغيّرها البياع.
+describe('لكل مصرف مفتاح إعداداته ونسبته', () => {
+  it('الأهلي يقرا installment_ahli — لا مفتاح النهرين', () => {
+    expect(dataApi).toMatch(/ahli:\s*'installment_ahli'/);
+  });
+
+  it('والافتراضات ثلاثة منفصلة: النهرين 1.35 والأهلي 1.25 والمبادرة 1.26', () => {
+    expect(dataApi).toMatch(/cbi:\s*\{\s*rate:\s*1\.26,\s*months:\s*84\s*\}/);
+    expect(dataApi).toMatch(/ahli:\s*\{\s*rate:\s*1\.25,\s*months:\s*60\s*\}/);
+    expect(dataApi).toMatch(/\|\|\s*\{\s*rate:\s*1\.35,\s*months:\s*60\s*\}/);
+  });
+
+  it('**ما يبقى أثر للاستعارة**: ماكو سطر يخلي الأهلي على مفتاح النهرين', () => {
+    expect(dataApi).not.toMatch(/plan === 'cbi' \? 'installment_cbi' : 'installment'/);
+  });
+
+  it('والإعدادات بيها قسم للأهلي يحفظ installment_ahli', () => {
+    const settings = fs.readFileSync(path.join(HERE, '../src/pages/Settings.jsx'), 'utf8');
+    expect(settings).toContain("config.set('installment_ahli'");
+    expect(settings).toContain("config.get('installment_ahli')");
+    expect(settings).toContain('المصرف الأهلي العراقي');
+  });
+
+  it('وشاشة العرض ما تقول للبياع إن الأهلي «بنفس نسبة الإعدادات»', () => {
+    expect(builder).not.toContain('بنفس نسبة وأشهر الإعدادات');
+  });
+});
+
+describe('أرقام عرض 464 نفسها', () => {
+  const CASH = 10396000;
+  const withRate = (rate, months = 60) => ({
+    total: Math.round(CASH * rate), monthly: Math.round((CASH * rate) / months),
+  });
+
+  it('بنسبة النهرين 1.35 يطلع 14,034,600 — وهذا اللي صار غلطاً', () => {
+    expect(withRate(1.35)).toEqual({ total: 14034600, monthly: 233910 });
+  });
+
+  it('وبنسبة الأهلي 1.25 يطلع ≈13 مليون مثل ما ينتظره المستخدم', () => {
+    const r = withRate(1.25);
+    expect(r.total).toBe(12995000);
+    expect(r.monthly).toBe(216583);
+    expect(Math.round(r.total / 1e6)).toBe(13);
+  });
+});

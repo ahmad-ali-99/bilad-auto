@@ -1251,7 +1251,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
               {[
                 { key: 'company', label: 'مصرف النهرين', hint: 'نسبة وأشهر التقسيط من الإعدادات' },
-                { key: 'ahli', label: 'المصرف الأهلي العراقي', hint: 'بنفس نسبة وأشهر الإعدادات' },
+                { key: 'ahli', label: 'المصرف الأهلي العراقي', hint: 'نسبته وأشهره المستقلة من الإعدادات' },
                 { key: 'cbi', label: 'مبادرة البنك المركزي', hint: 'فائدة 26% لمدة 7 سنوات' },
               ].map((pl) => (
                 <button

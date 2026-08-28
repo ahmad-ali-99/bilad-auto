@@ -43,6 +43,11 @@ export default function Settings() {
   const [instRate, setInstRate] = useState('1.35');
   const [instMonths, setInstMonths] = useState('60');
   const [instMsg, setInstMsg] = useState('');
+  // المصرف الأهلي العراقي: نسبته وأشهره مستقلة — كان يستعير إعداد النهرين
+  // فيطلع عرضه بـ35% بدل نسبته هو
+  const [ahliRate, setAhliRate] = useState('1.25');
+  const [ahliMonths, setAhliMonths] = useState('60');
+  const [ahliMsg, setAhliMsg] = useState('');
   // مبادرة البنك المركزي: فائدة 26% لسبع سنوات (قابلة للتعديل إذا تغيّرت شروط المبادرة)
   const [cbiRate, setCbiRate] = useState('1.26');
   const [cbiMonths, setCbiMonths] = useState('84');
@@ -54,6 +59,10 @@ export default function Settings() {
     window.api.config.get('installment').then((cfg) => {
       if (cfg?.rate > 0) setInstRate(String(cfg.rate));
       if (cfg?.months > 0) setInstMonths(String(cfg.months));
+    }).catch(() => {});
+    window.api.config.get('installment_ahli').then((cfg) => {
+      if (cfg?.rate > 0) setAhliRate(String(cfg.rate));
+      if (cfg?.months > 0) setAhliMonths(String(cfg.months));
     }).catch(() => {});
     window.api.config.get('installment_cbi').then((cfg) => {
       if (cfg?.rate > 0) setCbiRate(String(cfg.rate));
@@ -71,6 +80,18 @@ export default function Settings() {
     }
     await window.api.config.set('installment', { rate, months });
     setInstMsg(`تم الحفظ ✔ كل عرض مؤشَّر عليه التقسيط سيُحسب: المجموع × ${rate} ÷ ${months} شهراً`);
+  }
+
+  async function saveAhli(e) {
+    e.preventDefault();
+    const rate = Number(ahliRate);
+    const months = Math.round(Number(ahliMonths));
+    if (!(rate > 0) || !(months > 0)) {
+      setAhliMsg('أدخل نسبة وأشهر صحيحة — النسبة معامل ضرب مثل 1.25');
+      return;
+    }
+    await window.api.config.set('installment_ahli', { rate, months });
+    setAhliMsg(`تم الحفظ ✔ عروض المصرف الأهلي العراقي: المجموع × ${rate} ÷ ${months} شهراً`);
   }
 
   async function saveCbi(e) {
@@ -239,6 +260,28 @@ export default function Settings() {
           حفظ إعدادات التقسيط
         </button>
         {instMsg && <div className="alert alert-info" style={{ marginTop: 10, marginBottom: 0 }}>{instMsg}</div>}
+      </form>
+
+      <form className="card" onSubmit={saveAhli}>
+        <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>🏦 المصرف الأهلي العراقي</h3>
+        <p className="muted" style={{ marginTop: 0 }}>
+          نسبة الأهلي وأشهره <b>مستقلة عن النهرين</b> — قبل هذا كان يستعير نسبة النهرين
+          فيطلع مجموعه أعلى من الصحيح. النسبة معامل ضرب مباشر (مثال: 1.25 يعني المجموع + 25%).
+        </p>
+        <div className="grid-2">
+          <div className="field">
+            <label>نسبة فائدة المصرف (معامل الضرب)</label>
+            <input type="number" step="any" min="0" value={ahliRate} onChange={(e) => setAhliRate(e.target.value)} placeholder="مثال: 1.25" />
+          </div>
+          <div className="field">
+            <label>عدد أشهر التقسيط</label>
+            <input type="number" min="1" value={ahliMonths} onChange={(e) => setAhliMonths(e.target.value)} placeholder="60" />
+          </div>
+        </div>
+        <button className="btn btn-primary" type="submit">
+          حفظ إعدادات الأهلي
+        </button>
+        {ahliMsg && <div className="alert alert-info" style={{ marginTop: 10, marginBottom: 0 }}>{ahliMsg}</div>}
       </form>
 
       <form className="card" onSubmit={saveCbi}>

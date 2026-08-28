@@ -687,12 +687,14 @@ export const api = {
     async _installment(input) {
       if (!input.installment) return null;
       const plan = ['cbi', 'ahli'].includes(input.installmentPlan) ? input.installmentPlan : 'company';
-      // الأهلي يمشي بنفس نسبة وأشهر الإعدادات العامة مثل النهرين — مبادرة
-      // البنك المركزي وحدها إلها إعدادها المستقل (26% لسبع سنوات)
-      const key = plan === 'cbi' ? 'installment_cbi' : 'installment';
-      const fallback = plan === 'cbi'
-        ? { rate: 1.26, months: 84 }   // 26% لسبع سنوات
-        : { rate: 1.35, months: 60 };
+      // **لكل مصرف نسبته وأشهره**. كان الأهلي يستعير إعداد النهرين، فيطلع عرضه
+      // بـ35% بدل نسبته هو — عرض 464 طلع 14,034,600 بدل ≈12,995,000، والبياع
+      // ما عنده وين يغيّرها لأن الإعدادات ما بيها قسم للأهلي أصلاً.
+      const key = { cbi: 'installment_cbi', ahli: 'installment_ahli' }[plan] || 'installment';
+      const fallback = {
+        cbi: { rate: 1.26, months: 84 },    // مبادرة البنك المركزي: 26% لسبع سنوات
+        ahli: { rate: 1.25, months: 60 },   // المصرف الأهلي العراقي: 25% لخمس سنوات
+      }[plan] || { rate: 1.35, months: 60 };  // مصرف النهرين
       const cfg = await api.config.get(key);
       // نسبة وأشهر خاصة بهذا العرض تتقدّم على الإعدادات العامة — حتى يقسّط على
       // أي مصرف بنسبته بلا ما يغيّر الإعدادات المشتركة لكل الفريق
