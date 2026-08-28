@@ -11,6 +11,7 @@ import { getIsAdmin, getCurrentUsername, ADMIN_USERS } from '../lib/agent.js';
 import { canAttributeQuote } from '../lib/quoteAccess.js';
 import { canPickBrand, canPriceAdjust } from '../lib/permissions.js';
 import { bankRoundOptions } from '../lib/pricingTarget.js';
+import { addressBankLabel } from '../lib/installment.js';
 import ModalPortal from '../components/ModalPortal.jsx';
 import {
   brandSectionsFor, emptyBrandPick, pruneBrandPick, BRAND_SECTION_LABELS,
@@ -1252,7 +1253,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
               {[
                 { key: 'company', label: 'مصرف النهرين', hint: 'نسبة وأشهر التقسيط من الإعدادات' },
                 { key: 'ahli', label: 'المصرف الأهلي العراقي', hint: 'نسبته وأشهره المستقلة من الإعدادات' },
-                { key: 'cbi', label: 'مبادرة البنك المركزي', hint: 'فائدة 26% لمدة 7 سنوات' },
+                { key: 'cbi', label: 'مبادرة البنك المركزي', hint: 'عبر المصرف الأهلي العراقي — فائدة 26% لمدة 7 سنوات' },
               ].map((pl) => (
                 <button
                   key={pl.key}
@@ -1274,7 +1275,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
             </div>
             <div className="copies-note">
               📄 التصدير يطلّع <b>ثلاث نسخ</b>: رسمية معنونة إلى
-              <b> {installmentPlan === 'ahli' ? 'المصرف الأهلي العراقي' : installmentPlan === 'cbi' ? 'مبادرة البنك المركزي' : 'مصرف النهرين'}</b> بمبلغ
+              <b> {addressBankLabel(installmentPlan)}</b> بمبلغ
               النقد، وفنية للزبون بالقسط والنقد، وتجارية نقدية بلا عنونة.
             </div>
             </>

@@ -12,7 +12,7 @@ import { parseRoles, serializeRoles, normName as normStaffName } from './staffRo
 import { applyExportMethod, setExportMethod, getExportMethod } from './exportMethod.js';
 import { createClient } from '@supabase/supabase-js';
 import { canAccessQuote, visibleQuotes, canAttributeQuote, accessDeniedMessage } from './quoteAccess.js';
-import { installmentPlanLabel } from './installment.js';
+import { installmentPlanLabel, addressBankLabel } from './installment.js';
 import { imageKey, isImageKey } from './materialImages.js';
 import { ipKey, isIpKey, materialIdFromIpKey, parseIp, IP_RANGE_ERROR } from './materialSpecs.js';
 import {
@@ -693,7 +693,7 @@ export const api = {
       const key = { cbi: 'installment_cbi', ahli: 'installment_ahli' }[plan] || 'installment';
       const fallback = {
         cbi: { rate: 1.26, months: 84 },    // مبادرة البنك المركزي: 26% لسبع سنوات
-        ahli: { rate: 1.25, months: 84 },   // المصرف الأهلي العراقي: 25% لسبع سنوات
+        ahli: { rate: 1.26, months: 84 },   // الأهلي يمول بمبادرة البنك المركزي نفسها: 26% لسبع سنوات
       }[plan] || { rate: 1.35, months: 60 };  // مصرف النهرين
       const cfg = await api.config.get(key);
       // نسبة وأشهر خاصة بهذا العرض تتقدّم على الإعدادات العامة — حتى يقسّط على
@@ -704,6 +704,7 @@ export const api = {
         enabled: true,
         plan,
         label: installmentPlanLabel(plan),
+        addressee: addressBankLabel(plan),
         rate: ownRate > 0 ? ownRate : (Number(cfg?.rate) > 0 ? Number(cfg.rate) : fallback.rate),
         months: ownMonths > 0 ? ownMonths : (Number(cfg?.months) > 0 ? Number(cfg.months) : fallback.months),
       };
@@ -1233,11 +1234,14 @@ export const api = {
         // العروض المحفوظة قبل هذا التغيير بنودها بسعر الكاش، فتبقى على حسابها القديم.
         const distributed = inst.distributed === true;
         const totalWithInterest = distributed ? quote.total_price : Math.round(quote.total_price * rate);
-        const plan = inst.plan === 'cbi' ? 'cbi' : 'company';
+        // **الخطط الثلاث لازم تمر**: كان أي خطة مو 'cbi' تنسحق لـ'company'، فعرض
+        // محفوظ على الأهلي يرجع عند فتحه باسم «مصرف النهرين» وبعنونته — وهي
+        // نفس السحقة اللي انصلحت بالمحرك وبقت هنا بمسار العروض المحفوظة.
+        const plan = ['cbi', 'ahli'].includes(inst.plan) ? inst.plan : 'company';
         installment = {
           rate, months, totalWithInterest,
           monthly: Math.round(totalWithInterest / months),
-          plan, label: installmentPlanLabel(plan),
+          plan, label: installmentPlanLabel(plan), addressee: addressBankLabel(plan),
           cashTotal: distributed ? Math.round(quote.total_price / rate) : quote.total_price,
         };
       }

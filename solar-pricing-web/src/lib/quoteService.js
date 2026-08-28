@@ -3,7 +3,7 @@
 import * as calc from './calc.js';
 import { isDcProtectionBoard } from './secondaryDefaults.js';
 import { dcCableMeters, isDcCable, pickDcCable } from './dcCable.js';
-import { installmentPlanLabel } from './installment.js';
+import { installmentPlanLabel, addressBankLabel } from './installment.js';
 import { adjustmentsForTarget } from './pricingTarget.js';
 
 const CATEGORY_LABELS_AR = {
@@ -268,7 +268,7 @@ function applyAdjustments(items, total, adjustments) {
       // لمصرف غير اللي يقسّط عليه الزبون
       const plan = ['cbi', 'ahli'].includes(inst.plan) ? inst.plan : 'company';
       summary.installment = {
-        rate, months, plan, label: installmentPlanLabel(plan),
+        rate, months, plan, label: installmentPlanLabel(plan), addressee: addressBankLabel(plan),
         totalWithInterest,
         monthly: Math.round(totalWithInterest / months),
         cashTotal,

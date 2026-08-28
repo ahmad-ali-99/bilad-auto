@@ -29,9 +29,28 @@ describe('النسخة الرسمية للمصرف', () => {
     expect(addressBankLabel('ahli')).toBe('المصرف الأهلي العراقي');
   });
 
-  it('الخطط الثلاث كلها تنعنون بأسمائها — ماكو خطة بلا عنوان', () => {
-    for (const [plan, label] of Object.entries(INSTALLMENT_PLANS))
-      expect(html('bank', { ...INST, plan, label }), plan).toContain(`إلى / ${label} المحترم`);
+  // **العنونة تروح للمصرف الحقيقي لا لاسم الخطة**: «مبادرة البنك المركزي»
+  // خطة تمويل تُدار عبر المصرف الأهلي العراقي — مو مصرفاً يُعنون له كتاب.
+  it('كل خطة تنعنون للمصرف اللي يستلم فعلاً', () => {
+    const expected = {
+      company: 'مصرف النهرين',
+      ahli: 'المصرف الأهلي العراقي',
+      cbi: 'المصرف الأهلي العراقي',
+    };
+    for (const plan of Object.keys(INSTALLMENT_PLANS)) {
+      const h = html('bank', { ...INST, plan, label: INSTALLMENT_PLANS[plan], addressee: addressBankLabel(plan) });
+      expect(h, plan).toContain(`إلى / ${expected[plan]} المحترم`);
+    }
+  });
+
+  it('**ولا ورقة تنعنون «إلى / مبادرة البنك المركزي»** — جهة ما تستلم كتاباً', () => {
+    const h = html('bank', { ...INST, plan: 'cbi', label: INSTALLMENT_PLANS.cbi, addressee: addressBankLabel('cbi') });
+    expect(h).not.toContain('إلى / مبادرة البنك المركزي');
+  });
+
+  it('وبلا addressee محفوظ (عرض قديم) العنونة تنشتق من الخطة نفسها', () => {
+    expect(html('bank', { ...INST, plan: 'cbi', label: INSTALLMENT_PLANS.cbi })).toContain('إلى / المصرف الأهلي العراقي المحترم');
+    expect(html('bank', { ...INST, plan: 'ahli' })).toContain('إلى / المصرف الأهلي العراقي المحترم');
   });
 
   it('بمبلغ النقد وحده — ماكو قسط ولا مجموع تقسيط', () => {

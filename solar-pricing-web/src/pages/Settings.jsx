@@ -45,7 +45,7 @@ export default function Settings() {
   const [instMsg, setInstMsg] = useState('');
   // المصرف الأهلي العراقي: نسبته وأشهره مستقلة — كان يستعير إعداد النهرين
   // فيطلع عرضه بـ35% بدل نسبته هو
-  const [ahliRate, setAhliRate] = useState('1.25');
+  const [ahliRate, setAhliRate] = useState('1.26');
   const [ahliMonths, setAhliMonths] = useState('84');
   const [ahliMsg, setAhliMsg] = useState('');
   // مبادرة البنك المركزي: فائدة 26% لسبع سنوات (قابلة للتعديل إذا تغيّرت شروط المبادرة)
@@ -87,7 +87,7 @@ export default function Settings() {
     const rate = Number(ahliRate);
     const months = Math.round(Number(ahliMonths));
     if (!(rate > 0) || !(months > 0)) {
-      setAhliMsg('أدخل نسبة وأشهر صحيحة — النسبة معامل ضرب مثل 1.25');
+      setAhliMsg('أدخل نسبة وأشهر صحيحة — النسبة معامل ضرب مثل 1.26');
       return;
     }
     await window.api.config.set('installment_ahli', { rate, months });
@@ -271,7 +271,7 @@ export default function Settings() {
         <div className="grid-2">
           <div className="field">
             <label>نسبة فائدة المصرف (معامل الضرب)</label>
-            <input type="number" step="any" min="0" value={ahliRate} onChange={(e) => setAhliRate(e.target.value)} placeholder="مثال: 1.25" />
+            <input type="number" step="any" min="0" value={ahliRate} onChange={(e) => setAhliRate(e.target.value)} placeholder="مثال: 1.26" />
           </div>
           <div className="field">
             <label>عدد أشهر التقسيط</label>

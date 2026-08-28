@@ -10,7 +10,16 @@ export function installmentPlanLabel(plan) {
   return INSTALLMENT_PLANS[plan] || INSTALLMENT_PLANS.company;
 }
 
-// الجهة اللي تنعنون لها النسخة الرسمية = **خطة التقسيط نفسها**.
-// كان أكو مبدّل منفصل للعنونة، وهو تكرار: المصرف اللي يقسّط عليه الزبون هو
-// المصرف اللي ينقدّم له العرض، فاختياران لشي واحد يفتحون باب التناقض.
-export const addressBankLabel = installmentPlanLabel;
+// **المصرف اللي تنعنون له النسخة الرسمية مو دائماً اسم الخطة.**
+// «مبادرة البنك المركزي» خطة تمويل تُدار **عبر المصرف الأهلي العراقي** — مو
+// مصرفاً بحد ذاته، فورقة معنونة «إلى / مبادرة البنك المركزي المحترم» تروح
+// لجهة ما تستلم. الخطة تبقى باسمها للبياع، والعنونة تروح للمصرف الحقيقي.
+const ADDRESS_BANKS = {
+  company: 'مصرف النهرين',
+  ahli: 'المصرف الأهلي العراقي',
+  cbi: 'المصرف الأهلي العراقي',
+};
+
+export function addressBankLabel(plan) {
+  return ADDRESS_BANKS[plan] || ADDRESS_BANKS.company;
+}

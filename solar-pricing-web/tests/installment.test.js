@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildOptions, buildQuoteDraft } from '../src/lib/quoteService.js';
+import { addressBankLabel, installmentPlanLabel } from '../src/lib/installment.js';
 import { buildInvoiceInnerHtml } from '../src/lib/invoiceHtml.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -201,9 +202,9 @@ describe('لكل مصرف مفتاح إعداداته ونسبته', () => {
     expect(dataApi).toMatch(/ahli:\s*'installment_ahli'/);
   });
 
-  it('والافتراضات ثلاثة منفصلة: النهرين 1.35×60 والأهلي 1.25×84 والمبادرة 1.26×84', () => {
+  it('والافتراضات منفصلة: النهرين 1.35×60، والأهلي والمبادرة 1.26×84', () => {
     expect(dataApi).toMatch(/cbi:\s*\{\s*rate:\s*1\.26,\s*months:\s*84\s*\}/);
-    expect(dataApi).toMatch(/ahli:\s*\{\s*rate:\s*1\.25,\s*months:\s*84\s*\}/);
+    expect(dataApi).toMatch(/ahli:\s*\{\s*rate:\s*1\.26,\s*months:\s*84\s*\}/);
     expect(dataApi).toMatch(/\|\|\s*\{\s*rate:\s*1\.35,\s*months:\s*60\s*\}/);
   });
 
@@ -233,15 +234,56 @@ describe('أرقام عرض 464 نفسها', () => {
     expect(withRate(1.35, 60)).toEqual({ total: 14034600, monthly: 233910 });
   });
 
-  it('وبنسبة الأهلي 1.25 لأربعة وثمانين شهراً يطلع ≈13 مليون مثل ما ينتظره المستخدم', () => {
-    const r = withRate(1.25, 84);
-    expect(r.total).toBe(12995000);
-    expect(r.monthly).toBe(154702);
+  it('وبنسبة الأهلي 1.26 لأربعة وثمانين شهراً يطلع ≈13 مليون مثل ما ينتظره المستخدم', () => {
+    const r = withRate(1.26, 84);
+    expect(r.total).toBe(13098960);
+    expect(r.monthly).toBe(155940);
     expect(Math.round(r.total / 1e6)).toBe(13);
   });
 
   it('**الأشهر تغيّر القسط لا المجموع**: نفس النسبة بـ60 وبـ84 مجموعها واحد', () => {
-    expect(withRate(1.25, 84).total).toBe(withRate(1.25, 60).total);
-    expect(withRate(1.25, 84).monthly).toBeLessThan(withRate(1.25, 60).monthly);
+    expect(withRate(1.26, 84).total).toBe(withRate(1.26, 60).total);
+    expect(withRate(1.26, 84).monthly).toBeLessThan(withRate(1.26, 60).monthly);
+  });
+});
+
+// ═══ العرض المحفوظ يرجع بخطته هو ═══
+// «من كاعد يختارة الحساب يروح لاعدادات النهرين» — مسار العروض المحفوظة كان
+// يسحق أي خطة مو 'cbi' لـ'company'، فعرض محفوظ على الأهلي يرجع عند فتحه
+// باسم «مصرف النهرين» وبعنونته. نفس السحقة انصلحت بالمحرك وبقت هنا.
+describe('فتح عرض محفوظ ما يبدّل مصرفه', () => {
+  it('ماكو سحق للخطة بمسار العروض المحفوظة', () => {
+    expect(dataApi).not.toMatch(/inst\.plan === 'cbi' \? 'cbi' : 'company'/);
+  });
+
+  it('والمسارات كلها تمرر الخطط الثلاث', () => {
+    const guards = dataApi.match(/\['cbi', 'ahli'\]\.includes\(/g) || [];
+    expect(guards.length).toBeGreaterThanOrEqual(2);   // مسار الإدخال ومسار العرض المحفوظ
+  });
+});
+
+// ═══ عنونة النسخة الرسمية ═══
+describe('مبادرة البنك المركزي تُدار عبر الأهلي', () => {
+  it('عنوان الكتاب يروح للمصرف الأهلي العراقي لا لاسم المبادرة', () => {
+    expect(addressBankLabel('cbi')).toBe('المصرف الأهلي العراقي');
+    expect(addressBankLabel('ahli')).toBe('المصرف الأهلي العراقي');
+    expect(addressBankLabel('company')).toBe('مصرف النهرين');
+  });
+
+  it('واسم الخطة يبقى مثل ما هو للبياع — العنونة شي والخطة شي', () => {
+    expect(installmentPlanLabel('cbi')).toBe('مبادرة البنك المركزي');
+    expect(addressBankLabel('cbi')).not.toBe(installmentPlanLabel('cbi'));
+  });
+
+  it('والمحرك يخزن العنونة بالملخّص حتى العرض المحفوظ يطبعها صح', () => {
+    const d = draft(inst({ plan: 'cbi', rate: 1.26, months: 84 }));
+    expect(d.installment.addressee).toBe('المصرف الأهلي العراقي');
+    expect(d.installment.label).toBe('مبادرة البنك المركزي');
+    expect(d.installment.months).toBe(84);
+  });
+
+  it('وشاشة العرض تقرا العنونة من نفس المصدر بدل ما تكتبها بالإيد', () => {
+    expect(builder).toContain('addressBankLabel(installmentPlan)');
+    expect(builder).not.toContain("installmentPlan === 'cbi' ? 'مبادرة البنك المركزي'");
   });
 });

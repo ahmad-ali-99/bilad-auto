@@ -144,7 +144,7 @@ export function buildInvoiceInnerHtml({ quote, items, notes, company, installmen
   </div>
   ${copy === 'bank' ? `
   <div class="bank-address">
-    <div class="to">إلى / ${escapeHtml(installment?.label || addressBankLabel(installment?.plan))} المحترم</div>
+    <div class="to">إلى / ${escapeHtml(installment?.addressee || addressBankLabel(installment?.plan))} المحترم</div>
     <div class="subject">م / عرض سعر منظومة طاقة شمسية</div>
     <div class="body">
       تحية طيبة… بناءً على طلب السيد/ة <b>${escapeHtml(quote.client_name || '—')}</b>${quote.client_phone ? ` — هاتف <span class="ltr">${escapeHtml(quote.client_phone)}</span>` : ''}${quote.location ? ` — ${escapeHtml(quote.location)}` : ''}،
