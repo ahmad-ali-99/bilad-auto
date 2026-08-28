@@ -273,7 +273,7 @@ export default function Packages() {
           </label>
           {installment && (
             <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-              {[{ k: 'company', l: 'مصرف النهرين' }, { k: 'cbi', l: 'مبادرة البنك المركزي' }].map((pl) => (
+              {[{ k: 'company', l: 'مصرف النهرين' }, { k: 'ahli', l: 'المصرف الأهلي العراقي' }].map((pl) => (
                 <button
                   key={pl.k} type="button"
                   className={`btn btn-sm ${installmentPlan === pl.k ? 'btn-primary' : 'btn-secondary'}`}

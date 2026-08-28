@@ -11,7 +11,7 @@ import { getIsAdmin, getCurrentUsername, ADMIN_USERS } from '../lib/agent.js';
 import { canAttributeQuote } from '../lib/quoteAccess.js';
 import { canPickBrand, canPriceAdjust } from '../lib/permissions.js';
 import { bankRoundOptions } from '../lib/pricingTarget.js';
-import { addressBankLabel } from '../lib/installment.js';
+import { addressBankLabel, installmentPlanLabel, normalizePlan } from '../lib/installment.js';
 import ModalPortal from '../components/ModalPortal.jsx';
 import {
   brandSectionsFor, emptyBrandPick, pruneBrandPick, BRAND_SECTION_LABELS,
@@ -217,7 +217,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
   const [targetVisible, setTargetVisible] = useState(savedDraft?.targetVisible ?? false);
   // التقسيط المصرفي: جيك بوينت — النسبة والأشهر من الإعدادات، والمعادلة: المجموع × النسبة ÷ الأشهر
   const [installment, setInstallment] = useState(savedDraft?.installment ?? false);
-  // خطة التقسيط: 'company' = التقسيط عبر مصرف النهرين، 'cbi' = مبادرة البنك المركزي (26% لسبع سنوات)
+  // خطة التقسيط: 'company' = مصرف النهرين، 'ahli' = المصرف الأهلي العراقي
   const [installmentPlan, setInstallmentPlan] = useState(savedDraft?.installmentPlan ?? 'company');
   // **لازم يتعرّف هنا مع بقية حالات التقسيط لا بأسفل المكوّن**: يُستعمل
   // بالمدخلات المؤجّلة وبحمولة الحفظ اللي فوقه، وتعريفه تحتهن يخليه بمنطقة
@@ -491,7 +491,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
         targetTotal: Number(a.targetTotal) > 0 ? String(a.targetTotal) : '',
         targetVisible: a.targetVisible === true,
         installment: !!a.installment?.enabled,
-        installmentPlan: a.installment?.plan === 'cbi' ? 'cbi' : 'company',
+        installmentPlan: normalizePlan(a.installment?.plan),
         brands: { ...emptyBrandPick(), ...(p.brands || {}) },
         panelSafetyFactor: Number(p.panelSafetyFactor) > 0 ? Number(p.panelSafetyFactor) : PANEL_SAFETY_FACTOR,
         batteryFactors: p.batteryFactors ?? null,
@@ -546,7 +546,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
       setTargetTotal(Number(a.targetTotal) > 0 ? String(a.targetTotal) : '');
       setTargetVisible(a.targetVisible === true);
       setInstallment(!!a.installment?.enabled);
-      setInstallmentPlan(a.installment?.plan === 'cbi' ? 'cbi' : 'company');
+      setInstallmentPlan(normalizePlan(a.installment?.plan));
       if (p.brands) setBrands({ ...emptyBrandPick(), ...p.brands });
       if (Number(p.panelSafetyFactor) > 0) setPanelSafetyFactor(Number(p.panelSafetyFactor));
       setBatteryFactors(p.batteryFactors ?? null);
@@ -1138,7 +1138,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
                 )}
                 {installment && (
                   <span style={{ background: '#e6f0fb', color: '#1a5a9c', borderRadius: 12, padding: '2px 10px', fontSize: '0.8rem', fontWeight: 700 }}>
-                    🏦 {installmentPlan === 'cbi' ? 'تقسيط — البنك المركزي' : 'تقسيط — مصرف النهرين'}
+                    🏦 تقسيط — {installmentPlanLabel(installmentPlan)}
                   </span>
                 )}
               </span>
@@ -1253,7 +1253,6 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
               {[
                 { key: 'company', label: 'مصرف النهرين', hint: 'نسبة وأشهر التقسيط من الإعدادات' },
                 { key: 'ahli', label: 'المصرف الأهلي العراقي', hint: 'نسبته وأشهره المستقلة من الإعدادات' },
-                { key: 'cbi', label: 'مبادرة البنك المركزي', hint: 'عبر المصرف الأهلي العراقي — فائدة 26% لمدة 7 سنوات' },
               ].map((pl) => (
                 <button
                   key={pl.key}

@@ -3,23 +3,35 @@
 export const INSTALLMENT_PLANS = {
   company: 'مصرف النهرين',
   ahli: 'المصرف الأهلي العراقي',
-  cbi: 'مبادرة البنك المركزي',
 };
 
-export function installmentPlanLabel(plan) {
-  return INSTALLMENT_PLANS[plan] || INSTALLMENT_PLANS.company;
+// **خطة «مبادرة البنك المركزي» انشالت** (قرار المستخدم): المبادرة كانت تُدار
+// عبر المصرف الأهلي العراقي أصلاً، فبقاؤها خياراً ثانياً بنفس النسبة ونفس
+// الأشهر ونفس جهة العنونة كان تكراراً يربك البياع.
+//
+// العروض المحفوظة عليها ما تنكسر ولا ترجع لمصرف غيره: تُقرأ على **الأهلي**،
+// وهو المصرف اللي كان يمولها فعلاً. (رجوعها لـ«النهرين» يعني ورقة معنونة
+// لمصرف ما إله علاقة بالعرض.)
+const LEGACY_PLANS = { cbi: 'ahli' };
+
+/** يرجّع خطة صالحة من أي قيمة محفوظة — الخطط المشالة تنطبّق على وريثها */
+export function normalizePlan(plan) {
+  const p = LEGACY_PLANS[plan] || plan;
+  return INSTALLMENT_PLANS[p] ? p : 'company';
 }
 
-// **المصرف اللي تنعنون له النسخة الرسمية مو دائماً اسم الخطة.**
-// «مبادرة البنك المركزي» خطة تمويل تُدار **عبر المصرف الأهلي العراقي** — مو
-// مصرفاً بحد ذاته، فورقة معنونة «إلى / مبادرة البنك المركزي المحترم» تروح
-// لجهة ما تستلم. الخطة تبقى باسمها للبياع، والعنونة تروح للمصرف الحقيقي.
+export function installmentPlanLabel(plan) {
+  return INSTALLMENT_PLANS[normalizePlan(plan)];
+}
+
+// المصرف اللي تنعنون له النسخة الرسمية. اليوم هو نفسه اسم الخطة بعد ما
+// انشالت المبادرة، بس يبقى مفصولاً: أي خطة تنضاف بعدين وتُدار عبر مصرف
+// ثانٍ تنعنون لمصرفها لا لاسمها.
 const ADDRESS_BANKS = {
   company: 'مصرف النهرين',
   ahli: 'المصرف الأهلي العراقي',
-  cbi: 'المصرف الأهلي العراقي',
 };
 
 export function addressBankLabel(plan) {
-  return ADDRESS_BANKS[plan] || ADDRESS_BANKS.company;
+  return ADDRESS_BANKS[normalizePlan(plan)];
 }

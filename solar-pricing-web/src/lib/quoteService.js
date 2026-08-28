@@ -3,7 +3,7 @@
 import * as calc from './calc.js';
 import { isDcProtectionBoard } from './secondaryDefaults.js';
 import { dcCableMeters, isDcCable, pickDcCable } from './dcCable.js';
-import { installmentPlanLabel, addressBankLabel } from './installment.js';
+import { installmentPlanLabel, addressBankLabel, normalizePlan } from './installment.js';
 import { adjustmentsForTarget } from './pricingTarget.js';
 
 const CATEGORY_LABELS_AR = {
@@ -263,10 +263,10 @@ function applyAdjustments(items, total, adjustments) {
     if (rate > 0) {
       const cashTotal = total;
       const totalWithInterest = Math.round(cashTotal * rate);
-      // **لازم تمر الخطط الثلاث**: كانت أي خطة مو 'cbi' تنسحق لـ'company'،
+      // **لازم تمر كل خطة**: كانت أي خطة مو 'cbi' تنسحق لـ'company'،
       // فالأهلي يطلع بعنوان «مصرف النهرين» بالنسخة الرسمية — ورقة معنونة
       // لمصرف غير اللي يقسّط عليه الزبون
-      const plan = ['cbi', 'ahli'].includes(inst.plan) ? inst.plan : 'company';
+      const plan = normalizePlan(inst.plan);
       summary.installment = {
         rate, months, plan, label: installmentPlanLabel(plan), addressee: addressBankLabel(plan),
         totalWithInterest,

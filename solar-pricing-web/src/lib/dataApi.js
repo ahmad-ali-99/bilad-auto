@@ -12,7 +12,7 @@ import { parseRoles, serializeRoles, normName as normStaffName } from './staffRo
 import { applyExportMethod, setExportMethod, getExportMethod } from './exportMethod.js';
 import { createClient } from '@supabase/supabase-js';
 import { canAccessQuote, visibleQuotes, canAttributeQuote, accessDeniedMessage } from './quoteAccess.js';
-import { installmentPlanLabel, addressBankLabel } from './installment.js';
+import { installmentPlanLabel, addressBankLabel, normalizePlan } from './installment.js';
 import { imageKey, isImageKey } from './materialImages.js';
 import { ipKey, isIpKey, materialIdFromIpKey, parseIp, IP_RANGE_ERROR } from './materialSpecs.js';
 import {
@@ -686,15 +686,14 @@ export const api = {
     // كل خطة نسبتها وأشهرها من الإعدادات المشتركة — والقيم هنا احتياط إذا ما انحفظت بعد.
     async _installment(input) {
       if (!input.installment) return null;
-      const plan = ['cbi', 'ahli'].includes(input.installmentPlan) ? input.installmentPlan : 'company';
+      const plan = normalizePlan(input.installmentPlan);
       // **لكل مصرف نسبته وأشهره**. كان الأهلي يستعير إعداد النهرين، فيطلع عرضه
-      // بـ35% بدل نسبته هو — عرض 464 طلع 14,034,600 بدل ≈12,995,000، والبياع
+      // بـ35% بدل نسبته هو — عرض 464 طلع 14,034,600 بدل ≈13,098,960، والبياع
       // ما عنده وين يغيّرها لأن الإعدادات ما بيها قسم للأهلي أصلاً.
-      const key = { cbi: 'installment_cbi', ahli: 'installment_ahli' }[plan] || 'installment';
-      const fallback = {
-        cbi: { rate: 1.26, months: 84 },    // مبادرة البنك المركزي: 26% لسبع سنوات
-        ahli: { rate: 1.26, months: 84 },   // الأهلي يمول بمبادرة البنك المركزي نفسها: 26% لسبع سنوات
-      }[plan] || { rate: 1.35, months: 60 };  // مصرف النهرين
+      const key = plan === 'ahli' ? 'installment_ahli' : 'installment';
+      const fallback = plan === 'ahli'
+        ? { rate: 1.26, months: 84 }    // المصرف الأهلي العراقي: 26% لسبع سنوات
+        : { rate: 1.35, months: 60 };   // مصرف النهرين
       const cfg = await api.config.get(key);
       // نسبة وأشهر خاصة بهذا العرض تتقدّم على الإعدادات العامة — حتى يقسّط على
       // أي مصرف بنسبته بلا ما يغيّر الإعدادات المشتركة لكل الفريق
@@ -903,7 +902,7 @@ export const api = {
           installment: a.installment?.enabled
             ? {
               enabled: true,
-              plan: a.installment.plan === 'cbi' ? 'cbi' : 'company',
+              plan: normalizePlan(a.installment.plan),
               rate: Number(a.installment.rate) || 1.35,
               months: Number(a.installment.months) || 60,
               // النسبة ما عادت تتوزع على أسعار البنود — `total_price` هو سعر
@@ -1234,10 +1233,10 @@ export const api = {
         // العروض المحفوظة قبل هذا التغيير بنودها بسعر الكاش، فتبقى على حسابها القديم.
         const distributed = inst.distributed === true;
         const totalWithInterest = distributed ? quote.total_price : Math.round(quote.total_price * rate);
-        // **الخطط الثلاث لازم تمر**: كان أي خطة مو 'cbi' تنسحق لـ'company'، فعرض
-        // محفوظ على الأهلي يرجع عند فتحه باسم «مصرف النهرين» وبعنونته — وهي
-        // نفس السحقة اللي انصلحت بالمحرك وبقت هنا بمسار العروض المحفوظة.
-        const plan = ['cbi', 'ahli'].includes(inst.plan) ? inst.plan : 'company';
+        // **الخطة المحفوظة تمر مثل ما هي**: كان أي خطة مو 'cbi' تنسحق لـ'company'،
+        // فعرض محفوظ على الأهلي يرجع عند فتحه باسم «مصرف النهرين» وبعنونته.
+        // normalizePlan يحرس هذا ويطبّق الخطط المشالة على وريثها.
+        const plan = normalizePlan(inst.plan);
         installment = {
           rate, months, totalWithInterest,
           monthly: Math.round(totalWithInterest / months),

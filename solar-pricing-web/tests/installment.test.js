@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildOptions, buildQuoteDraft } from '../src/lib/quoteService.js';
-import { addressBankLabel, installmentPlanLabel } from '../src/lib/installment.js';
+import { addressBankLabel, installmentPlanLabel, normalizePlan, INSTALLMENT_PLANS } from '../src/lib/installment.js';
 import { buildInvoiceInnerHtml } from '../src/lib/invoiceHtml.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -63,9 +63,9 @@ describe('التقسيط: النسبة على المجموع بس — البنو
     expect(d2.installment.monthly).toBe(Math.round(d2.installment.totalWithInterest / 84));
   });
 
-  it('اسم المصرف يتبع الخطة — مبادرة البنك المركزي ما ترجع «النهرين»', () => {
+  it('اسم المصرف يتبع الخطة — الأهلي ما يرجع «النهرين»', () => {
     expect(draft(inst()).installment.label).toBe('مصرف النهرين');
-    expect(draft(inst({ plan: 'cbi', rate: 1.26, months: 84 })).installment.label).toBe('مبادرة البنك المركزي');
+    expect(draft(inst({ plan: 'ahli', rate: 1.26, months: 84 })).installment.label).toBe('المصرف الأهلي العراقي');
   });
 
   it('الفائدة تنحسب بعد الزيادة والخصم', () => {
@@ -159,7 +159,7 @@ describe('النسبة والأشهر يوصلون لكل مسار — مو بس
 
   it('لقطة العرض المحفوظ تخزن الخطة وعلَم التوزيع — وإلا الاسم والأرقام تطلع غلط', () => {
     const snap = dataApi.slice(dataApi.indexOf('installment: a.installment?.enabled'), dataApi.indexOf('// الزيادة/النقصان اليدوي بالوحدات'));
-    expect(snap).toMatch(/plan: a\.installment\.plan === 'cbi'/);
+    expect(snap).toMatch(/plan: normalizePlan\(a\.installment\.plan\)/);
     expect(snap).toMatch(/distributed: true/);
     // وإعادة البناء ما تضرب الفائدة مرتين
     expect(dataApi).toMatch(/const distributed = inst\.distributed === true;/);
@@ -199,13 +199,12 @@ describe('إخفاء المجموع الكلي انشال', () => {
 // مفتاح إعدادات النهرين نفسه، وما بالإعدادات قسم للأهلي حتى يغيّرها البياع.
 describe('لكل مصرف مفتاح إعداداته ونسبته', () => {
   it('الأهلي يقرا installment_ahli — لا مفتاح النهرين', () => {
-    expect(dataApi).toMatch(/ahli:\s*'installment_ahli'/);
+    expect(dataApi).toMatch(/plan === 'ahli' \? 'installment_ahli' : 'installment'/);
   });
 
-  it('والافتراضات منفصلة: النهرين 1.35×60، والأهلي والمبادرة 1.26×84', () => {
-    expect(dataApi).toMatch(/cbi:\s*\{\s*rate:\s*1\.26,\s*months:\s*84\s*\}/);
-    expect(dataApi).toMatch(/ahli:\s*\{\s*rate:\s*1\.26,\s*months:\s*84\s*\}/);
-    expect(dataApi).toMatch(/\|\|\s*\{\s*rate:\s*1\.35,\s*months:\s*60\s*\}/);
+  it('والافتراضان منفصلان: الأهلي 1.26×84 والنهرين 1.35×60', () => {
+    expect(dataApi).toMatch(/\{\s*rate:\s*1\.26,\s*months:\s*84\s*\}/);
+    expect(dataApi).toMatch(/\{\s*rate:\s*1\.35,\s*months:\s*60\s*\}/);
   });
 
   it('**ما يبقى أثر للاستعارة**: ماكو سطر يخلي الأهلي على مفتاح النهرين', () => {
@@ -256,30 +255,46 @@ describe('فتح عرض محفوظ ما يبدّل مصرفه', () => {
     expect(dataApi).not.toMatch(/inst\.plan === 'cbi' \? 'cbi' : 'company'/);
   });
 
-  it('والمسارات كلها تمرر الخطط الثلاث', () => {
-    const guards = dataApi.match(/\['cbi', 'ahli'\]\.includes\(/g) || [];
-    expect(guards.length).toBeGreaterThanOrEqual(2);   // مسار الإدخال ومسار العرض المحفوظ
+  it('وكل مسار يمر بـnormalizePlan — ماكو سحق مكتوب بالإيد', () => {
+    expect((dataApi.match(/normalizePlan\(/g) || []).length).toBeGreaterThanOrEqual(3);
+    expect(dataApi).not.toMatch(/\? 'cbi' : 'company'/);
+    expect(dataApi).not.toMatch(/\['cbi', 'ahli'\]\.includes\(/);
   });
 });
 
 // ═══ عنونة النسخة الرسمية ═══
-describe('مبادرة البنك المركزي تُدار عبر الأهلي', () => {
-  it('عنوان الكتاب يروح للمصرف الأهلي العراقي لا لاسم المبادرة', () => {
-    expect(addressBankLabel('cbi')).toBe('المصرف الأهلي العراقي');
-    expect(addressBankLabel('ahli')).toBe('المصرف الأهلي العراقي');
-    expect(addressBankLabel('company')).toBe('مصرف النهرين');
+describe('مبادرة البنك المركزي انشالت خياراً', () => {
+  it('ما بقت بقائمة الخطط — خطتان بس', () => {
+    expect(Object.keys(INSTALLMENT_PLANS).sort()).toEqual(['ahli', 'company']);
   });
 
-  it('واسم الخطة يبقى مثل ما هو للبياع — العنونة شي والخطة شي', () => {
-    expect(installmentPlanLabel('cbi')).toBe('مبادرة البنك المركزي');
-    expect(addressBankLabel('cbi')).not.toBe(installmentPlanLabel('cbi'));
+  it('**والعروض المحفوظة عليها ما تنكسر**: تُقرأ على الأهلي مموّلها', () => {
+    expect(normalizePlan('cbi')).toBe('ahli');
+    expect(installmentPlanLabel('cbi')).toBe('المصرف الأهلي العراقي');
+    expect(addressBankLabel('cbi')).toBe('المصرف الأهلي العراقي');
+  });
+
+  it('وما ترجع «النهرين» — ورقة معنونة لمصرف ما إله علاقة بالعرض', () => {
+    expect(normalizePlan('cbi')).not.toBe('company');
+    expect(addressBankLabel('cbi')).not.toBe('مصرف النهرين');
+  });
+
+  it('وخطة غريبة ترجع للنهرين بدل ما تكسر', () => {
+    for (const p of ['شي غريب', null, undefined, '']) expect(normalizePlan(p)).toBe('company');
   });
 
   it('والمحرك يخزن العنونة بالملخّص حتى العرض المحفوظ يطبعها صح', () => {
     const d = draft(inst({ plan: 'cbi', rate: 1.26, months: 84 }));
+    expect(d.installment.plan).toBe('ahli');
     expect(d.installment.addressee).toBe('المصرف الأهلي العراقي');
-    expect(d.installment.label).toBe('مبادرة البنك المركزي');
     expect(d.installment.months).toBe(84);
+  });
+
+  it('وماكو أثر للمبادرة بالواجهة ولا بالإعدادات', () => {
+    const settings = fs.readFileSync(path.join(HERE, '../src/pages/Settings.jsx'), 'utf8');
+    expect(settings).not.toContain('installment_cbi');
+    expect(settings).not.toContain('مبادرة البنك المركزي');
+    expect(builder).not.toContain('مبادرة البنك المركزي');
   });
 
   it('وشاشة العرض تقرا العنونة من نفس المصدر بدل ما تكتبها بالإيد', () => {

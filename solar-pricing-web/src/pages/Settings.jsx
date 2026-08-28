@@ -48,10 +48,6 @@ export default function Settings() {
   const [ahliRate, setAhliRate] = useState('1.26');
   const [ahliMonths, setAhliMonths] = useState('84');
   const [ahliMsg, setAhliMsg] = useState('');
-  // مبادرة البنك المركزي: فائدة 26% لسبع سنوات (قابلة للتعديل إذا تغيّرت شروط المبادرة)
-  const [cbiRate, setCbiRate] = useState('1.26');
-  const [cbiMonths, setCbiMonths] = useState('84');
-  const [cbiMsg, setCbiMsg] = useState('');
   function reload() {
     window.api.settings.get().then(setSettings);
     window.api.company.get().then(setCompany);
@@ -63,10 +59,6 @@ export default function Settings() {
     window.api.config.get('installment_ahli').then((cfg) => {
       if (cfg?.rate > 0) setAhliRate(String(cfg.rate));
       if (cfg?.months > 0) setAhliMonths(String(cfg.months));
-    }).catch(() => {});
-    window.api.config.get('installment_cbi').then((cfg) => {
-      if (cfg?.rate > 0) setCbiRate(String(cfg.rate));
-      if (cfg?.months > 0) setCbiMonths(String(cfg.months));
     }).catch(() => {});
   }
 
@@ -92,18 +84,6 @@ export default function Settings() {
     }
     await window.api.config.set('installment_ahli', { rate, months });
     setAhliMsg(`تم الحفظ ✔ عروض المصرف الأهلي العراقي: المجموع × ${rate} ÷ ${months} شهراً`);
-  }
-
-  async function saveCbi(e) {
-    e.preventDefault();
-    const rate = Number(cbiRate);
-    const months = Math.round(Number(cbiMonths));
-    if (!(rate > 0) || !(months > 0)) {
-      setCbiMsg('أدخل نسبة وأشهر صحيحة — النسبة معامل ضرب مثل 1.26');
-      return;
-    }
-    await window.api.config.set('installment_cbi', { rate, months });
-    setCbiMsg(`تم الحفظ ✔ عروض مبادرة البنك المركزي: المجموع × ${rate} ÷ ${months} شهراً`);
   }
 
   useEffect(reload, []);
@@ -284,27 +264,7 @@ export default function Settings() {
         {ahliMsg && <div className="alert alert-info" style={{ marginTop: 10, marginBottom: 0 }}>{ahliMsg}</div>}
       </form>
 
-      <form className="card" onSubmit={saveCbi}>
-        <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>🏛 مبادرة البنك المركزي</h3>
-        <p className="muted" style={{ marginTop: 0 }}>
-          خطة التقسيط الثانية اللي تظهر للبياع عند تأشير التقسيط. الافتراضي حسب المبادرة:
-          <b> فائدة 26% (معامل 1.26) لمدة 7 سنوات = 84 شهراً</b> — عدّلها هنا إذا تغيّرت شروط المبادرة.
-        </p>
-        <div className="grid-2">
-          <div className="field">
-            <label>نسبة الفائدة (معامل الضرب)</label>
-            <input type="number" step="any" min="0" value={cbiRate} onChange={(e) => setCbiRate(e.target.value)} placeholder="1.26" />
-          </div>
-          <div className="field">
-            <label>عدد الأشهر</label>
-            <input type="number" min="1" value={cbiMonths} onChange={(e) => setCbiMonths(e.target.value)} placeholder="84" />
-          </div>
-        </div>
-        <button className="btn btn-primary" type="submit">
-          حفظ إعدادات المبادرة
-        </button>
-        {cbiMsg && <div className="alert alert-info" style={{ marginTop: 10, marginBottom: 0 }}>{cbiMsg}</div>}
-      </form>
+      
 
       <form className="card" onSubmit={saveAgentKey}>
         <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>🤖 المساعد الذكي (مجاني)</h3>

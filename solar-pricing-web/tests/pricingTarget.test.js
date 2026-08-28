@@ -187,19 +187,26 @@ describe('أسعار البنود ما تنزل صفراً مهما نزل ال�
   }
 });
 
-describe('خطط التقسيط الثلاث توصل كما هي', () => {
+describe('خطط التقسيط توصل كما هي', () => {
   it('الأهلي ما ينسحق لـ«النهرين»', () => {
     const d = make({ installment: { enabled: true, plan: 'ahli', rate: 1.35, months: 60 } });
     expect(d.adjustments.installment.plan).toBe('ahli');
     expect(d.adjustments.installment.label).toBe('المصرف الأهلي العراقي');
   });
 
-  it('والنهرين والمركزي كما هما', () => {
-    for (const [plan, label] of [['company', 'مصرف النهرين'], ['cbi', 'مبادرة البنك المركزي']]) {
-      const d = make({ installment: { enabled: true, plan, rate: 1.35, months: 60 } });
-      expect(d.adjustments.installment.plan, plan).toBe(plan);
-      expect(d.adjustments.installment.label, plan).toBe(label);
-    }
+  it('والنهرين كما هو', () => {
+    const d = make({ installment: { enabled: true, plan: 'company', rate: 1.35, months: 60 } });
+    expect(d.adjustments.installment.plan).toBe('company');
+    expect(d.adjustments.installment.label).toBe('مصرف النهرين');
+  });
+
+  // «مبادرة البنك المركزي» انشالت خياراً، والعروض المحفوظة عليها تُقرأ على
+  // الأهلي — المصرف اللي كان يمولها. رجوعها للنهرين يعني ورقة معنونة لمصرف
+  // ما إله علاقة بالعرض.
+  it('وعرض محفوظ على المبادرة يرجع على الأهلي لا على النهرين', () => {
+    const d = make({ installment: { enabled: true, plan: 'cbi', rate: 1.26, months: 84 } });
+    expect(d.adjustments.installment.plan).toBe('ahli');
+    expect(d.adjustments.installment.label).toBe('المصرف الأهلي العراقي');
   });
 
   it('وخطة غريبة ترجع للنهرين بدل ما تكسر', () => {
