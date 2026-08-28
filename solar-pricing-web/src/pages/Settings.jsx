@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { getAgentKey, setAgentKey, SHARE_KEY_SQL } from '../lib/agent.js';
 import { getCurrentUsername } from '../lib/agent.js';
-import { canEditSettings, isOwnerAccount } from '../lib/permissions.js';
+import { canEditSettings } from '../lib/permissions.js';
 import StaffManager from '../components/StaffManager.jsx';
 import { EXPORT_METHODS, getExportMethod, setExportMethod } from '../lib/exportMethod.js';
 
@@ -20,9 +20,6 @@ export default function Settings() {
   const [canEdit, setCanEdit] = useState(true);
   // طريقة التصدير: تفضيل محلي لهذا الجهاز (مو بقاعدة البيانات)
   const [exportMethod, setExportMethodState] = useState(getExportMethod);
-  // خيار محرك التصدير محصور بحساب أحمد — الباقي ياخذ الافتراضي بلا ما يشوف
-  // الخيار أصلاً (قرار المستخدم بعد ما تثبّت المحرك الخفيف عنده)
-  const [isOwner, setIsOwner] = useState(false);
   // تبديل الرموز وإنشاء الحسابات: حيدر وأحمد حصراً (قرار المستخدم) — بقية
   // المشرفين يعدّلون الصلاحيات بس
   const [mayManageCodes, setMayManageCodes] = useState(false);
@@ -30,7 +27,6 @@ export default function Settings() {
     getCurrentUsername()
       .then((n) => {
         setCanEdit(canEditSettings(n));
-        setIsOwner(isOwnerAccount(n));
         const norm = String(n || '').trim().replace(/\s+/g, ' ').replace(/[أإآ]/g, 'ا');
         setMayManageCodes(norm === 'احمد' || norm === 'حيدر');
       })
@@ -160,9 +156,10 @@ export default function Settings() {
       {canEdit && <StaffManager canManageCodes={mayManageCodes} />}
 
       {/* تفضيل هذا الجهاز — برّا fieldset المعطّل عمداً: مو إعداداً مشتركاً يمس
-          الفريق، بل خيار محلي. ومحصور بحساب أحمد: بقية الحسابات تاخذ المحرك
-          الافتراضي بلا ما تشوف الخيار ولا تحتاجه. */}
-      {isOwner && (
+          الفريق، بل خيار محلي ينحفظ بذاكرة المتصفح.
+          **مفتوح لكل الحسابات**: الجهاز اللي يتعثّر عنده الرسم (يعلّق أو يطيح
+          التبويب) لازم صاحبه يبدّل طريقته بنفسه — وكان محصوراً بحساب واحد،
+          يعني أي بياع يتعطّل عنده التصدير ما عنده مخرج إلا ينتظر غيره. */}
       <div className="card">
         <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>📄 محرك تصدير ملف العرض (هذا الجهاز فقط)</h3>
         <p className="muted" style={{ marginTop: 0 }}>
@@ -190,7 +187,6 @@ export default function Settings() {
           ))}
         </div>
       </div>
-      )}
 
       <fieldset disabled={!canEdit} style={{ border: 'none', padding: 0, margin: 0, minInlineSize: 'auto' }}>
 

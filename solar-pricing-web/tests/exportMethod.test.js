@@ -6,6 +6,7 @@ import { getExportMethod, setExportMethod, prefersPrintExport, prefersSvgRender,
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const src = fs.readFileSync(path.join(HERE, '../src/lib/pdfExport.js'), 'utf8');
+const src2 = fs.readFileSync(path.join(HERE, '../src/lib/exportMethod.js'), 'utf8');
 const settings = fs.readFileSync(path.join(HERE, '../src/pages/Settings.jsx'), 'utf8');
 const structure = fs.readFileSync(path.join(HERE, '../src/lib/structure3d.js'), 'utf8');
 
@@ -63,12 +64,23 @@ describe('طريقة التصدير — تفضيل هذا الجهاز', () => {
     for (const m of EXPORT_METHODS) expect(m.hint.length).toBeGreaterThan(20);
   });
 
-  it('الخيار محصور بحساب أحمد — بقية الحسابات ما تشوفه أصلاً', () => {
-    expect(settings).toContain('isOwnerAccount');
+  it('الخيار مفتوح لكل الحسابات — ماكو حارس حساب عليه', () => {
+    // الجهاز اللي يتعثّر عنده الرسم لازم صاحبه يبدّل طريقته بنفسه. كان
+    // محصوراً بحساب واحد، يعني أي بياع يتعطّل عنده التصدير ما عنده مخرج.
+    expect(settings).toContain('محرك تصدير ملف العرض');
+    expect(settings).not.toContain('isOwner');
+    expect(settings).not.toContain('isOwnerAccount');
+  });
+
+  it('وتفضيل محلي لهذا الجهاز — ما ينحفظ بقاعدة البيانات ولا يمس حساباً ثانياً', () => {
+    // التخزين بذاكرة المتصفح: كل جهاز يدير طريقته وما يتغيّر للكل
+    expect(src2).toContain('localStorage.getItem(KEY)');
+    expect(src2).toContain('localStorage.setItem(KEY, value)');
+    expect(src2).not.toMatch(/supabase|app_config|api\.config/);
+    // والبطاقة برّا الـfieldset المعطّل — تشتغل حتى للحسابات اللي ما تعدّل إعدادات
     const card = settings.indexOf('محرك تصدير ملف العرض');
-    const guard = settings.lastIndexOf('{isOwner && (', card);
-    expect(guard).toBeGreaterThan(-1);
-    expect(card - guard).toBeLessThan(600); // الحارس ملتصق بالبطاقة
+    const fieldset = settings.indexOf('<fieldset disabled={!canEdit}');
+    expect(card).toBeLessThan(fieldset);
   });
 
   it('لو ما وصلت حزمة المحرك الخفيف نرجع للاعتيادي مو نفشل', () => {
