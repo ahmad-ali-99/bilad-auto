@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   panelAmpsFor, panelsRequired, selectInverterTiers,
   PANEL_AMPS_PER_WATT, PANEL_AMPS_REF_VOLTAGE, PANEL_REAL_YIELD,
-  DEFAULT_CHARGE_PANELS_PER_BATTERY, PREMIUM_INVERTER_HEADROOM, PV_OVERSIZE_RATIO,
+  DEFAULT_CHARGE_PANELS_PER_BATTERY, PV_OVERSIZE_RATIO,
 } from '../src/lib/calc.js';
 
 const SET = (v = 220) => ({
@@ -62,30 +62,28 @@ describe('ألواح الشحن لكل بطارية', () => {
   });
 });
 
-describe('هامش الممتاز ما يلغي سماحية تحميل الألواح', () => {
+describe('الممتاز يغطي حدّ الألواح بلا وحدات زيادة', () => {
   const call = (panelArrayW) => selectInverterTiers(INV, 105, 20, SET(230), panelArrayW, 105);
 
-  it('الممتاز ما يطلب وحدات زيادة لأن الطلب جاي من الألواح', () => {
+  it('ما يطلب وحدات زيادة لأن الطلب جاي من الألواح', () => {
     // مصفوفة 66 لوح × 650 = 42.9kW ← طلب الألواح = 42.9 ÷ 1.3 = 33kW.
-    // قبل الإصلاح: 33 × 1.3 = 42.9kW أي المصفوفة كاملة (DC/AC = 1) — القسمة
-    // والضرب يلغون بعض، فيصير الطلب أكبر من اللازم وينخطف انفيرترين.
     const t = call(66 * 650);
     expect(t.premium.units).toBe(1);
     expect(t.premium.units).toBeLessThanOrEqual(t.economy.units);
-    // والقدرة المختارة تظل تغطي حدّ الألواح الحقيقي
     expect(t.premium.units * t.premium.material.watt_or_capacity)
       .toBeGreaterThanOrEqual((66 * 650) / PV_OVERSIZE_RATIO);
   });
 
-  it('بلا ألواح الممتاز يبقى ياخذ هامشه فوق الحمل', () => {
+  // **هامش الممتاز 1.3 انشال** مع إلغاء التقييم بالـIP: التحجيم صار واحداً بكل
+  // المستويات — بالكيلوواطية اللي يحتاجها الزبون بس، بلا تكبير خاص بالممتاز.
+  it('وبلا ألواح يغطي الحمل نفسه — ماكو هامش تكبير', () => {
     const loadW = 105 * 230 * 1.25;
     const premium = call(0).premium;
-    expect(premium.units * premium.material.watt_or_capacity)
-      .toBeGreaterThanOrEqual(Math.min(loadW * PREMIUM_INVERTER_HEADROOM, 50000));
+    expect(premium.units * premium.material.watt_or_capacity).toBeGreaterThanOrEqual(loadW);
   });
 
-  it('الهامش 1.3 مسمّى وثابت', () => {
-    expect(PREMIUM_INVERTER_HEADROOM).toBe(1.3);
+  it('وسماحية تحميل الألواح 1.3 باقية — هاي غير هامش الممتاز', () => {
     expect(PV_OVERSIZE_RATIO).toBe(1.3);
   });
 });
+

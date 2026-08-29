@@ -275,7 +275,7 @@ describe('الزيادة/النقصان اليدوي بالوحدات (لوح/ب
   });
 });
 
-describe('دستور المستويات الجديد: IP قبل السعر + هويمايلز بالممتاز + معاملات البطاريات', () => {
+describe('دستور المستويات: السعر وحده + هويمايلز بالممتاز', () => {
   // مخزون موسع: انفيرترات بنفس الحجم وIP مختلف + أجهزة هويمايلز + بطاريات حدية
   const MATERIALS2 = [
     { id: 1, category: 'panel', model: 'JINKO 650', full_description: 'ألواح شمسية 650 واط', unit: 'عدد', watt_or_capacity: 650, price: 185000, qty_per_panel: null },
@@ -325,40 +325,34 @@ describe('دستور المستويات الجديد: IP قبل السعر + ه�
   // buildQuoteDraft كان حجم المصفوفة (اللي كبر بمعامل أمان الألواح) يرفع القدرة
   // المطلوبة فيصير 6kW وحدتين و12kW وحدة، فيفوز الـ12kW بأقل عدد وحدات
   // ويخفي القاعدة اللي نريد نفحصها.
-  it('المتوسط يختار أعلى IP ثم الأرخص: Growatt IP65 (650) قبل Felicity IP21 (600) وقبل Gospower IP65 (700)', () => {
+  it('الاقتصادي الأرخص والمتوسط الوسط سعراً — الـIP ما إله دخل', () => {
     const inverters = MATERIALS2.filter((m) => m.category === 'inverter');
     const tiers = calcModule.selectInverterTiers(
       inverters, 18, 18, { systemVoltage: 220, inverterSafetyFactor: 1.25 }, 0, 18,
     );
-    expect(tiers.standard.material.model).toBe('Growatt 6kW');
-    // والاقتصادي يبقى الأرخص (Felicity IP21)
-    expect(tiers.economy.material.model).toBe('Felicity 6kW');
+    expect(tiers.economy.material.model).toBe('Felicity 6kW');   // 600,000 أرخص واحد
+    expect(tiers.economy.totalPrice).toBeLessThanOrEqual(tiers.standard.totalPrice);
+    expect(tiers.premium.material.brand).toBe('hoymiles');
   });
 
-  it('الممتاز ≤120 أمبير: هويمايلز بتكبير الحجم لا التعديد — هامش ≥30% وبلا بطارية احتياط', () => {
+  // **الممتاز هويمايلز بالحجم اللي يحتاجه الزبون بس** — بلا هامش 1.3 وبلا
+  // تكبير. قبل هذا كان يضرب الحمل بـ1.3 فيطلع جهازين بدل واحد.
+  it('الممتاز: انفيرتر وبطارية هويمايلز، وبأقل عدد وحدات يكفي الحاجة', () => {
     const options = opts2(borderline);
     const draft = buildQuoteDraft(options, { tier: 'premium', cableMeters: {} });
-    // الدرجة أولاً: أعلى IP بالمخزون هو 66 (HIS6L)، فالممتاز ياخذه — والمطلوب
-    // ~6000W ×1.3 = 7800 يحتاج منه وحدتين. (قبل قاعدة المواصفة كان ياخذ
-    // HYS-12kW IP65 بوحدة وحدة لأن الترتيب كان بالحجم والسعر.)
-    expect(draft.inverterTiers.premium.material.model).toBe('HIS6L-G3S');
-    expect(draft.inverterTiers.premium.units).toBe(2);
-    expect(draft.inverterTiers.premium.units * draft.inverterTiers.premium.material.watt_or_capacity)
-      .toBeGreaterThanOrEqual(6000 * 1.3);
-    // البطارية: الأكبر سعة (هويمايلز 16kWh). العدد وحدتان بمعامل الممتاز 1.25 —
-    // الحاجة 15.84kWh ×1.25 ÷0.9 = 22kWh، و16kWh وحدة ما تكفيها.
+    expect(draft.inverterTiers.premium.material.brand).toBe('hoymiles');
     expect(options.batteryTiers.premium.material.model).toBe('LB16D-G3');
-    expect(options.batteryTiers.premium.units).toBe(2);
     expect(options.batteryTiers.premium.extraUnit).toBeUndefined();
-    // والممتاز أكبر فعلاً من الاقتصادي — هذا كل المقصود من المستوى
-    expect(options.batteryTiers.premium.units * options.batteryTiers.premium.material.watt_or_capacity)
-      .toBeGreaterThan(options.batteryTiers.economy.units * options.batteryTiers.economy.material.watt_or_capacity);
+    // والتغطية تكفي الحاجة الحقيقية بلا زيادة مفروضة
+    const bank = options.batteryTiers.premium.units * options.batteryTiers.premium.material.watt_or_capacity;
+    expect(bank * SETTINGS_ROW.dod).toBeGreaterThanOrEqual(17.6);
   });
 
-  it('الممتاز فوق 120 أمبير يرجع للقاعدة العامة (مو مجبور هويمايلز)', () => {
+  // **ماكو سقف 120 أمبير**: هويمايلز تنطبق بأي حجم ما دامت تغطي الحاجة بأقل
+  // عدد وحدات؛ وإذا ما تغطيها (٩ أجهزة مقابل جهازين Deye) ترجع القاعدة العامة.
+  it('وبالأحجام الكبيرة يبقى أقل عدد وحدات هو الحاكم', () => {
     const options = opts2({ roofAreaM2: 500, ampDay: 150, ampNight: 0, nightSupplyHours: null });
     const draft = buildQuoteDraft(options, { tier: 'premium', cableMeters: {} });
-    // الحمل 150×220×1.25=41.25kW ← هويمايلز 6kW يحتاج 9 أجهزة بينما Deye 50kW وحدتين أرخص
     expect(draft.inverterTiers.premium.material.model).toBe('Deye 50kW');
   });
 
@@ -551,21 +545,21 @@ describe('معامل أمان الألواح 1.25', () => {
 
 // طلب المستخدم: الممتاز كان يطلع نفس الاقتصادي لما تنحصر المواد بماركة وحدة.
 // لازم يطلع انفيرتر أكبر وبطاريات أكبر وألواح شحن أكثر.
-describe('الممتاز أكبر فعلاً — مو الأرخص', () => {
+describe('الممتاز: هويمايلز بالحجم اللي يحتاجه الزبون', () => {
   const { selectInverterTiers, selectBatteryTiers, selectPanelTiers } = calcModule;
   const S = { systemVoltage: 220, inverterSafetyFactor: 1.25, dod: 0.9, chargePanelsPerBattery: 1.5 };
 
-  it('انفيرتر: بنفس الماركة ياخذ الأكبر قدرة مو الأرخص اللي يمرّ', () => {
+  it('انفيرتر: الأصغر اللي يكفي الحاجة — بلا تكبير', () => {
     const inv = [
       { id: 1, category: 'inverter', brand: 'Deye', model: 'D 6kW', full_description: 'IP65', watt_or_capacity: 6000, price: 900000 },
       { id: 2, category: 'inverter', brand: 'Deye', model: 'D 8kW', full_description: 'IP65', watt_or_capacity: 8000, price: 1100000 },
     ];
-    // 20 أمبير ← 5500W مطلوب ← ×1.3 = 7150: الاثنان يوصلون بوحدة وحدة (6kW لا،
-    // 6000 < 7150 فيحتاج وحدتين) — فالممتاز ياخذ 8kW وحدة وحدة
+    // 20 أمبير ← 5500W مطلوب. **بلا هامش 1.3**: 6kW تكفي بوحدة وحدة، فالممتاز
+    // ياخذ الأصغر اللي يكفي مو الأكبر — «بالكيلوواطية اللي يحتاجها الزبون بس».
     const t = selectInverterTiers(inv, 20, 20, S, 0, 20);
-    expect(t.premium.material.model).toBe('D 8kW');
+    expect(t.premium.material.model).toBe('D 6kW');
     expect(t.premium.units).toBe(1);
-    // والاقتصادي ياخذ الأرخص
+    expect(t.premium.units * t.premium.material.watt_or_capacity).toBeGreaterThanOrEqual(20 * 220 * 1.25);
     expect(t.economy.material.model).toBe('D 6kW');
   });
 
@@ -575,7 +569,7 @@ describe('الممتاز أكبر فعلاً — مو الأرخص', () => {
       { id: 2, category: 'inverter', brand: 'Deye', model: 'D 50kW', full_description: 'IP65', watt_or_capacity: 50000, price: 6300000 },
     ];
     const t = selectInverterTiers(inv, 20, 20, S, 0, 20);
-    expect(t.premium.material.model, '50kW = 9× الطلب — فوق السقف').toBe('D 8kW');
+    expect(t.premium.material.model, '50kW أكبر بكثير من الحاجة').toBe('D 8kW');
   });
 
   it('بطاريات: الممتاز أكبر من الاقتصادي بنفس الماركة', () => {
@@ -588,17 +582,17 @@ describe('الممتاز أكبر فعلاً — مو الأرخص', () => {
     expect(bank(t.premium)).toBeGreaterThan(bank(t.economy));
   });
 
-  it('ألواح: الممتاز يزيد ألواح الشحن ربعاً', () => {
+  // **بلا زيادة ألواح للممتاز**: التحجيم واحد بكل المستويات
+  it('ألواح: الممتاز نفس عدد الاقتصادي بالضبط — ماكو ربع زيادة', () => {
     const panels = [{ id: 1, category: 'panel', model: 'J650', watt_or_capacity: 650, price: 185000 }];
     const eco = selectPanelTiers(panels, 15, 4, S, 'economy');
     const pre = selectPanelTiers(panels, 15, 4, S, 'premium');
-    expect(eco.economy.chargePanels).toBe(6);      // ceil(4 × 1.5)
-    expect(pre.premium.chargePanels).toBe(8);      // ceil(4 × 1.5 × 1.25)
-    // وألواح التغذية ما تتأثر بالمستوى
+    expect(pre.premium.chargePanels).toBe(eco.economy.chargePanels);
     expect(pre.premium.feedPanels).toBe(eco.economy.feedPanels);
+    expect(pre.premium.units).toBe(eco.economy.units);
   });
 
-  it('العرض الكامل: الممتاز أكبر من الاقتصادي بالثلاثة سوية', () => {
+  it('العرض الكامل: الممتاز ما ينزل عن الاقتصادي بالتحجيم', () => {
     const mats = [
       { id: 1, category: 'panel', brand: 'Deye', model: 'D 650', full_description: 'لوح', unit: 'عدد', watt_or_capacity: 650, price: 185000 },
       { id: 2, category: 'inverter', brand: 'Deye', model: 'D 6kW', full_description: 'انفيرتر IP65', unit: 'عدد', watt_or_capacity: 6000, price: 900000 },
@@ -612,8 +606,9 @@ describe('الممتاز أكبر فعلاً — مو الأرخص', () => {
     });
     const eco = buildQuoteDraft(opts, { tier: 'economy', cableMeters: {} });
     const pre = buildQuoteDraft(opts, { tier: 'premium', cableMeters: {} });
-    expect(pre.counts.panel, 'ألواح الممتاز أكثر').toBeGreaterThan(eco.counts.panel);
-    expect(pre.total, 'الممتاز أغلى — مو نفس الاقتصادي').toBeGreaterThan(eco.total);
+    // التحجيم واحد بكل المستويات الآن — الفرق بالماركة والسعر لا بالعدد
+    expect(pre.counts.panel, 'ألواح الممتاز مثل الاقتصادي').toBe(eco.counts.panel);
+    expect(pre.total, 'الممتاز ما ينزل عن الاقتصادي').toBeGreaterThanOrEqual(eco.total);
     // سعة البنك وقدرة الانفيرتر بالكيلوواط — مو مجرد عدد وحدات
     const bankKwh = (o, tier) => o.batteryTiers[tier].units * o.batteryTiers[tier].material.watt_or_capacity;
     // بعد إلغاء معامل البطاريات: البنك ينحسب بالحاجة الحقيقية لكل المستويات، فما
@@ -623,7 +618,7 @@ describe('الممتاز أكبر فعلاً — مو الأرخص', () => {
     expect(bankKwh(opts, 'premium'), 'بنك الممتاز ما ينزل عن الاقتصادي').toBeGreaterThanOrEqual(bankKwh(opts, 'economy'));
     const invW = (d) => d.inverterTiers.premium.units * d.inverterTiers.premium.material.watt_or_capacity;
     const invEcoW = (d) => d.inverterTiers.economy.units * d.inverterTiers.economy.material.watt_or_capacity;
-    expect(invW(pre), 'قدرة انفيرتر الممتاز أكبر').toBeGreaterThan(invEcoW(eco));
+    expect(invW(pre), 'قدرة انفيرتر الممتاز تغطي الحاجة').toBeGreaterThanOrEqual(invEcoW(eco));
   });
 });
 
@@ -655,13 +650,15 @@ describe('الاقتصادي: قطعتين أصغر إذا أرخص', () => {
     expect(tiers.economy.units).toBe(1);
   });
 
-  it('الـIP يبقى قبل السعر: قطعتين IP65 أرخص ما تسحبن الاقتصادي من IP21', () => {
+  // **السعر يفوز**: قبل هذا كان الـIP يتقدم عليه، فيطلع «اقتصادي» أغلى بالضعف
+  it('قطعتان أرخص تسحبن الاقتصادي مهما كان الـIP', () => {
     const inverters = [
       { id: 1, category: 'inverter', brand: 'A', model: 'A 12kW', full_description: 'انفيرتر IP21', watt_or_capacity: 12000, price: 2600000 },
       { id: 2, category: 'inverter', brand: 'B', model: 'B 6kW',  full_description: 'انفيرتر IP65', watt_or_capacity: 6000,  price: 900000 },
     ];
     const tiers = selectInverterTiers(inverters, 40, 40, S, 0, 40);
-    expect(tiers.economy.material.id, 'IP21 يفوز حتى لو أغلى').toBe(1);
+    expect(tiers.economy.material.id, 'الأرخص مجموعاً').toBe(2);
+    expect(tiers.economy.totalPrice).toBe(1800000);
   });
 
   it('السقف: ثلاث قطع أرخص ما تنتخب — وحدة زيادة بس على أقل عدد', () => {
@@ -698,38 +695,38 @@ describe('الاقتصادي: قطعتين أصغر إذا أرخص', () => {
   });
 });
 
-describe('الاقتصادي انفيرترات: أدنى فئة IP (تبدأ من IP21) ثم الأرخص', () => {
+// كان هنا قسم «الاقتصادي = أدنى فئة IP» — انشال كله مع إلغاء التقييم بالـIP.
+// محله: الاقتصادي = الأرخص، مهما كانت درجة الحماية.
+describe('الاقتصادي = الأرخص، والـIP ما يدخل بالحساب', () => {
   const { selectInverterTiers } = calcModule;
   const S = { systemVoltage: 220, inverterSafetyFactor: 1.25 };
 
-  it('IP66 أرخص قليلاً من محلي بلا IP → الاقتصادي ياخذ البلا IP', () => {
+  it('IP66 أرخص من محلي بلا IP → الاقتصادي ياخذ الأرخص (IP66)', () => {
     const inverters = [
-      { id: 1, category: 'inverter', model: 'hoymiles HYS-12kW', full_description: 'انفيرتر هويمايلز IP66', watt_or_capacity: 12000, price: 2553000 },
+      { id: 1, category: 'inverter', model: 'HYS-12kW', full_description: 'انفيرتر هويمايلز IP66', watt_or_capacity: 12000, price: 2553000 },
       { id: 2, category: 'inverter', model: 'Hybrid 12kW LV', full_description: 'انفيرتر هجين 12 كيلو واط', watt_or_capacity: 12000, price: 2600000 },
     ];
     const tiers = selectInverterTiers(inverters, 40, 40, S, 0, 40);
-    expect(tiers.economy.material.id).toBe(2);
+    expect(tiers.economy.material.id).toBe(1);
   });
 
-  it('IP21 صريح موجود وIP65 أرخص → الاقتصادي ياخذ IP21', () => {
+  it('وIP65 أرخص من IP21 → الاقتصادي ياخذ IP65', () => {
     const inverters = [
       { id: 1, category: 'inverter', model: 'A 6kW', full_description: 'انفيرتر IP65', watt_or_capacity: 6000, price: 600000 },
       { id: 2, category: 'inverter', model: 'B 6kW', full_description: 'انفيرتر IP21', watt_or_capacity: 6000, price: 650000 },
     ];
     const tiers = selectInverterTiers(inverters, 15, 15, S, 0, 15);
-    expect(tiers.economy.material.id).toBe(2);
+    expect(tiers.economy.material.id).toBe(1);
   });
 
-  it('IP65 وIP66 درجتان مختلفتان: الاقتصادي ياخذ 65 حتى لو 66 أرخص', () => {
-    // قبل قاعدة المواصفة كان اكو سقف يعتبر IP66 = IP65 فيفصل السعر — انشال،
-    // لأن المستخدم قرر إن الترتيب بالمواصفة مو بالسعر.
+  it('**والاقتصادي ما يطلع أغلى من الممتاز أبداً** — كان يصير بقاعدة الـIP', () => {
     const inverters = [
       { id: 1, category: 'inverter', model: 'A 6kW', full_description: 'انفيرتر IP65', watt_or_capacity: 6000, price: 1600000 },
       { id: 2, category: 'inverter', model: 'B 6kW', full_description: 'انفيرتر IP66', watt_or_capacity: 6000, price: 1265000 },
     ];
     const tiers = selectInverterTiers(inverters, 15, 15, S, 0, 15);
-    expect(tiers.economy.material.id, 'IP65 = الدرجة الأدنى').toBe(1);
-    expect(tiers.premium.material.id, 'IP66 = الدرجة الأعلى').toBe(2);
+    expect(tiers.economy.totalPrice).toBeLessThanOrEqual(tiers.premium.totalPrice);
+    expect(tiers.economy.material.id, 'الأرخص').toBe(2);
   });
 });
 
