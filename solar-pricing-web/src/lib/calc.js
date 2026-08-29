@@ -158,14 +158,10 @@ function classifyTiers(combos) {
 // ماكو تكبير خاص بالممتاز ولا هامش زيادة. «بالكيلوواطية اللي يحتاجها الزبون بس».
 //
 // والمستويات تتفرق بالسعر وحده:
-//   economy  → الأرخص (بسقف وحدة زيادة على أقل عدد ممكن)
-//   standard → الوسط سعراً ضمن أقل عدد وحدات
-//   premium  → **هويمايلز تلقائياً** بأي حجم؛ وإذا ماكو هويمايلز يغطي الحاجة
-//              ياخذ الأعلى سعراً ضمن أقل عدد وحدات.
-
-// **الممتاز يروح لهويمايلز تلقائياً** بأي أمبيرية (قرار المستخدم). كان محصوراً
-// بـ120 أمبير وفوقها يرجع لكل الماركات — والحصر بقي محسوباً بالفولباك نفسه:
-// إذا ماكو هويمايلز يغطي الحاجة، premiumPool يرجّع كل المرشحين بلا كسر.
+//   economy  → الأرخص
+//   standard → الوسط سعراً
+//   premium  → **هويمايلز تلقائياً** بأي أمبيرية (كان محصوراً بـ120 أمبير)؛
+//              وإذا ماكو هويمايلز بالمجموعة ياخذ الأعلى سعراً.
 
 // معاملات أمان البطاريات الافتراضية لكل مستوى (تتغير من الإعدادات — app_config).
 // الاقتصادي والمتوسط أقل من 1 = **تسامح**: يسمحون لبطارية 16kWh تغطي حاجة 17.6kWh
@@ -207,15 +203,6 @@ function midByPrice(group) {
   return sorted[Math.floor((sorted.length - 1) / 2)];
 }
 
-// التوليفات الصالحة: مادة تحتاج تسع وحدات بالتوازي مو خياراً مهما كان سعرها.
-// السقف وحدة زيادة على أقل عدد ممكن.
-function viableCombos(combos) {
-  if (!combos.length) return combos;
-  const minUnits = Math.min(...combos.map((c) => c.units));
-  const within = combos.filter((c) => c.units <= minUnits + ECONOMY_EXTRA_UNITS);
-  return within.length ? within : combos;
-}
-
 const capacityOf = (m) => Number(m.watt_or_capacity) || 0;
 
 // ملاحظة مقصودة: ماكو «حارس» يمنع أن يطلع الاقتصادي أغلى من المتوسط.
@@ -229,79 +216,80 @@ function fewestUnitsGroup(combos) {
   return combos.filter((c) => c.units === minUnits);
 }
 
-// الاقتصادي: أرخص كلفة فعلية، مو أقل عدد وحدات. قرار الشركة صراحةً — إذا
-// وحدتين أصغر أرخص من وحدة كبيرة تنتخب الوحدتين. السقف وحدة زيادة على أقل عدد
-// ممكن (١ ← ٢ قطع، ٣ ← ٤) حتى ما تنبني منظومة من ست قطع صغيرة صيانتها وجع راس.
-const ECONOMY_EXTRA_UNITS = 1;
-function economyPool(combos) {
-  const minUnits = Math.min(...combos.map((c) => c.units));
-  const cap = minUnits + ECONOMY_EXTRA_UNITS;
-  const within = combos.filter((c) => c.units <= cap);
-  return within.length ? within : combos;
+// ═══ التحجيم الصحيح: القدرة تلزم قريبة من حاجة الزبون ═══════════════════
+// قرار المستخدم: «الأمبيرية اللي أريدها بالاقتصادي ما يتجاوزها، تكون قريبة
+// جداً أو متساوية… وحتى بالمتوسط تبقى الكيلوواطية نفسها أو أكبر بشوي، بس
+// سعر أعلى… ما يطفر يختار جهازين أو كيلوواطية عالية جداً».
+//
+// يعني **القدرة ما تفرّق المستويات، السعر يفرّقها**. كل المستويات تشتغل على
+// نفس مجموعة المرشحين: اللي قدرتها الكلية قريبة من المطلوب، وبأقل عدد أجهزة.
+//
+// السقف: القدرة الكلية ما تتجاوز المطلوب بأكثر من النصف. بلا هذا كان
+// الاقتصادي بـ105 أمبير ياخذ انفيرتر 55kW لحاجة 29kW لمجرد أنه الأرخص،
+// والبطاريات تاخذ كابينة 261kWh لحاجة 98kWh لمجرد أنها وحدة واحدة.
+const MAX_OVERSIZE = 1.5;
+
+// يحصر المرشحين باللي قدرتهم الكلية ضمن السقف. وإذا ماكو ولا واحد يمر
+// (كل الأجهزة أكبر من الحاجة بكثير) ناخذ **الأقرب للمطلوب** بدل ما نكسر.
+function rightSized(combos, required, totalCapOf) {
+  if (!(required > 0) || !combos.length) return combos;
+  const within = combos.filter((c) => totalCapOf(c) <= required * MAX_OVERSIZE);
+  if (within.length) return within;
+  const closest = Math.min(...combos.map(totalCapOf));
+  return combos.filter((c) => totalCapOf(c) === closest);
 }
 
-// الأرخص داخل سقف الاقتصادي، وعند تساوي السعر أقل عدد وحدات
-function pickCheapestWithinEconomyCap(combos) {
-  return [...economyPool(combos)].sort((a, b) => (a.totalPrice - b.totalPrice) || (a.units - b.units))[0];
+// مجموعة الاختيار النهائية: محجّمة صح، وبأقل عدد أجهزة.
+// **أقل عدد أجهزة مطلق** — ماكو سماح بوحدة زيادة بعد: كان الاقتصادي ياخذ
+// جهازين أصغر لمجرد أنهما أرخص، والمستخدم رفضها صراحةً.
+function tierPool(combos, required, totalCapOf) {
+  return fewestUnitsGroup(rightSized(combos, required, totalCapOf));
 }
 
-function pickFewestThenCheapest(combos) {
-  return fewestUnitsGroup(combos).sort((a, b) => a.totalPrice - b.totalPrice)[0];
+const byPrice = (list) => [...list].sort((a, b) => (a.totalPrice - b.totalPrice) || (a.units - b.units));
+
+// الاقتصادي الأرخص، والمتوسط الوسط سعراً، والممتاز هويمايلز (وإلا الأغلى) —
+// كلهم من نفس المجموعة المحجّمة، فالكيلوواطية تبقى وحدة والسعر هو الفارق.
+function pickCheapest(pool) { return byPrice(pool)[0]; }
+function pickMidPrice(pool) { return midByPrice(pool); }
+
+// الممتاز هويمايلز: ندوّر عليها بالمجموعة المحجّمة أولاً، وإذا ما طلعت بيها
+// نوسّع **بنفس عدد الأجهزة بالضبط** — لأن سقف التحجيم الضيّق ممكن يستبعد
+// هويمايلز لفرق سعة بسيط فيضيع المستوى كله. التوسيع محصور بنفس العدد عمداً:
+// بلا هذا الحصر كانت كابينة 215kWh (وحدة واحدة، وهويمايلز) تنخطف للممتاز
+// بعرض حاجته 29kWh.
+function pickPremium(pool, sameUnits = pool) {
+  const inPool = pool.filter((c) => isHoymiles(c.material));
+  if (inPool.length) return byPrice(inPool)[0];
+  const wider = sameUnits.filter((c) => isHoymiles(c.material));
+  if (wider.length) return byPrice(wider)[0];
+  return byPrice(pool)[pool.length - 1];
 }
 
-function pickFewestThenMid(combos) {
-  return midByPrice(fewestUnitsGroup(combos));
-}
-
-// المتوسط (داخل درجته): أقل عدد وحدات ← **أصغر جهاز يكفي** ← الأرخص.
-// هويته درجة الحماية مو الحجم — التكبير شغل الممتاز. بلا هذا كان المتوسط ياخذ
-// انفيرتر 50kW لبيت 18 أمبير لمجرد إنه أكبر جهاز بنفس الدرجة.
-// وما عاد بيه سقف IP: كان محطوطاً لسبب سعري («ما نخلي جهازاً أغلى يسحب المتوسط»)
-// وهذا بالضبط اللي القاعدة الجديدة تمنعه.
-function pickFewestThenSmallest(combos) {
-  return fewestUnitsGroup(combos)
-    .sort((a, b) => (capacityOf(a.material) - capacityOf(b.material)) || (a.totalPrice - b.totalPrice))[0];
-}
-
-function assignTiers(combos, premiumPick, standardPick = pickFewestThenMid, economyPick = pickFewestThenCheapest) {
+// يوزّع المستويات على مجموعة مرشحين **واحدة** — القدرة نفسها للثلاثة،
+// والفرق بالسعر وحده.
+function assignTiers(combos, required, totalCapOf) {
   if (combos.length === 0) {
     return { economy: null, standard: null, premium: null, singleOption: false, insufficient: true, all: [] };
   }
   const sorted = [...combos].sort((a, b) => a.totalPrice - b.totalPrice);
-  if (sorted.length === 1) {
-    return { economy: sorted[0], standard: sorted[0], premium: premiumPick ? premiumPick(sorted) : sorted[0], singleOption: true, insufficient: false, all: sorted };
+  const pool = tierPool(combos, required, totalCapOf);
+  const poolUnits = pool[0]?.units;
+  const sameUnits = combos.filter((c) => c.units === poolUnits);
+  if (pool.length === 1) {
+    return {
+      economy: pool[0], standard: pool[0], premium: pickPremium(pool, sameUnits),
+      singleOption: sorted.length === 1, insufficient: false, all: sorted,
+    };
   }
   return {
-    economy: economyPick(sorted),
-    standard: standardPick(sorted),
-    premium: premiumPick(sorted),
+    economy: pickCheapest(pool),
+    standard: pickMidPrice(pool),
+    premium: pickPremium(pool, sameUnits),
     singleOption: false,
     insufficient: false,
     all: sorted,
   };
-}
-
-// حصر مرشحات الممتاز بهويمايلز إذا حجم المنظومة ≤120 أمبير واكو مرشح هويمايلز
-function premiumPool(combos) {
-  // هويمايلز تفوز إذا **تغطي الحاجة بعدد وحدات معقول** — ضمن وحدة زيادة على
-  // أقل عدد ممكن من كل المخزون. بلا هذا الشرط كان الممتاز بمنظومة 150 أمبير
-  // يبني جدار أربعة أجهزة هويمايلز 12kW بدل جهاز واحد 50kW يغطيها، وهذا يناقض
-  // «بالكيلوواطية اللي يحتاجها الزبون بس». وإذا ماكو هويمايلز يمر بالشرط
-  // نرجع لكل المرشحين بلا كسر.
-  const hoymiles = viableCombos(combos).filter((c) => isHoymiles(c.material));
-  return hoymiles.length ? hoymiles : combos;
-}
-
-// premium بطاريات: **هويمايلز تلقائياً** وبحجم الحاجة بس. كان ياخذ الأكبر سعة
-// ضمن سقف 3× الحاجة — تكبيرٌ ما طلبه الزبون. صار: أقل عدد وحدات ← الأصغر سعة
-// اللي تكفي ← الأعلى سعراً عند التساوي (الممتاز يبقى الأرقى بين المتطابقات).
-// سقف التكبير العام (3× الحاجة) باقٍ بـautoPool — يمنع كابينة 215kWh تنخطف
-// لعرض بيت صغير لمجرد أنها وحدة وحدة.
-const PREMIUM_OVERSIZE_CAP = 3;
-
-function pickBatteryPremium(combos) {
-  return fewestUnitsGroup(combos)
-    .sort((a, b) => (capacityOf(a.material) - capacityOf(b.material)) || (b.totalPrice - a.totalPrice))[0];
 }
 
 // نتيجة «الفئة غير مطلوبة بهذا العرض» — منظومة نهارية بلا بطاريات أو بلا ألواح:
@@ -341,20 +329,15 @@ function selectBatteryTiers(batteryMaterials, ampNight, nightSupplyHours, settin
   // الاختيار التلقائي (حتى كابينة 215kWh ما تنخطف بأي مستوى لعرض صغير لمجرد أنها
   // وحدة واحدة)، وتبقى متاحة بقوائم التبديل اليدوي allByTier كما هي
   const neededKwhFor = (factor) => (((ampNight * settings.systemVoltage * nightSupplyHours) / 1000) * factor) / settings.dod;
-  const autoPool = (combos, factor) => {
-    const needed = neededKwhFor(factor);
-    if (!(needed > 0)) return combos;
-    const within = combos.filter((c) => c.units * c.material.watt_or_capacity <= needed * PREMIUM_OVERSIZE_CAP);
-    return within.length ? within : combos;
+  // نفس دستور الانفيرتر: مجموعة واحدة محجّمة على حاجة الزبون، والسعر يفرّق
+  const bankKwh = (c) => c.units * c.material.watt_or_capacity;
+  const tiers = {
+    economy: assignTiers(allByTier.economy, neededKwhFor(f.economy), bankKwh).economy,
+    standard: assignTiers(allByTier.standard, neededKwhFor(f.standard), bankKwh).standard,
+    premium: assignTiers(allByTier.premium, neededKwhFor(f.premium), bankKwh).premium,
   };
-  // السعر وحده يفرّق المستويات — ماكو سلّم IP ولا سلّم سعة
-  const ecoPool = autoPool(allByTier.economy, f.economy);
-  const stdPool = autoPool(allByTier.standard, f.standard);
-  const prePool = autoPool(allByTier.premium, f.premium);
   return {
-    economy: pickCheapestWithinEconomyCap(ecoPool),
-    standard: pickFewestThenMid(stdPool),
-    premium: pickBatteryPremium(premiumPool(prePool)),
+    ...tiers,
     singleOption: allByTier.standard.length === 1,
     insufficient: false,
     all: allByTier.standard,
@@ -401,17 +384,9 @@ function selectInverterTiers(inverterMaterials, ampDay, ampNight, settings, pane
     combos.push({ material, units, totalPrice: units * material.price });
   }
 
-  // premium: **هويمايلز تلقائياً**، وبالحجم اللي يحتاجه الزبون بس — بلا هامش
-  // تكبير. كان الممتاز يضرب الحمل بـ1.3 ويكبّر الجهاز، فيطلع انفيرتر أكبر من
-  // حاجة الزبون. ضمن أقل عدد وحدات ناخذ **الأصغر اللي يكفي**، والسعر فاصل أخير.
-  function pickInverterPremium(all) {
-    const pool = premiumPool(all);
-    return fewestUnitsGroup(pool)
-      .sort((a, b) => (capacityOf(a.material) - capacityOf(b.material)) || (b.totalPrice - a.totalPrice))[0];
-  }
-
-  // السعر وحده يفرّق المستويات — ماكو سلّم IP
-  return assignTiers(combos, pickInverterPremium, pickFewestThenMid, pickCheapestWithinEconomyCap);
+  // القدرة الكلية للتوليفة (واط) — عليها يتحدد التحجيم الصحيح
+  const totalW = (c) => c.units * c.material.watt_or_capacity;
+  return assignTiers(combos, requiredW, totalW);
 }
 
 // القدرة الفعلية للتوليفة: ساعات تجهيز الليل من بنك البطاريات، وأمبير النهار اللي

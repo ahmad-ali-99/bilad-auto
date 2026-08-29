@@ -65,13 +65,16 @@ describe('ألواح الشحن لكل بطارية', () => {
 describe('الممتاز يغطي حدّ الألواح بلا وحدات زيادة', () => {
   const call = (panelArrayW) => selectInverterTiers(INV, 105, 20, SET(230), panelArrayW, 105);
 
-  it('ما يطلب وحدات زيادة لأن الطلب جاي من الألواح', () => {
+  it('يغطي حدّ الألواح بأقرب قدرة للمطلوب', () => {
     // مصفوفة 66 لوح × 650 = 42.9kW ← طلب الألواح = 42.9 ÷ 1.3 = 33kW.
+    // **الأقرب للمطلوب يفوز**: 2×20kW = 40kW (1.21×) أقرب من 1×50kW (1.52×،
+    // فوق السقف) — قرار المستخدم «ما يتجاوزها، تكون قريبة جداً أو متساوية».
     const t = call(66 * 650);
-    expect(t.premium.units).toBe(1);
-    expect(t.premium.units).toBeLessThanOrEqual(t.economy.units);
-    expect(t.premium.units * t.premium.material.watt_or_capacity)
-      .toBeGreaterThanOrEqual((66 * 650) / PV_OVERSIZE_RATIO);
+    const totalW = (c) => c.units * c.material.watt_or_capacity;
+    expect(totalW(t.premium)).toBeGreaterThanOrEqual((66 * 650) / PV_OVERSIZE_RATIO);
+    expect(totalW(t.premium)).toBeLessThan(50000);
+    // وكل المستويات على نفس القدرة — الفرق بالسعر
+    expect(totalW(t.economy)).toBe(totalW(t.premium));
   });
 
   // **هامش الممتاز 1.3 انشال** مع إلغاء التقييم بالـIP: التحجيم صار واحداً بكل

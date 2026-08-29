@@ -556,11 +556,14 @@ describe('الممتاز: هويمايلز بالحجم اللي يحتاجه ا
     ];
     // 20 أمبير ← 5500W مطلوب. **بلا هامش 1.3**: 6kW تكفي بوحدة وحدة، فالممتاز
     // ياخذ الأصغر اللي يكفي مو الأكبر — «بالكيلوواطية اللي يحتاجها الزبون بس».
+    // 5500W مطلوب، والسقف 8250W: 6kW و8kW الاثنان بجهاز واحد وضمن السقف،
+    // فالمجموعة وحدة والفرق بالسعر — الاقتصادي 6kW والممتاز (بلا هويمايلز) 8kW.
     const t = selectInverterTiers(inv, 20, 20, S, 0, 20);
-    expect(t.premium.material.model).toBe('D 6kW');
-    expect(t.premium.units).toBe(1);
-    expect(t.premium.units * t.premium.material.watt_or_capacity).toBeGreaterThanOrEqual(20 * 220 * 1.25);
     expect(t.economy.material.model).toBe('D 6kW');
+    expect(t.premium.material.model).toBe('D 8kW');
+    expect(t.economy.units).toBe(1);
+    expect(t.premium.units).toBe(1);
+    expect(t.economy.units * t.economy.material.watt_or_capacity).toBeGreaterThanOrEqual(20 * 220 * 1.25);
   });
 
   it('انفيرتر: الممتاز ما يقفز لجهاز ضخم — سقف ضعف الطلب', () => {
@@ -622,81 +625,71 @@ describe('الممتاز: هويمايلز بالحجم اللي يحتاجه ا
   });
 });
 
-describe('الاقتصادي: قطعتين أصغر إذا أرخص', () => {
+// **القاعدة انعكست بقرار المستخدم**: كان الاقتصادي ياخذ جهازين أصغر إذا كانا
+// أرخص. صار: «ما يطفر انه يختار جهازين» — أقل عدد أجهزة أولاً، والقدرة قريبة
+// من المطلوب، والسعر يفرّق المستويات داخل هذي المجموعة.
+describe('ماكو جهازان إذا جهاز واحد يكفي', () => {
   const { selectInverterTiers, selectBatteryTiers } = calcModule;
   const S = { systemVoltage: 220, inverterSafetyFactor: 1.25, dod: 0.9, nightCoverageHours: 8 };
 
-  it('انفيرتر: 2×6kW أرخص من 1×12kW → الاقتصادي ياخذ الاثنين', () => {
+  it('انفيرتر: 2×6kW أرخص من 1×12kW — ومع هذا ياخذ الجهاز الواحد', () => {
     const inverters = [
-      { id: 1, category: 'inverter', brand: 'Deye', model: 'D 12kW', full_description: 'انفيرتر IP21', watt_or_capacity: 12000, price: 2600000 },
-      { id: 2, category: 'inverter', brand: 'Deye', model: 'D 6kW',  full_description: 'انفيرتر IP21', watt_or_capacity: 6000,  price: 1100000 },
+      { id: 1, category: 'inverter', brand: 'Deye', model: 'D 12kW', full_description: 'انفيرتر', watt_or_capacity: 12000, price: 2600000 },
+      { id: 2, category: 'inverter', brand: 'Deye', model: 'D 6kW',  full_description: 'انفيرتر', watt_or_capacity: 6000,  price: 1100000 },
     ];
     const tiers = selectInverterTiers(inverters, 40, 40, S, 0, 40);
-    expect(tiers.economy.material.id).toBe(2);
-    expect(tiers.economy.units).toBe(2);
-    expect(tiers.economy.totalPrice).toBe(2200000);
-    // والقدرة الكلية تغطي الطلب فعلاً — مو مجرد أرخص
+    expect(tiers.economy.units, 'جهاز واحد').toBe(1);
+    expect(tiers.economy.material.id).toBe(1);
     expect(tiers.economy.units * tiers.economy.material.watt_or_capacity)
       .toBeGreaterThanOrEqual(40 * 220 * 1.25);
   });
 
-  it('انفيرتر: 2×6kW أغلى → يبقى الجهاز الكبير الواحد', () => {
+  // **قرب القدرة يتقدّم على عدد الأجهزة** لما الفرق كبير: الحاجة 9.78kWh،
+  // فبطارية 16kWh وحدة = 1.64× (فوق السقف)، وبطاريتان 5kWh = 10kWh أي 1.02×.
+  // هذا نفس مقصد المستخدم «ما يتجاوزها، تكون قريبة جداً أو متساوية».
+  it('بطاريتان 5kWh (10kWh) تفوزن على وحدة 16kWh — الأقرب للحاجة', () => {
+    const bats = [
+      { id: 1, category: 'battery', brand: 'A', model: 'A 16', watt_or_capacity: 16, price: 3000000 },
+      { id: 2, category: 'battery', brand: 'A', model: 'A 5',  watt_or_capacity: 5,  price: 1200000 },
+    ];
+    const t = selectBatteryTiers(bats, 5, 8, S);
+    expect(t.economy.material.id).toBe(2);
+    const bank = t.economy.units * t.economy.material.watt_or_capacity;
+    expect(bank).toBeGreaterThanOrEqual(9.78);
+    expect(bank).toBeLessThan(16);
+  });
+
+  it('وبطارية وحدة تفوز إذا كانت ضمن السقف', () => {
+    const bats = [
+      { id: 1, category: 'battery', brand: 'A', model: 'A 12', watt_or_capacity: 12, price: 3000000 },
+      { id: 2, category: 'battery', brand: 'A', model: 'A 5',  watt_or_capacity: 5,  price: 1200000 },
+    ];
+    // 12kWh = 1.23× الحاجة (ضمن السقف) وبوحدة واحدة → تفوز على 2×5
+    const t = selectBatteryTiers(bats, 5, 8, S);
+    expect(t.economy.units).toBe(1);
+    expect(t.economy.material.id).toBe(1);
+  });
+
+  it('**والقدرة ما تتجاوز المطلوب بأكثر من النصف**', () => {
     const inverters = [
-      { id: 1, category: 'inverter', brand: 'Deye', model: 'D 12kW', full_description: 'انفيرتر IP21', watt_or_capacity: 12000, price: 2000000 },
-      { id: 2, category: 'inverter', brand: 'Deye', model: 'D 6kW',  full_description: 'انفيرتر IP21', watt_or_capacity: 6000,  price: 1100000 },
+      { id: 1, category: 'inverter', brand: 'A', model: 'A 50kW', full_description: 'انفيرتر', watt_or_capacity: 50000, price: 900000 },
+      { id: 2, category: 'inverter', brand: 'A', model: 'A 8kW',  full_description: 'انفيرتر', watt_or_capacity: 8000,  price: 2000000 },
     ];
-    const tiers = selectInverterTiers(inverters, 40, 40, S, 0, 40);
-    expect(tiers.economy.material.id).toBe(1);
-    expect(tiers.economy.units).toBe(1);
+    // المطلوب 5500W — الـ50kW أرخص بس هو 9× الحاجة، فينستبعد رغم رخصه
+    const t = selectInverterTiers(inverters, 20, 20, S, 0, 20);
+    expect(t.economy.material.model).toBe('A 8kW');
   });
 
-  // **السعر يفوز**: قبل هذا كان الـIP يتقدم عليه، فيطلع «اقتصادي» أغلى بالضعف
-  it('قطعتان أرخص تسحبن الاقتصادي مهما كان الـIP', () => {
+  it('وإذا كل الأجهزة أكبر من الحاجة بكثير ياخذ الأقرب بلا كسر', () => {
     const inverters = [
-      { id: 1, category: 'inverter', brand: 'A', model: 'A 12kW', full_description: 'انفيرتر IP21', watt_or_capacity: 12000, price: 2600000 },
-      { id: 2, category: 'inverter', brand: 'B', model: 'B 6kW',  full_description: 'انفيرتر IP65', watt_or_capacity: 6000,  price: 900000 },
+      { id: 1, category: 'inverter', brand: 'A', model: 'A 50kW', full_description: 'انفيرتر', watt_or_capacity: 50000, price: 900000 },
+      { id: 2, category: 'inverter', brand: 'A', model: 'A 80kW', full_description: 'انفيرتر', watt_or_capacity: 80000, price: 800000 },
     ];
-    const tiers = selectInverterTiers(inverters, 40, 40, S, 0, 40);
-    expect(tiers.economy.material.id, 'الأرخص مجموعاً').toBe(2);
-    expect(tiers.economy.totalPrice).toBe(1800000);
-  });
-
-  it('السقف: ثلاث قطع أرخص ما تنتخب — وحدة زيادة بس على أقل عدد', () => {
-    const inverters = [
-      { id: 1, category: 'inverter', brand: 'A', model: 'A 12kW', full_description: 'انفيرتر IP21', watt_or_capacity: 12000, price: 2600000 },
-      { id: 2, category: 'inverter', brand: 'A', model: 'A 4kW',  full_description: 'انفيرتر IP21', watt_or_capacity: 4000,  price: 400000 },
-    ];
-    // المطلوب 11000W ← 4kW يحتاج 3 قطع (1.2مليون، أرخص) بس أقل عدد ممكن 1 والسقف 2
-    const tiers = selectInverterTiers(inverters, 40, 40, S, 0, 40);
-    expect(tiers.economy.units).toBeLessThanOrEqual(2);
-    expect(tiers.economy.material.id).toBe(1);
-  });
-
-  it('بطاريات: 2×5kWh أرخص من 1×16kWh → الاقتصادي ياخذ الاثنتين', () => {
-    const batteries = [
-      { id: 1, category: 'battery', brand: 'Deye', model: 'D 16', watt_or_capacity: 16, price: 3000000 },
-      { id: 2, category: 'battery', brand: 'Deye', model: 'D 8',  watt_or_capacity: 8,  price: 1200000 },
-    ];
-    // 5 أمبير × 220 × 8 ساعات = 8.8kWh ← ×0.9 ÷0.9 dod = 8.8kWh ← 16 توليفة وحدة، 8 توليفتين
-    const tiers = selectBatteryTiers(batteries, 5, 8, S, { factors: { economy: 0.9, standard: 0.85, premium: 0.8 } });
-    expect(tiers.economy.material.id).toBe(2);
-    expect(tiers.economy.units).toBe(2);
-    expect(tiers.economy.totalPrice).toBe(2400000);
-  });
-
-  it('بطاريات: الكبيرة الواحدة أرخص → تبقى هي', () => {
-    const batteries = [
-      { id: 1, category: 'battery', brand: 'Deye', model: 'D 16', watt_or_capacity: 16, price: 2000000 },
-      { id: 2, category: 'battery', brand: 'Deye', model: 'D 8',  watt_or_capacity: 8,  price: 1200000 },
-    ];
-    const tiers = selectBatteryTiers(batteries, 5, 8, S, { factors: { economy: 0.9, standard: 0.85, premium: 0.8 } });
-    expect(tiers.economy.material.id).toBe(1);
-    expect(tiers.economy.units).toBe(1);
+    const t = selectInverterTiers(inverters, 20, 20, S, 0, 20);
+    expect(t.economy.material.model, 'الأقرب للحاجة مو الأرخص').toBe('A 50kW');
   });
 });
 
-// كان هنا قسم «الاقتصادي = أدنى فئة IP» — انشال كله مع إلغاء التقييم بالـIP.
-// محله: الاقتصادي = الأرخص، مهما كانت درجة الحماية.
 describe('الاقتصادي = الأرخص، والـIP ما يدخل بالحساب', () => {
   const { selectInverterTiers } = calcModule;
   const S = { systemVoltage: 220, inverterSafetyFactor: 1.25 };
