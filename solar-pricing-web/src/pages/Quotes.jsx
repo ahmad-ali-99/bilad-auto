@@ -5,7 +5,8 @@ import { canViewQuotes, isOwnerAccount } from '../lib/permissions.js';
 import { creatorsOf, filterByCreators, normName } from '../lib/quotesFilter.js';
 import AnchoredPopup from '../components/AnchoredPopup.jsx';
 import { installmentPlanLabel } from '../lib/installment.js';
-import { followupRows, followupSheet, followupFileName, followupSummary } from '../lib/followupReport.js';
+import { followupRows, followupFileName, followupSummary } from '../lib/followupReport.js';
+import { buildFollowupWorkbook } from '../lib/followupWorkbook.js';
 
 const TIER_LABELS = { economy: 'اقتصادي', standard: 'متوسط', premium: 'ممتاز' };
 const MAX_ATTACH_MB = 8;
@@ -222,12 +223,21 @@ export default function Quotes({ onEditQuote }) {
       return;
     }
     try {
-      const XLSX = await import('xlsx');
-      const ws = XLSX.utils.aoa_to_sheet(followupSheet(rows, { username: who || 'الفريق', day }));
-      ws['!cols'] = [{ wch: 8 }, { wch: 10 }, { wch: 22 }, { wch: 14 }, { wch: 18 }, { wch: 13 }, { wch: 46 }, { wch: 15 }];
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'متابعة اليوم');
-      XLSX.writeFile(wb, followupFileName(who || 'الفريق', day));
+      // ExcelJS ينزّل عند التصدير فقط — مكتبة كبيرة ما تستاهل تنشحن بكل فتحة
+      const mod = await import('exceljs');
+      const ExcelJS = mod.default || mod;
+      const wb = buildFollowupWorkbook(ExcelJS, rows, { username: who || 'الفريق', day });
+      const buf = await wb.xlsx.writeBuffer();
+      const url = URL.createObjectURL(new Blob([buf], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = followupFileName(who || 'الفريق', day);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
       const s2 = followupSummary(rows);
       setMessage(`تم تصدير ${s2.count} عرضاً — من ${s2.from} إلى ${s2.to}`);
     } catch (e) {

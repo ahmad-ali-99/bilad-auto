@@ -16,7 +16,10 @@ export default defineConfig({
       includeAssets: ['icons/*.png'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,wasm,woff,woff2,png,svg}'],
-        globIgnores: ['showcase/**'], // أصول العرض التفاعلي الثقيلة لا تدخل بالتخزين المسبق
+        // أصول العرض التفاعلي الثقيلة لا تدخل بالتخزين المسبق. وكذلك ExcelJS
+        // (~940 كيلوبايت): يُستعمل بزر «متابعة اليوم» وحده، فتخزينه مسبقاً يثقّل
+        // كل تحديث على تلفونات الموظفين بلا فائدة — ينزل عند أول تصدير ويتخزّن.
+        globIgnores: ['showcase/**', '**/exceljs*.js'],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024, // sql-wasm + الحزمة الرئيسية
         // أصول العرض التفاعلي (HDRI/خامات/موديلات ~160MB): تنزل مرة وحدة عند أول فتح
         // للعرض وتُخزَّن بجهاز المستخدم دائمياً (CacheFirst) — ما تتغير بين النسخ

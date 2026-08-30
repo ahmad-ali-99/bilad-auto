@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  dayKey, timeOf, followupRows, followupSummary, followupFileName, followupSheet, STATUS_LABELS,
+  dayKey, timeOf, followupRows, followupSummary, followupFileName, STATUS_LABELS,
 } from '../src/lib/followupReport.js';
 
 // يوم عمل حقيقي: من الثامنة صباحاً للرابعة عصراً
@@ -103,28 +103,6 @@ describe('الملخّص واسم الملف', () => {
   });
 });
 
-describe('ورقة الإكسل', () => {
-  const rows = followupRows({ quotes: QUOTES, statuses: STATUSES, username: 'أحمد', day: DAY });
-  const sheet = followupSheet(rows, { username: 'أحمد', day: DAY });
-
-  it('ترويسة عربية واضحة للإدارة', () => {
-    expect(sheet[0][0]).toContain('تقرير متابعة');
-    expect(sheet[1][0]).toContain('2026-08-30');
-    expect(sheet[3]).toEqual(['الوقت', 'رقم العرض', 'العميل', 'الهاتف', 'الموقع', 'الحالة', 'الملاحظة', 'المجموع (د.ع)']);
-  });
-
-  it('وصف لكل عرض بنفس ترتيب الرأس', () => {
-    expect(sheet).toHaveLength(4 + rows.length);
-    expect(sheet[4][0]).toBe('08:15');
-    expect(sheet[4][1]).toBe(401);
-    expect(sheet[4][6]).toBe('اتصلت بيه، يريد مهلة');
-  });
-
-  it('والمجموع رقم مو نص — حتى الإدارة تجمعه بالإكسل', () => {
-    expect(typeof sheet[4][7]).toBe('number');
-  });
-});
-
 // ═══ الوصل بالشاشة وبطبقة البيانات ═══════════════════════════════════════
 import fs from 'node:fs';
 import path from 'node:path';
@@ -165,11 +143,13 @@ describe('زر تصدير متابعة اليوم', () => {
     expect(fn).toContain('ماكو أي تعديل حالة أو ملاحظة اليوم');
   });
 
-  it('ويكتب ملف xlsx حقيقي بورقة مسمّاة', () => {
+  it('ويبني الملف بـExcelJS (تنسيق وألوان) وينزّله بلوب', () => {
     const fn = page.slice(page.indexOf('async function exportFollowup()'), page.indexOf('function toggleCreator('));
-    expect(fn).toContain("await import('xlsx')");
-    expect(fn).toContain('aoa_to_sheet(followupSheet(');
-    expect(fn).toContain("book_append_sheet(wb, ws, 'متابعة اليوم')");
-    expect(fn).toContain('XLSX.writeFile(wb, followupFileName(');
+    expect(fn).toContain("await import('exceljs')");
+    expect(fn).toContain('buildFollowupWorkbook(ExcelJS, rows');
+    expect(fn).toContain('wb.xlsx.writeBuffer()');
+    expect(fn).toContain('followupFileName(');
+    // SheetJS انشال من هذا المسار: نسخته المجانية ما تكتب ألواناً أصلاً
+    expect(fn).not.toContain("import('xlsx')");
   });
 });

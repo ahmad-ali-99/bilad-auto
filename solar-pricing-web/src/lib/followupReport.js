@@ -77,17 +77,3 @@ export function followupFileName(username, day = new Date()) {
   const safe = String(username || 'الفريق').trim().replace(/[\\/:*?"<>|]/g, '-');
   return `متابعة ${safe} ${dayKey(day)}.xlsx`;
 }
-
-/** مصفوفة الصفوف كما تنكتب بالإكسل — الرأس عربي وواضح للإدارة */
-export function followupSheet(rows, { username, day = new Date() } = {}) {
-  const head = ['الوقت', 'رقم العرض', 'العميل', 'الهاتف', 'الموقع', 'الحالة', 'الملاحظة', 'المجموع (د.ع)'];
-  const body = rows.map((r) => [r.time, r.quoteNumber, r.client, r.phone, r.location, r.status, r.note, r.total]);
-  const s = followupSummary(rows);
-  return [
-    [`تقرير متابعة — ${username || 'الفريق'}`],
-    [`التاريخ: ${dayKey(day)}`, '', `عدد العروض: ${s.count}`, '', s.count ? `من ${s.from} إلى ${s.to}` : ''],
-    [],
-    head,
-    ...body,
-  ];
-}
