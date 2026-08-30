@@ -185,3 +185,46 @@ describe('تصنيف التقسيط والنقد', () => {
     expect(css).toMatch(/\.table-scroll table\.data-table td \{ padding-inline: 7px; \}/);
   });
 });
+
+// ═══ بطاقات بدل جدول ═══════════════════════════════════════════════════
+// نفس قرار المخزون: الجدول بعشرة أعمدة كان يحتاج تمريراً أفقياً وصفوفه ضيقة.
+describe('عرض العروض ببطاقات', () => {
+  it('ماكو جدول بيانات بقائمة العروض — الجدول الوحيد الباقي هو سلة المحذوفات', () => {
+    const list = page.slice(page.indexOf('{filtered.map('));
+    expect(list).not.toContain('<table className="data-table">');
+    expect(page).toContain('className="quote-cards"');
+    // سلة المحذوفات تبقى جدولاً — قائمة مؤقتة صغيرة داخل بطاقة منطوية
+    expect(page.slice(0, page.indexOf('{filtered.map('))).toContain('<table className="data-table">');
+  });
+
+  it('وكل بطاقة تحمل كل ما كان بالصف: رقم وعميل وهاتف وموقع وفئة ومنشئ وتاريخ ومجموع', () => {
+    for (const bit of ['qc-num', 'qc-client', 'qc-phone', 'qc-meta', 'qc-total', 'qc-attach', 'qc-actions']) {
+      expect(page, bit).toContain(bit);
+    }
+    expect(page).toContain('creatorName(qt.created_by)');
+    expect(page).toContain('fmtDate(qt.created_at)');
+    expect(page).toContain('fmt(qt.total_price)');
+  });
+
+  it('والأزرار الثلاثة باقية: تعديل وPDF وحذف', () => {
+    const list = page.slice(page.indexOf('{filtered.map('));
+    expect(list).toContain('handleEdit(qt.id)');
+    expect(list).toContain('handleExport(qt.id, qt.quote_number)');
+    expect(list).toContain('handleDelete(qt.id)');
+  });
+
+  it('والعرض المرفوع يبقى بزر تنزيل بلا تعديل ولا PDF', () => {
+    const list = page.slice(page.indexOf('{filtered.map('));
+    expect(list).toContain('downloadUploaded(qt)');
+  });
+
+  it('وشريط البطاقة يتلوّن بحالة العرض — «مستعجل» تنقرا بالنظرة', () => {
+    expect(page).toContain('`quote-card qc-${st.level}`');
+    for (const k of ['qc-normal', 'qc-follow', 'qc-urgent', 'qc-done']) expect(css, k).toContain(`.${k}::before`);
+  });
+
+  it('والشبكة تتوسّع بالحاسوب وتنزل لعمود بالجوال', () => {
+    expect(css).toMatch(/\.quote-cards\s*\{[^}]*repeat\(auto-fill, minmax\(300px, 1fr\)\)/);
+    expect(css).toMatch(/@media \(max-width: 560px\) \{ \.quote-cards \{ grid-template-columns: 1fr; \} \}/);
+  });
+});

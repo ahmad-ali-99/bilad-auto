@@ -621,123 +621,93 @@ export default function Quotes({ onEditQuote }) {
         </div>
       )}
 
-      <div className="table-scroll">
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>العدد</th>
-            <th>العميل</th>
-            <th>الموقع</th>
-            <th>النوع</th>
-            <th>أنشأه</th>
-            <th>الحالة</th>
-            <th>التاريخ</th>
-            <th>المجموع (د.ع)</th>
-            <th>التصميم</th>
-            <th>إجراءات</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.map((qt) => (
-            // الملاحظة تنبثق بمرور الماوس على أي جزء من صف العرض — مو بس على الحالة
-            <tr
+      {/* بطاقات بدل جدول — نفس قرار المخزون. الجدول بعشرة أعمدة كان يحتاج تمريراً
+          أفقياً، والصف الواحد بارتفاع ٧٠ بكسل يخلي الشاشة تعرض عشرة عروض. البطاقة
+          تحط كل شي بمتناول النظر، والشبكة تتوسّع لعمودين أو ثلاثة حسب عرض الشاشة. */}
+      <div className="quote-cards">
+        {filtered.map((qt) => {
+          const st = statuses[qt.id] || { level: 'normal', note: '' };
+          const up = isUploaded(qt);
+          return (
+            <div
               key={qt.id}
+              className={`quote-card qc-${st.level}`}
               onMouseEnter={() => setHoveredRow(qt.id)}
               onMouseLeave={() => setHoveredRow((r) => (r === qt.id ? null : r))}
             >
-              <td style={{ whiteSpace: 'nowrap' }}>
-                {qt.quote_number}
-                {isInstallment(qt) && (
-                  <span
-                    className="pay-tag pay-inst"
-                    title={`تقسيط — ${installmentPlanLabel(instPlans[qt.id])}`}
-                  >
-                    🏦
-                  </span>
-                )}
-                {isUploaded(qt) && (
-                  <div
-                    title="عرض جاهز مرفوع من خارج البرنامج"
-                    style={{
-                      display: 'inline-block', marginRight: 4, background: '#eaf3fb', color: '#1a5a9c',
-                      border: '1px solid #bcd6ec', borderRadius: 10, padding: '1px 7px',
-                      fontSize: '0.7rem', fontWeight: 700,
-                    }}
-                  >
-                    📤 مرفوع
-                  </div>
-                )}
-              </td>
-              <td>
-                {qt.client_name || '-'}
-                {qt.client_phone && <div className="muted" style={{ fontSize: '0.78rem' }}>{qt.client_phone}</div>}
-              </td>
-              <td>{qt.location || '-'}</td>
-              {/* الفئة (اقتصادي/متوسط/ممتاز) ما إلها معنى بعرض مرفوع جاهز */}
-              <td>{isUploaded(qt) ? 'ملف جاهز' : TIER_LABELS[qt.selected_tier] || qt.selected_tier}</td>
-              <td style={{ fontWeight: 700, color: 'var(--navy)' }}>{creatorName(qt.created_by)}</td>
-              <td>
+              <div className="qc-top">
+                <span className="qc-num">
+                  #{qt.quote_number}
+                  {isInstallment(qt) && (
+                    <span className="pay-tag pay-inst" title={`تقسيط — ${installmentPlanLabel(instPlans[qt.id])}`}>🏦</span>
+                  )}
+                  {up && <span className="qc-up" title="عرض جاهز مرفوع من خارج البرنامج">📤 مرفوع</span>}
+                </span>
                 <StatusCell
                   quoteId={qt.id}
-                  st={statuses[qt.id] || { level: 'normal', note: '' }}
+                  st={st}
                   editing={statusEdit?.id === qt.id}
                   statusEdit={statusEdit}
                   setStatusEdit={setStatusEdit}
                   saveStatus={saveStatus}
                   rowHovered={hoveredRow === qt.id}
                 />
-              </td>
-              <td>{fmtDate(qt.created_at)}</td>
-              <td>{fmt(qt.total_price)}</td>
-              <td>
-                {isUploaded(qt) ? (
-                  /* ملف العرض المرفوع هو العرض نفسه — إزالته تخلي السجل فاضي، فما ننطي زر حذف */
-                  <span title={qt.attachment_name} style={{ whiteSpace: 'nowrap' }}>📎 ملف العرض</span>
+              </div>
+
+              <div className="qc-client">{qt.client_name || 'بلا اسم'}</div>
+              {qt.client_phone && <a className="qc-phone" href={`tel:${qt.client_phone}`}>{qt.client_phone}</a>}
+
+              <div className="qc-meta">
+                <span>📍 {qt.location || '-'}</span>
+                <span>⚙ {up ? 'ملف جاهز' : TIER_LABELS[qt.selected_tier] || qt.selected_tier || '-'}</span>
+                <span>👤 {creatorName(qt.created_by)}</span>
+                <span>📅 {fmtDate(qt.created_at)}</span>
+              </div>
+
+              <div className="qc-total">
+                {fmt(qt.total_price)} <small>د.ع</small>
+              </div>
+
+              <div className="qc-attach">
+                {up ? (
+                  <span className="qc-file" title={qt.attachment_name}>📎 ملف العرض</span>
                 ) : qt.attachment_name ? (
-                  <span title={qt.attachment_name} style={{ whiteSpace: 'nowrap' }}>
-                    📎 مرفق{' '}
-                    <button className="btn btn-danger btn-sm" onClick={() => handleRemoveAttachment(qt)} title="إزالة المرفق">
-                      ✕
-                    </button>
+                  <span className="qc-file" title={qt.attachment_name}>
+                    📎 مرفق
+                    <button className="btn btn-danger btn-sm" onClick={() => handleRemoveAttachment(qt)} title="إزالة المرفق">✕</button>
                   </span>
                 ) : (
                   <button className="btn btn-secondary btn-sm" disabled={busyId === qt.id} onClick={() => pickAttachment(qt)}>
                     {busyId === qt.id ? '...' : '📎 إرفاق تصميم'}
                   </button>
                 )}
-              </td>
-              <td style={{ whiteSpace: 'nowrap' }}>
-                {/* العرض المرفوع ملف جاهز بلا بنود: ما ينفتح بشاشة التعديل ولا ينبني منه PDF */}
-                {isUploaded(qt) ? (
-                  <button className="btn btn-secondary btn-sm" onClick={() => downloadUploaded(qt)}>
-                    ⬇ تنزيل الملف
-                  </button>
+              </div>
+
+              <div className="qc-actions">
+                {up ? (
+                  <button className="btn btn-secondary btn-sm" onClick={() => downloadUploaded(qt)}>⬇ تنزيل الملف</button>
                 ) : (
                   <>
                     <button className="btn btn-primary btn-sm" disabled={busyId === qt.id} onClick={() => handleEdit(qt.id)}>
                       ✏ تعديل
-                    </button>{' '}
+                    </button>
                     <button className="btn btn-secondary btn-sm" onClick={() => handleExport(qt.id, qt.quote_number)}>
-                      تصدير PDF{qt.attachment_name ? ' + التصميم' : ''}
+                      📄 PDF{qt.attachment_name ? ' + التصميم' : ''}
                     </button>
                   </>
-                )}{' '}
-                <button className="btn btn-danger btn-sm" onClick={() => handleDelete(qt.id)}>
-                  حذف
-                </button>
-              </td>
-            </tr>
-          ))}
-          {filtered.length === 0 && (
-            <tr>
-              <td colSpan={10} className="muted" style={{ textAlign: 'center', padding: 20 }}>
-                {quotes.length === 0 ? 'لا توجد عروض محفوظة بعد' : 'لا توجد نتائج لهذا البحث'}
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+                )}
+                <button className="btn btn-danger btn-sm" onClick={() => handleDelete(qt.id)}>حذف</button>
+              </div>
+            </div>
+          );
+        })}
       </div>
+
+      {filtered.length === 0 && (
+        <p className="muted" style={{ textAlign: 'center', padding: 24 }}>
+          {quotes.length === 0 ? 'لا توجد عروض محفوظة بعد' : 'لا توجد نتائج لهذا البحث'}
+        </p>
+      )}
     </div>
   );
 }
