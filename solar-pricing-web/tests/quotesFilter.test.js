@@ -223,8 +223,20 @@ describe('عرض العروض ببطاقات', () => {
     for (const k of ['qc-normal', 'qc-follow', 'qc-urgent', 'qc-done']) expect(css, k).toContain(`.${k}::before`);
   });
 
-  it('والشبكة تتوسّع بالحاسوب وتنزل لعمود بالجوال', () => {
-    expect(css).toMatch(/\.quote-cards\s*\{[^}]*repeat\(auto-fill, minmax\(300px, 1fr\)\)/);
-    expect(css).toMatch(/@media \(max-width: 560px\) \{ \.quote-cards \{ grid-template-columns: 1fr; \} \}/);
+  // **بطاقة واحدة بالسطر عرضية** (قرار المستخدم): الشبكة بثلاثة أعمدة كانت
+  // تضيّق البطاقة وتكسر الموقع الطويل على أربعة أسطر.
+  it('بطاقة واحدة بالسطر — عمود واحد بأي عرض شاشة', () => {
+    expect(css).toMatch(/\.quote-cards \{ display: flex; flex-direction: column;/);
+    expect(css).not.toContain('minmax(300px, 1fr)');
+  });
+
+  it('والبطاقة عرضية: الرقم ثم التفاصيل ثم المجموع والأزرار', () => {
+    expect(css).toMatch(/\.quote-card \{[^}]*display: flex;/);
+    expect(page).toContain('className="qc-main"');
+    expect(page).toContain('className="qc-side"');
+  });
+
+  it('وبالشاشة الضيقة تنقلب لأسطر حتى ما ينضغط شي', () => {
+    expect(css).toMatch(/@media \(max-width: 860px\)/);
   });
 });

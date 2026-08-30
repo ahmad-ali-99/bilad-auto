@@ -2122,80 +2122,88 @@ h2.page-title::before {
 .table-scroll table.data-table td { padding-inline: 7px; }
 
 /* ====== بطاقات العروض ======
-   بديل جدول بعشرة أعمدة كان يحتاج تمريراً أفقياً ويعرض عشرة صفوف بالشاشة.
-   شريط علوي بلون حالة العرض يخلي «قيد المتابعة» و«مستعجل» تنقرا بالنظرة. */
-.quote-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 12px;
-  align-items: start;
-}
-@media (max-width: 560px) { .quote-cards { grid-template-columns: 1fr; } }
+   **بطاقة واحدة بالسطر، عرضية**: المعلومات على اليمين والمجموع والأزرار على
+   اليسار. الشبكة بثلاثة أعمدة كانت تضيّق كل بطاقة وتكسر الموقع الطويل على
+   أربعة أسطر. الترتيب حسب الإنشاء — الأحدث أولاً. */
+.quote-cards { display: flex; flex-direction: column; gap: 9px; }
 
 .quote-card {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
   background: #fff;
   border: 1px solid #dbe3ec;
-  border-radius: 14px;
-  padding: 13px 13px 11px;
-  box-shadow: 0 2px 6px rgba(18, 41, 67, 0.07);
-  transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+  border-radius: 12px;
+  padding: 10px 16px 10px 13px;
+  box-shadow: 0 1px 4px rgba(18, 41, 67, 0.06);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
 }
+/* الشريط الملوّن بحافة البطاقة اليمنى — أوضح بالسطر العريض من شريط علوي رفيع */
 .quote-card::before {
   content: '';
   position: absolute;
-  inset-block-start: 0;
-  inset-inline: 0;
-  height: 3px;
-  border-start-start-radius: 14px;
-  border-start-end-radius: 14px;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 5px;
+  border-start-start-radius: 12px;
+  border-end-start-radius: 12px;
 }
 .qc-normal::before { background: #7fb2d6; }
 .qc-follow::before { background: #e8a33d; }
 .qc-urgent::before { background: #e63946; }
 .qc-done::before   { background: #46a06d; }
-.quote-card:hover {
-  box-shadow: 0 6px 18px rgba(18, 41, 67, 0.13);
-  border-color: #c2d0e0;
-  transform: translateY(-1px);
-}
+.quote-card:hover { box-shadow: 0 4px 14px rgba(18, 41, 67, 0.12); border-color: #c2d0e0; }
 
+/* العمود الأول: الرقم والحالة */
 .qc-top {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 8px; margin-bottom: 5px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 5px;
+  flex: 0 0 118px; min-width: 118px;
 }
 .qc-num { font-weight: 800; color: var(--navy); font-size: 0.92rem; white-space: nowrap; }
 .qc-up {
-  margin-inline-start: 5px; font-size: 0.68rem; font-weight: 700;
+  font-size: 0.66rem; font-weight: 700;
   background: #eaf3fb; color: #1a5a9c; border: 1px solid #bcd6ec;
-  border-radius: 9px; padding: 1px 6px;
+  border-radius: 9px; padding: 1px 5px;
 }
+
+/* العمود الأوسط: العميل والتفاصيل — ياخذ كل المساحة الباقية */
+.qc-main { flex: 1 1 auto; min-width: 0; }
 .qc-client {
-  font-size: 1.02rem; font-weight: 800; color: var(--navy-dark);
-  line-height: 1.4; word-break: break-word;
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px;
+  font-size: 1rem; font-weight: 800; color: var(--navy-dark);
+  line-height: 1.35; word-break: break-word;
 }
 .qc-phone {
-  display: inline-block; font-size: 0.82rem; color: #5a7fa3;
-  text-decoration: none; direction: ltr; unicode-bidi: isolate;
+  font-size: 0.8rem; font-weight: 600; color: #5a7fa3; text-decoration: none;
+  direction: ltr; unicode-bidi: isolate;
 }
 .qc-phone:hover { text-decoration: underline; }
-
 .qc-meta {
-  display: flex; flex-wrap: wrap; gap: 3px 12px;
-  margin-top: 6px; font-size: 0.78rem; color: var(--muted);
+  display: flex; flex-wrap: wrap; gap: 2px 14px;
+  margin-top: 3px; font-size: 0.78rem; color: var(--muted);
+}
+
+/* العمود الأخير: المجموع والمرفق والأزرار */
+.qc-side {
+  display: flex; align-items: center; gap: 12px;
+  flex: 0 0 auto; margin-inline-start: auto;
 }
 .qc-total {
-  margin-top: 8px; font-size: 1.18rem; font-weight: 800;
-  color: var(--navy); letter-spacing: -0.3px;
+  font-size: 1.1rem; font-weight: 800; color: var(--navy);
+  letter-spacing: -0.3px; white-space: nowrap; text-align: end;
 }
-.qc-total small { font-size: 0.7rem; font-weight: 600; color: var(--muted); }
+.qc-total small { font-size: 0.68rem; font-weight: 600; color: var(--muted); }
+.qc-attach { font-size: 0.78rem; white-space: nowrap; }
+.qc-file { color: #4a6a88; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; }
+.qc-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.qc-actions .btn { min-height: 34px; white-space: nowrap; }
 
-.qc-attach { margin-top: 7px; font-size: 0.8rem; }
-.qc-file { color: #4a6a88; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
-
-.qc-actions {
-  display: flex; gap: 6px; flex-wrap: wrap;
-  margin-top: 9px; padding-top: 9px; border-top: 1px dashed var(--border);
+/* بالشاشات الضيقة تنقلب البطاقة لعمود حتى ما ينضغط شي */
+@media (max-width: 860px) {
+  .quote-card { flex-wrap: wrap; gap: 8px; padding: 11px 14px 11px 12px; }
+  .qc-top { flex: 0 0 auto; flex-direction: row; align-items: center; min-width: 0; }
+  .qc-main { flex: 1 1 100%; }
+  .qc-side { flex: 1 1 100%; margin-inline-start: 0; justify-content: space-between; flex-wrap: wrap; }
+  .qc-actions .btn { min-height: 40px; }
 }
-.qc-actions .btn { flex: 1 1 auto; min-height: 36px; }
-@media (max-width: 700px) { .qc-actions .btn { min-height: 42px; } }

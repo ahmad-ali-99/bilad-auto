@@ -790,7 +790,9 @@ export const api = {
         if (!id) continue;
         try {
           const v = JSON.parse(row.value);
-          if (v && v.level) map[id] = { level: v.level, note: v.note || '' };
+          // `at` و`by` يوصلان كما هما — عليهما يتبني تقرير متابعة اليوم.
+          // الحالات المحفوظة قبل هذي الإضافة ما عندها المفتاحين، فتبقى بلا وقت.
+          if (v && v.level) map[id] = { level: v.level, note: v.note || '', at: v.at || null, by: v.by || null };
         } catch {
           /* قيمة تالفة — نتجاهلها ويبقى العرض بالحالة الافتراضية */
         }
@@ -805,7 +807,13 @@ export const api = {
         'رقم العرض': q?.quote_number ?? id, 'العميل': q?.client_name || '-', 'الحالة': status.level, ...(status.note ? { 'ملاحظة': status.note } : {}),
         [UNDO]: { kind: 'config', key: `quote_status_${id}`, before: beforeStatus, label: 'إرجاع الحالة السابقة', confirm: `إرجاع حالة العرض ${q?.quote_number ?? id} لما كانت عليه` },
       });
-      return api.config.set(`quote_status_${id}`, { level: status.level, note: status.note || '' });
+      // **وقت التعديل ومن سواه ينحفظان مع الحالة**: بدونهما ما نقدر نطلّع تقرير
+      // «شنو اشتغلت عليه اليوم» — وسجل الحركات (activity_log) محصور بالإدارة
+      // بالـRLS، فالبياع ما يقدر يقراه ليبني تقريره بنفسه.
+      const by = (await currentIdentity()).username || null;
+      return api.config.set(`quote_status_${id}`, {
+        level: status.level, note: status.note || '', at: new Date().toISOString(), by,
+      });
     },
     // أسماء كل من سبق وأنشأ عرضاً — تغذي قائمة «العرض من طرف» تلقائياً بدون قائمة ثابتة.
     // للإدارة فقط: هي وحدها اللي تسند العروض، وأسماء الفريق ما تنعرض لغيرها.

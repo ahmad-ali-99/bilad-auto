@@ -5,6 +5,7 @@ import { canViewQuotes, isOwnerAccount } from '../lib/permissions.js';
 import { creatorsOf, filterByCreators, normName } from '../lib/quotesFilter.js';
 import AnchoredPopup from '../components/AnchoredPopup.jsx';
 import { installmentPlanLabel } from '../lib/installment.js';
+import { followupRows, followupSheet, followupFileName, followupSummary } from '../lib/followupReport.js';
 
 const TIER_LABELS = { economy: 'اقتصادي', standard: 'متوسط', premium: 'ممتاز' };
 const MAX_ATTACH_MB = 8;
@@ -145,9 +146,11 @@ export default function Quotes({ onEditQuote }) {
   const [uploading, setUploading] = useState(false);
   const uploadRef = useRef(null);
 
+  const [me, setMe] = useState('');
   useEffect(() => {
     getCurrentUsername()
       .then((n) => {
+        setMe(n || '');
         setIsAhmad(isOwnerAccount(n));
         setSeesAll(canViewQuotes(n));
       })
@@ -205,6 +208,32 @@ export default function Quotes({ onEditQuote }) {
         (x.location || '').toLowerCase().includes(q) ||
         creatorName(x.created_by).toLowerCase().includes(q)
     );
+
+  // تقرير متابعة اليوم بإكسل — يرسله البياع للإدارة. الإدارة تصدّر الفريق كله.
+  async function exportFollowup() {
+    const day = new Date();
+    // الحساب الاعتيادي يصدّر شغله هو؛ والإدارة تصدّر الحساب المختار أو الفريق كله
+    const who = seesAll
+      ? (selectedCreators.length === 1 ? selectedCreators[0] : null)
+      : me;
+    const rows = followupRows({ quotes, statuses, username: who, day });
+    if (rows.length === 0) {
+      setMessage('ماكو أي تعديل حالة أو ملاحظة اليوم — التقرير فارغ');
+      return;
+    }
+    try {
+      const XLSX = await import('xlsx');
+      const ws = XLSX.utils.aoa_to_sheet(followupSheet(rows, { username: who || 'الفريق', day }));
+      ws['!cols'] = [{ wch: 8 }, { wch: 10 }, { wch: 22 }, { wch: 14 }, { wch: 18 }, { wch: 13 }, { wch: 46 }, { wch: 15 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'متابعة اليوم');
+      XLSX.writeFile(wb, followupFileName(who || 'الفريق', day));
+      const s2 = followupSummary(rows);
+      setMessage(`تم تصدير ${s2.count} عرضاً — من ${s2.from} إلى ${s2.to}`);
+    } catch (e) {
+      setMessage(`تعذّر التصدير: ${e.message}`);
+    }
+  }
 
   function toggleCreator(key) {
     setSelectedCreators((prev) => {
@@ -398,6 +427,9 @@ export default function Quotes({ onEditQuote }) {
         />
         <button className="btn btn-primary" onClick={() => setUploadOpen((v) => !v)}>
           ⬆ رفع عرض جاهز
+        </button>
+        <button className="btn btn-secondary" onClick={exportFollowup} title="العروض اللي عدّلت حالتها أو ملاحظتها اليوم — ملف إكسل جاهز للإرسال للإدارة">
+          📊 متابعة اليوم
         </button>
         <button className="btn btn-secondary" onClick={() => setShowTrash((v) => !v)}>
           🗑 سلة المحذوفات ({deleted.length})
@@ -654,34 +686,36 @@ export default function Quotes({ onEditQuote }) {
                 />
               </div>
 
-              <div className="qc-client">{qt.client_name || 'بلا اسم'}</div>
-              {qt.client_phone && <a className="qc-phone" href={`tel:${qt.client_phone}`}>{qt.client_phone}</a>}
-
-              <div className="qc-meta">
-                <span>📍 {qt.location || '-'}</span>
-                <span>⚙ {up ? 'ملف جاهز' : TIER_LABELS[qt.selected_tier] || qt.selected_tier || '-'}</span>
-                <span>👤 {creatorName(qt.created_by)}</span>
-                <span>📅 {fmtDate(qt.created_at)}</span>
+              <div className="qc-main">
+                <div className="qc-client">
+                  {qt.client_name || 'بلا اسم'}
+                  {qt.client_phone && <a className="qc-phone" href={`tel:${qt.client_phone}`}>{qt.client_phone}</a>}
+                </div>
+                <div className="qc-meta">
+                  <span>📍 {qt.location || '-'}</span>
+                  <span>⚙ {up ? 'ملف جاهز' : TIER_LABELS[qt.selected_tier] || qt.selected_tier || '-'}</span>
+                  <span>👤 {creatorName(qt.created_by)}</span>
+                  <span>📅 {fmtDate(qt.created_at)}</span>
+                </div>
               </div>
 
-              <div className="qc-total">
-                {fmt(qt.total_price)} <small>د.ع</small>
-              </div>
+              <div className="qc-side">
+                <div className="qc-total">{fmt(qt.total_price)} <small>د.ع</small></div>
 
-              <div className="qc-attach">
-                {up ? (
-                  <span className="qc-file" title={qt.attachment_name}>📎 ملف العرض</span>
-                ) : qt.attachment_name ? (
-                  <span className="qc-file" title={qt.attachment_name}>
-                    📎 مرفق
-                    <button className="btn btn-danger btn-sm" onClick={() => handleRemoveAttachment(qt)} title="إزالة المرفق">✕</button>
-                  </span>
-                ) : (
-                  <button className="btn btn-secondary btn-sm" disabled={busyId === qt.id} onClick={() => pickAttachment(qt)}>
-                    {busyId === qt.id ? '...' : '📎 إرفاق تصميم'}
-                  </button>
-                )}
-              </div>
+                <div className="qc-attach">
+                  {up ? (
+                    <span className="qc-file" title={qt.attachment_name}>📎 ملف العرض</span>
+                  ) : qt.attachment_name ? (
+                    <span className="qc-file" title={qt.attachment_name}>
+                      📎 مرفق
+                      <button className="btn btn-danger btn-sm" onClick={() => handleRemoveAttachment(qt)} title="إزالة المرفق">✕</button>
+                    </span>
+                  ) : (
+                    <button className="btn btn-secondary btn-sm" disabled={busyId === qt.id} onClick={() => pickAttachment(qt)}>
+                      {busyId === qt.id ? '...' : '📎 إرفاق'}
+                    </button>
+                  )}
+                </div>
 
               <div className="qc-actions">
                 {up ? (
@@ -696,7 +730,8 @@ export default function Quotes({ onEditQuote }) {
                     </button>
                   </>
                 )}
-                <button className="btn btn-danger btn-sm" onClick={() => handleDelete(qt.id)}>حذف</button>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(qt.id)}>حذف</button>
+                </div>
               </div>
             </div>
           );
