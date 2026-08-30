@@ -96,7 +96,8 @@ describe('فلتر حالة العروض', () => {
     const j = page.indexOf('.filter((x) => !statusFilter');
     expect(i).toBeGreaterThan(0);
     expect(j).toBeGreaterThan(i);   // العدّ قبل الفلترة
-    expect(page).toContain('byCreator.filter((x) => levelOf(x) === l.key).length');
+    // العدّ يجري على المجموعة قبل فلتر الحالة نفسه (وبعد فلتر الدفع)
+    expect(page).toContain('byPay.filter((x) => levelOf(x) === l.key).length');
   });
 
   it('وكل الحالات الأربع تطلع بالشريط', () => {
@@ -129,5 +130,58 @@ describe('ستايل شريط الفلاتر موجود فعلاً', () => {
 
   it('والمؤشَّر له إطار واضح', () => {
     expect(css).toMatch(/\.qf-chip\.on\s*\{[^}]*border:\s*2px solid var\(--navy\)/);
+  });
+});
+
+// ═══ تصنيف التقسيط والنقد ═══════════════════════════════════════════════
+// أي عرض محفوظة معه لقطة تقسيط مفعّلة (installment.enabled) يُحسب «تقسيط»،
+// وغيره «نقد». التصنيف يشتغل مع فلتر الحالة وفلتر الحسابات سوية.
+const api = fs.readFileSync(path.join(HERE, '../src/lib/dataApi.js'), 'utf8');
+
+describe('تصنيف التقسيط والنقد', () => {
+  it('الخطط تُقرأ بطلب واحد لكل اللقطات — مو 400 طلب', () => {
+    expect(api).toContain('async installmentPlans()');
+    expect(api).toMatch(/\.like\('key', 'quote_adj_%'\)/);
+  });
+
+  it('والمعيار هو installment.enabled وحده', () => {
+    const fn = api.slice(api.indexOf('async installmentPlans()'));
+    expect(fn.slice(0, fn.indexOf('\n    },'))).toContain('v?.installment?.enabled');
+  });
+
+  it('واللقطة التالفة ما تكسر الشاشة', () => {
+    const fn = api.slice(api.indexOf('async installmentPlans()'));
+    expect(fn.slice(0, fn.indexOf('\n    },'))).toContain('catch');
+  });
+
+  it('والخطة المشالة (cbi) تُقرأ على وريثها بـnormalizePlan', () => {
+    const fn = api.slice(api.indexOf('async installmentPlans()'));
+    expect(fn.slice(0, fn.indexOf('\n    },'))).toContain('normalizePlan(v.installment.plan)');
+  });
+
+  it('الشاشة بيها فلتر دفع بثلاث حالات: الكل وتقسيط ونقد', () => {
+    expect(page).toMatch(/const \[payFilter, setPayFilter\] = useState\(null\)/);
+    expect(page).toContain("setPayFilter(payFilter === 'installment' ? null : 'installment')");
+    expect(page).toContain("setPayFilter(payFilter === 'cash' ? null : 'cash')");
+  });
+
+  it('**والفلتران يشتغلان سوية**: الدفع ثم الحالة على نفس القائمة', () => {
+    const i = page.indexOf("const filtered = byCreator");
+    const seg = page.slice(i, i + 400);
+    expect(seg).toContain('payFilter');
+    expect(seg).toContain('statusFilter');
+  });
+
+  it('وعدّاد الحالة يحترم فلتر الدفع — وإلا الأرقام ما تطابق المعروض', () => {
+    expect(page).toContain('byPay.filter((x) => levelOf(x) === l.key).length');
+  });
+
+  it('وعلامة التقسيط تنحط بخلية رقم العرض بلا عمود جديد يوسّع الجدول', () => {
+    expect(page).toContain('className="pay-tag pay-inst"');
+    expect(page).not.toContain('<th>الدفع</th>');
+  });
+
+  it('وحشوة جداول التمرير مضيّقة حتى ما يطلع زر «حذف» خارج الصندوق', () => {
+    expect(css).toMatch(/\.table-scroll table\.data-table td \{ padding-inline: 7px; \}/);
   });
 });

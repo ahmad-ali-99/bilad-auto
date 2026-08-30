@@ -4,6 +4,7 @@ import { getCurrentUsername } from '../lib/agent.js';
 import { canViewQuotes, isOwnerAccount } from '../lib/permissions.js';
 import { creatorsOf, filterByCreators, normName } from '../lib/quotesFilter.js';
 import AnchoredPopup from '../components/AnchoredPopup.jsx';
+import { installmentPlanLabel } from '../lib/installment.js';
 
 const TIER_LABELS = { economy: 'اقتصادي', standard: 'متوسط', premium: 'ممتاز' };
 const MAX_ATTACH_MB = 8;
@@ -131,6 +132,10 @@ export default function Quotes({ onEditQuote }) {
   });
   // فلتر الحالة: null = كل الحالات. اضغط «قيد المتابعة» تطلع كل عروضها.
   const [statusFilter, setStatusFilter] = useState(null);
+  // فلتر طريقة الدفع: null = الكل، 'installment' = تقسيط، 'cash' = نقد
+  const [payFilter, setPayFilter] = useState(null);
+  // { [quoteId]: خطة التقسيط } — العرض اللي مو بالجدول يعني نقداً
+  const [instPlans, setInstPlans] = useState({});
   // شريط الحسابات مطوي افتراضياً — كان يوكل ثلث الشاشة ويخلي الجدول يبيّن صفّين
   const [creatorsOpen, setCreatorsOpen] = useState(false);
   // بطاقة رفع عرض جاهز
@@ -162,6 +167,7 @@ export default function Quotes({ onEditQuote }) {
     window.api.quotes.listDeleted().then(setDeleted).catch(() => setDeleted([]));
     window.api.quotes.statuses().then(setStatuses).catch(() => {});
     window.api.quotes.uploadedIds?.().then((ids) => setUploadedIds(ids || [])).catch(() => {});
+    window.api.quotes.installmentPlans?.().then((m) => setInstPlans(m || {})).catch(() => {});
   }
 
   useEffect(reload, []);
@@ -172,12 +178,23 @@ export default function Quotes({ onEditQuote }) {
   const uploadedSet = new Set(uploadedIds);
   const isUploaded = (qt) => uploadedSet.has(qt.id);
   const levelOf = (qt) => statuses[qt.id]?.level || 'normal';
+  // عرض بلقطة تقسيط مفعّلة = تقسيط، وأي عرض غيره = نقد
+  const isInstallment = (qt) => Boolean(instPlans[qt.id]);
   // الفلترة على مرحلتين حتى **عدّاد كل حالة يبقى صحيحاً**: نفلتر بالحسابات أولاً،
   // نعدّ الحالات على هذي المجموعة، وبعدها نطبّق فلتر الحالة والبحث.
   const byCreator = filterByCreators(quotes, seesAll ? selectedCreators : null);
+  // عدّاد الحالة يحترم فلتر الدفع (تقسيط/نقد) حتى الأرقام تتوافق مع المعروض،
+  // وعدّاد الدفع يُحسب على مجموعة الحسابات كاملة — كل عدّاد يُحسب قبل فلتره هو.
+  const byPay = byCreator.filter(
+    (x) => !payFilter || (payFilter === 'installment' ? isInstallment(x) : !isInstallment(x)));
   const statusCounts = STATUS_LEVELS.reduce(
-    (acc, l) => ({ ...acc, [l.key]: byCreator.filter((x) => levelOf(x) === l.key).length }), {});
+    (acc, l) => ({ ...acc, [l.key]: byPay.filter((x) => levelOf(x) === l.key).length }), {});
+  const payCounts = {
+    installment: byCreator.filter(isInstallment).length,
+    cash: byCreator.filter((x) => !isInstallment(x)).length,
+  };
   const filtered = byCreator
+    .filter((x) => !payFilter || (payFilter === 'installment' ? isInstallment(x) : !isInstallment(x)))
     .filter((x) => !statusFilter || levelOf(x) === statusFilter)
     .filter(
       (x) =>
@@ -391,6 +408,41 @@ export default function Quotes({ onEditQuote }) {
           كانت بطاقة الحسابات مفتوحة دائماً فتوكل ثلث الشاشة ويبقى الجدول صفّين. */}
       <div className="quotes-filters">
         <div className="qf-row">
+          <span className="qf-label">الدفع:</span>
+          <button
+            type="button"
+            className={`qf-chip${!payFilter ? ' on' : ''}`}
+            onClick={() => setPayFilter(null)}
+          >
+            الكل <b>{byCreator.length}</b>
+          </button>
+          <button
+            type="button"
+            className={`qf-chip qf-pay-inst${payFilter === 'installment' ? ' on' : ''}`}
+            onClick={() => setPayFilter(payFilter === 'installment' ? null : 'installment')}
+          >
+            🏦 تقسيط <b>{payCounts.installment}</b>
+          </button>
+          <button
+            type="button"
+            className={`qf-chip qf-pay-cash${payFilter === 'cash' ? ' on' : ''}`}
+            onClick={() => setPayFilter(payFilter === 'cash' ? null : 'cash')}
+          >
+            💵 نقد <b>{payCounts.cash}</b>
+          </button>
+
+          {seesAll && creators.length > 1 && (
+            <button
+              type="button"
+              className={`qf-chip qf-accounts${selectedCreators.length ? ' on' : ''}`}
+              onClick={() => setCreatorsOpen((v) => !v)}
+            >
+              👥 {selectedCreators.length ? `${selectedCreators.length} حساب` : 'الحسابات'} {creatorsOpen ? '▲' : '▼'}
+            </button>
+          )}
+        </div>
+
+        <div className="qf-row">
           <span className="qf-label">الحالة:</span>
           <button
             type="button"
@@ -409,16 +461,6 @@ export default function Quotes({ onEditQuote }) {
               {l.label} <b>{statusCounts[l.key] || 0}</b>
             </button>
           ))}
-
-          {seesAll && creators.length > 1 && (
-            <button
-              type="button"
-              className={`qf-chip qf-accounts${selectedCreators.length ? ' on' : ''}`}
-              onClick={() => setCreatorsOpen((v) => !v)}
-            >
-              👥 {selectedCreators.length ? `${selectedCreators.length} حساب` : 'الحسابات'} {creatorsOpen ? '▲' : '▼'}
-            </button>
-          )}
         </div>
 
         {seesAll && creators.length > 1 && creatorsOpen && (
@@ -446,11 +488,16 @@ export default function Quotes({ onEditQuote }) {
           </div>
         )}
 
-        {(statusFilter || selectedCreators.length > 0) && (
+        {(statusFilter || payFilter || selectedCreators.length > 0) && (
           <div className="qf-note">
             معروض <b>{filtered.length}</b> من {quotes.length} عرضاً
+            {payFilter && <> — {payFilter === 'installment' ? 'بالتقسيط' : 'نقداً'}</>}
             {statusFilter && <> — الحالة: <b>{STATUS_LABELS[statusFilter]}</b></>}
-            <button type="button" className="qf-clear" onClick={() => { setStatusFilter(null); setSelectedCreators([]); }}>
+            <button
+              type="button"
+              className="qf-clear"
+              onClick={() => { setStatusFilter(null); setPayFilter(null); setSelectedCreators([]); }}
+            >
               ✕ إلغاء الفلترة
             </button>
           </div>
@@ -600,6 +647,14 @@ export default function Quotes({ onEditQuote }) {
             >
               <td style={{ whiteSpace: 'nowrap' }}>
                 {qt.quote_number}
+                {isInstallment(qt) && (
+                  <span
+                    className="pay-tag pay-inst"
+                    title={`تقسيط — ${installmentPlanLabel(instPlans[qt.id])}`}
+                  >
+                    🏦
+                  </span>
+                )}
                 {isUploaded(qt) && (
                   <div
                     title="عرض جاهز مرفوع من خارج البرنامج"

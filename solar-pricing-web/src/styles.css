@@ -2096,3 +2096,27 @@ h2.page-title::before {
   .qf-accounts { margin-inline-start: 0; }
   .qf-label { width: 100%; margin-bottom: 2px; }
 }
+
+/* علامة التقسيط بخلية رقم العرض — **بلا عمود جديد**: عمود «الدفع» كان يزيد عرض
+   الجدول 92 بكسل ويطلّع زر «حذف» خارج الصندوق. غياب العلامة = نقد. */
+.pay-tag {
+  display: inline-block;
+  margin-inline-start: 3px;
+  border-radius: 8px;
+  padding: 0 2px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1.5;
+  white-space: nowrap;
+  cursor: help;
+}
+.pay-inst { background: #ffe9c7; color: #8a5b00; }
+.pay-cash { background: #e7f1ea; color: #40695a; }
+.qf-chip.qf-pay-inst b { background: #ffe9c7; color: #8a5b00; }
+.qf-chip.qf-pay-cash b { background: #e7f1ea; color: #40695a; }
+
+/* حشوة أضيق للجداول الطويلة داخل صناديق التمرير: جدول العروض ١١ عموداً، وكل
+   بكسل حشوة يتضاعف ٢٢ مرة. تنزيلها من ١٠ لـ٧ يوفّر ٦٦ بكسل — يكفي علامة
+   التقسيط بخلية الرقم بلا ما يطلع زر «حذف» خارج الصندوق. */
+.table-scroll table.data-table th { padding-inline: 7px; }
+.table-scroll table.data-table td { padding-inline: 7px; }

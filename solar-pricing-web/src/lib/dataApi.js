@@ -935,6 +935,26 @@ export const api = {
       const ids = await api.config.get(this.UPLOADED_KEY);
       return Array.isArray(ids) ? ids : [];
     },
+    // أرقام العروض المحفوظة بتقسيط — تُقرأ بطلب **واحد** لكل لقطات العروض
+    // (quote_adj_*) بدل 400 طلب منفصل، حتى تصنيف «تقسيط/نقد» بالشاشة يشتغل
+    // بلا ما ينتظر البياع. المفتاح الوحيد للتقسيط هو installment.enabled.
+    async installmentPlans() {
+      const { data, error } = await supabase
+        .from('app_config').select('key,value').like('key', 'quote_adj_%');
+      if (error) return {};
+      const out = {};
+      for (const row of data || []) {
+        const id = Number(/^quote_adj_(\d+)$/.exec(row.key)?.[1]);
+        if (!id) continue;
+        try {
+          const v = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+          if (v?.installment?.enabled) out[id] = normalizePlan(v.installment.plan);
+        } catch {
+          /* لقطة تالفة ما تكسر الشاشة — العرض ينحسب نقداً */
+        }
+      }
+      return out;
+    },
     async createUploaded(input) {
       const file = input.file;
       if (!file?.data) throw new Error('ما اخترت ملف العرض');
