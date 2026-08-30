@@ -129,6 +129,10 @@ export default function Quotes({ onEditQuote }) {
       return [];
     }
   });
+  // فلتر الحالة: null = كل الحالات. اضغط «قيد المتابعة» تطلع كل عروضها.
+  const [statusFilter, setStatusFilter] = useState(null);
+  // شريط الحسابات مطوي افتراضياً — كان يوكل ثلث الشاشة ويخلي الجدول يبيّن صفّين
+  const [creatorsOpen, setCreatorsOpen] = useState(false);
   // بطاقة رفع عرض جاهز
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadForm, setUploadForm] = useState({ clientName: '', clientPhone: '', location: '', totalPrice: '' });
@@ -167,15 +171,23 @@ export default function Quotes({ onEditQuote }) {
   const creators = seesAll ? creatorsOf(quotes) : [];
   const uploadedSet = new Set(uploadedIds);
   const isUploaded = (qt) => uploadedSet.has(qt.id);
-  const filtered = filterByCreators(quotes, seesAll ? selectedCreators : null).filter(
-    (x) =>
-      !q ||
-      String(x.quote_number).includes(q) ||
-      (x.client_name || '').toLowerCase().includes(q) ||
-      (x.client_phone || '').includes(q) ||
-      (x.location || '').toLowerCase().includes(q) ||
-      creatorName(x.created_by).toLowerCase().includes(q)
-  );
+  const levelOf = (qt) => statuses[qt.id]?.level || 'normal';
+  // الفلترة على مرحلتين حتى **عدّاد كل حالة يبقى صحيحاً**: نفلتر بالحسابات أولاً،
+  // نعدّ الحالات على هذي المجموعة، وبعدها نطبّق فلتر الحالة والبحث.
+  const byCreator = filterByCreators(quotes, seesAll ? selectedCreators : null);
+  const statusCounts = STATUS_LEVELS.reduce(
+    (acc, l) => ({ ...acc, [l.key]: byCreator.filter((x) => levelOf(x) === l.key).length }), {});
+  const filtered = byCreator
+    .filter((x) => !statusFilter || levelOf(x) === statusFilter)
+    .filter(
+      (x) =>
+        !q ||
+        String(x.quote_number).includes(q) ||
+        (x.client_name || '').toLowerCase().includes(q) ||
+        (x.client_phone || '').includes(q) ||
+        (x.location || '').toLowerCase().includes(q) ||
+        creatorName(x.created_by).toLowerCase().includes(q)
+    );
 
   function toggleCreator(key) {
     setSelectedCreators((prev) => {
@@ -375,22 +387,48 @@ export default function Quotes({ onEditQuote }) {
         </button>
       </div>
 
-      {/* اختيار الحسابات: يظهر للإدارة فقط — البياع أصلاً يشوف عروضه هو */}
-      {seesAll && creators.length > 1 && (
-        <div className="card" style={{ padding: '10px 12px', marginBottom: 10 }}>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <b style={{ color: 'var(--navy)' }}>👥 الحسابات:</b>
+      {/* شريط الفلاتر: الحالات ظاهرة دائماً، والحسابات بشريط مطوي.
+          كانت بطاقة الحسابات مفتوحة دائماً فتوكل ثلث الشاشة ويبقى الجدول صفّين. */}
+      <div className="quotes-filters">
+        <div className="qf-row">
+          <span className="qf-label">الحالة:</span>
+          <button
+            type="button"
+            className={`qf-chip${!statusFilter ? ' on' : ''}`}
+            onClick={() => setStatusFilter(null)}
+          >
+            الكل <b>{byCreator.length}</b>
+          </button>
+          {STATUS_LEVELS.map((l) => (
+            <button
+              key={l.key}
+              type="button"
+              className={`qf-chip status-${l.key}${statusFilter === l.key ? ' on' : ''}`}
+              onClick={() => setStatusFilter(statusFilter === l.key ? null : l.key)}
+            >
+              {l.label} <b>{statusCounts[l.key] || 0}</b>
+            </button>
+          ))}
+
+          {seesAll && creators.length > 1 && (
             <button
               type="button"
-              onClick={() => setSelectedCreators([])}
-              style={{
-                cursor: 'pointer', borderRadius: 20, padding: '5px 14px', fontFamily: 'inherit', fontWeight: 700,
-                border: selectedCreators.length === 0 ? '2px solid var(--navy)' : '1px solid #ccd6e2',
-                background: selectedCreators.length === 0 ? 'var(--navy)' : '#fff',
-                color: selectedCreators.length === 0 ? '#fff' : 'var(--navy)',
-              }}
+              className={`qf-chip qf-accounts${selectedCreators.length ? ' on' : ''}`}
+              onClick={() => setCreatorsOpen((v) => !v)}
             >
-              {selectedCreators.length === 0 ? '✓ ' : ''}الكل ({quotes.length})
+              👥 {selectedCreators.length ? `${selectedCreators.length} حساب` : 'الحسابات'} {creatorsOpen ? '▲' : '▼'}
+            </button>
+          )}
+        </div>
+
+        {seesAll && creators.length > 1 && creatorsOpen && (
+          <div className="qf-row qf-accounts-bar">
+            <button
+              type="button"
+              className={`qf-chip${selectedCreators.length === 0 ? ' on' : ''}`}
+              onClick={() => setSelectedCreators([])}
+            >
+              كل الفريق <b>{quotes.length}</b>
             </button>
             {creators.map((c) => {
               const on = selectedCreators.some((n) => normName(n) === c.key);
@@ -398,26 +436,26 @@ export default function Quotes({ onEditQuote }) {
                 <button
                   key={c.key}
                   type="button"
+                  className={`qf-chip${on ? ' on' : ''}`}
                   onClick={() => toggleCreator(c.key)}
-                  style={{
-                    cursor: 'pointer', borderRadius: 20, padding: '5px 14px', fontFamily: 'inherit', fontWeight: 700,
-                    border: on ? '2px solid var(--navy)' : '1px solid #ccd6e2',
-                    background: on ? '#e9f0f9' : '#fff',
-                    color: 'var(--navy)',
-                  }}
                 >
-                  {on ? '✓ ' : ''}{creatorName(c.name)} ({c.count})
+                  {creatorName(c.name)} <b>{c.count}</b>
                 </button>
               );
             })}
           </div>
-          {selectedCreators.length > 0 && (
-            <p className="muted" style={{ margin: '6px 0 0', fontSize: '0.8rem' }}>
-              معروض {filtered.length} من {quotes.length} عرضاً — اضغط «الكل» لعرض عروض الفريق كاملة.
-            </p>
-          )}
-        </div>
-      )}
+        )}
+
+        {(statusFilter || selectedCreators.length > 0) && (
+          <div className="qf-note">
+            معروض <b>{filtered.length}</b> من {quotes.length} عرضاً
+            {statusFilter && <> — الحالة: <b>{STATUS_LABELS[statusFilter]}</b></>}
+            <button type="button" className="qf-clear" onClick={() => { setStatusFilter(null); setSelectedCreators([]); }}>
+              ✕ إلغاء الفلترة
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* رفع عرض جاهز انعمل خارج البرنامج */}
       {uploadOpen && (

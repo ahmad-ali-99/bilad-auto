@@ -2006,3 +2006,93 @@ h2.page-title::before {
   line-height: 1.75;
   color: #2c4a6b;
 }
+
+/* ====== شريط فلاتر العروض ======
+   كانت بطاقة الحسابات مفتوحة دائماً بحشوة وعنوان وسطر ملاحظة، فتوكل ~130 بكسل
+   من ارتفاع الشاشة ويبقى الجدول يعرض صفّين بس. صار: صف واحد مضغوط للحالات،
+   والحسابات بشريط **مطوي** ينفتح بالضغط. */
+.quotes-filters {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 7px 10px;
+  margin-bottom: 8px;
+}
+.qf-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.qf-label {
+  font-weight: 800;
+  color: var(--navy);
+  font-size: 0.82rem;
+  margin-inline-end: 2px;
+}
+.qf-chip {
+  cursor: pointer;
+  border: 1px solid #ccd6e2;
+  background: #fff;
+  color: var(--navy);
+  border-radius: 16px;
+  padding: 4px 11px;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: background 0.12s, border-color 0.12s;
+}
+.qf-chip b {
+  font-size: 0.74rem;
+  background: #eef3f8;
+  border-radius: 9px;
+  padding: 0 6px;
+  color: #4a6a88;
+}
+.qf-chip:hover { background: #f2f6fa; }
+/* المؤشَّر: إطار كحلي واضح — الخلفية تبقى فاتحة حتى العدّاد يبقى مقروءاً */
+.qf-chip.on {
+  border: 2px solid var(--navy);
+  background: #e9f0f9;
+  padding: 3px 10px;
+}
+/* لون كل حالة يمرّ على الشريحة نفسها حتى تنعرف بالنظرة */
+.qf-chip.status-normal b { background: #d7ecfb; color: #23628f; }
+.qf-chip.status-follow b { background: #ffe9c7; color: #8a5b00; }
+.qf-chip.status-urgent b { background: #e63946; color: #fff; }
+.qf-chip.status-done   b { background: #d9f2e1; color: #1c7c46; }
+.qf-accounts { margin-inline-start: auto; }
+.qf-accounts-bar {
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px dashed var(--border);
+}
+.qf-note {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: #5a6b7d;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.qf-clear {
+  cursor: pointer;
+  border: 1px solid #ccd6e2;
+  background: #fff;
+  color: #8a3a3a;
+  border-radius: 12px;
+  padding: 2px 9px;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.qf-clear:hover { background: #fdf2f2; }
+@media (max-width: 640px) {
+  .qf-accounts { margin-inline-start: 0; }
+  .qf-label { width: 100%; margin-bottom: 2px; }
+}

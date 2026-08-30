@@ -70,3 +70,64 @@ describe('تطبيع الاسم', () => {
     expect(normName(null)).toBe('');
   });
 });
+
+// ═══ تنظيم شاشة العروض ═══════════════════════════════════════════════════
+// شكوى المستخدم: «الواجهة ضيقة وأغلب المحتوى خلف عدة طبقات وما يبين إلا عرضين».
+// السبب كان بطاقة الحسابات المفتوحة دائماً (عنوان + شرائح لكل حساب + سطر ملاحظة)
+// توكل ~130 بكسل فوق الجدول. صارت شريطاً مطوياً، وانضاف فلتر حالة بصف واحد.
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const page = fs.readFileSync(path.join(HERE, '../src/pages/Quotes.jsx'), 'utf8');
+const css = fs.readFileSync(path.join(HERE, '../src/styles.css'), 'utf8');
+
+describe('فلتر حالة العروض', () => {
+  it('أكو حالة فلتر تبدي فارغة = كل الحالات', () => {
+    expect(page).toMatch(/const \[statusFilter, setStatusFilter\] = useState\(null\)/);
+  });
+
+  it('والضغط على الحالة يفلتر عليها، وإعادة الضغط تلغي الفلتر', () => {
+    expect(page).toContain("setStatusFilter(statusFilter === l.key ? null : l.key)");
+  });
+
+  it('والعدّادات تنحسب **قبل** فلتر الحالة — وإلا صار كل عدّاد صفراً عدا المختار', () => {
+    const i = page.indexOf('const statusCounts');
+    const j = page.indexOf('.filter((x) => !statusFilter');
+    expect(i).toBeGreaterThan(0);
+    expect(j).toBeGreaterThan(i);   // العدّ قبل الفلترة
+    expect(page).toContain('byCreator.filter((x) => levelOf(x) === l.key).length');
+  });
+
+  it('وكل الحالات الأربع تطلع بالشريط', () => {
+    expect(page).toContain('STATUS_LEVELS.map((l) => (');
+    for (const k of ['normal', 'follow', 'urgent', 'done']) expect(page).toContain(`'${k}'`);
+  });
+});
+
+describe('شريط الحسابات مطوي', () => {
+  it('يبدي مطوياً — هذا اللي رجّع ارتفاع الجدول', () => {
+    expect(page).toMatch(/const \[creatorsOpen, setCreatorsOpen\] = useState\(false\)/);
+  });
+
+  it('وما بقت بطاقة حسابات مفتوحة دائماً فوق الجدول', () => {
+    expect(page).not.toContain('👥 الحسابات:');
+    expect(page).toContain('qf-accounts-bar');
+  });
+
+  it('والشريط ينفتح وينطوي بزر واحد', () => {
+    expect(page).toContain('setCreatorsOpen((v) => !v)');
+  });
+});
+
+describe('ستايل شريط الفلاتر موجود فعلاً', () => {
+  it('الأصناف مكتوبة بـstyles.css — الملف اللي ينشحن فعلاً', () => {
+    for (const cls of ['.quotes-filters', '.qf-chip', '.qf-row', '.qf-accounts-bar', '.qf-clear']) {
+      expect(css, cls).toContain(cls);
+    }
+  });
+
+  it('والمؤشَّر له إطار واضح', () => {
+    expect(css).toMatch(/\.qf-chip\.on\s*\{[^}]*border:\s*2px solid var\(--navy\)/);
+  });
+});
