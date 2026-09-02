@@ -14,6 +14,34 @@ const INST = { plan: 'company', label: 'مصرف النهرين', months: 60, ra
 const html = (copy, inst = INST) => buildInvoiceInnerHtml({
   quote: QUOTE, items: ITEMS, notes: [], company: COMPANY, installment: inst, copy });
 
+describe('توقيع الطرفين — نسخة المصرف وحدها', () => {
+  it('نسخة المصرف بيها خانتا توقيع: الشركة والزبون', () => {
+    const h = html('bank', { ...INST, plan: 'ahli', label: 'المصرف الأهلي العراقي' });
+    expect(h).toContain('الطرف الأول — بلاد اوتو');
+    expect(h).toContain('الطرف الثاني — طالب التمويل');
+    expect(h).toContain('التوقيع والختم:');
+    expect(h).toContain('التوقيع:');
+    // اسم المدير واسم الزبون كل واحد بخانته
+    expect(h).toContain('حيدر');
+    expect(h).toContain('علي حسن');
+    // خطّان فارغان للتوقيع — واحد لكل طرف
+    expect((h.match(/class="blank"/g) || []).length).toBe(2);
+  });
+
+  it('والنسختان الثانيتان تبقيان بتذييل الشركة مثل ما هو', () => {
+    for (const copy of ['client', 'cash']) {
+      const h = html(copy);
+      expect(h, copy).toContain('توقيع وختم الشركة');
+      expect(h, copy).not.toContain('الطرف الثاني — طالب التمويل');
+    }
+  });
+
+  it('ماكو تذييل مكرر — نسخة المصرف بلا بلوك الشركة القديم', () => {
+    const h = html('bank');
+    expect(h).not.toContain('توقيع وختم الشركة');
+  });
+});
+
 describe('النسخة الرسمية للمصرف', () => {
   it('معنونة للجهة المختارة بالتقسيط وباسم الزبون وتفاصيله', () => {
     const h = html('bank', { ...INST, plan: 'ahli', label: 'المصرف الأهلي العراقي' });

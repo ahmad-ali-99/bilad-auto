@@ -126,6 +126,15 @@ export function buildInvoiceInnerHtml({ quote, items, notes, company, installmen
 .inv-sheet .footer { display: flex; justify-content: space-between; margin-top: 10px; font-size: 0.88em; }
 .inv-sheet .footer .block { text-align: center; }
 .inv-sheet .footer .role { font-weight: 700; color: #1a3a5c; margin-bottom: 8px; }
+/* توقيع الطرفين — نسخة المصرف وحدها. الارتفاع مضبوط حتى تبقى الورقة صفحة واحدة */
+.inv-sheet .sign-two { display: flex; gap: 10px; margin-top: 10px; font-size: 0.86em; }
+.inv-sheet .sign-two .party { flex: 1 1 0; border: 1px solid #c7d2db; border-radius: 3px; padding: 6px 9px; }
+.inv-sheet .sign-two .party-role { font-weight: 700; color: #1a3a5c; margin-bottom: 5px; }
+.inv-sheet .sign-two .sign-line { display: flex; align-items: flex-end; gap: 6px; margin-top: 6px; }
+.inv-sheet .sign-two .sign-line .k { color: #52606d; white-space: nowrap; }
+.inv-sheet .sign-two .sign-line .v { font-weight: 700; }
+.inv-sheet .sign-two .sign-line .blank { flex: 1; border-bottom: 1px dotted #8fa0b0; min-height: 14px; }
+.inv-sheet .sign-two .sign-line.tall .blank { min-height: 30px; }
 </style>
 <div class="inv-sheet">
   <div class="header">
@@ -180,10 +189,23 @@ export function buildInvoiceInnerHtml({ quote, items, notes, company, installmen
     </tbody>
   </table>
   <div class="notes-section"><h3>ملاحظات:</h3>${notesHtml}</div>
+  ${copy === 'bank' ? `
+  <div class="sign-two">
+    <div class="party">
+      <div class="party-role">الطرف الأول — ${escapeHtml(company.company_name || '')}</div>
+      <div class="sign-line"><span class="k">المدير المفوض:</span><span class="v">${escapeHtml(company.manager_name || '')}</span></div>
+      <div class="sign-line tall"><span class="k">التوقيع والختم:</span><span class="blank"></span></div>
+    </div>
+    <div class="party">
+      <div class="party-role">الطرف الثاني — طالب التمويل</div>
+      <div class="sign-line"><span class="k">الاسم:</span><span class="v">${escapeHtml(quote.client_name || '')}</span></div>
+      <div class="sign-line tall"><span class="k">التوقيع:</span><span class="blank"></span></div>
+    </div>
+  </div>` : `
   <div class="footer">
     <div class="block"><div class="role">المدير المفوض</div><div>${escapeHtml(company.manager_name || '')}</div></div>
     <div class="block"><div class="role">توقيع وختم الشركة</div><div>&nbsp;</div></div>
-  </div>
+  </div>`}
 </div>`;
 }
 
