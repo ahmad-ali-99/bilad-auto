@@ -7,7 +7,8 @@ import * as excelImport from './excelImport.js';
 import { exportInvoicePdf, quoteFileName } from './pdfExport.js';
 import { logActivity } from './activityLog.js';
 import { UNDO, DRAFT } from './activityUndo.js';
-import { isRestrictedUser, canEditSettings, canAddMaterial, canEditMaterial, canEditInventory, canImportInventory, canImportUpdates, canEditLabor, hiddenMarkupPercentFor, applyStaffRoles } from './permissions.js';
+import { isRestrictedUser, canEditSettings, canAddMaterial, canEditMaterial, canEditInventory, canImportInventory, canImportUpdates, canEditLabor, hiddenMarkupPercentFor, applyStaffRoles, hasPrivateInventory, isAdminName } from './permissions.js';
+import { visibleMaterials } from './inventoryVisibility.js';
 import { parseRoles, serializeRoles, normName as normStaffName } from './staffRoles.js';
 import { applyExportMethod, setExportMethod, getExportMethod } from './exportMethod.js';
 import { createClient } from '@supabase/supabase-js';
@@ -253,7 +254,7 @@ async function allMaterials() {
   throwIf(error);
   // قدرة الكابينات المتكاملة (kW) لازمة للتحجيم التلقائي — تنلحق من app_config
   // والصفوف ترجع كلها (حتى المخفية) لأن الاستيراد والعروض المحفوظة تحتاجها
-  return withActive(await withIpRating(await withIntegratedKw(data || [])));
+  return withActive(await withIpRating(await withIntegratedKw(await withPrivateInventory(data || []))));
 }
 
 async function nextQuoteNumber() {
@@ -304,6 +305,22 @@ const ownerKey = (id) => `material_owner_${id}`;
 
 async function materialOwner(id) {
   return api.config.get(ownerKey(id));
+}
+
+// عزل المخزون: مواد الحسابات «المخزون الخاص» ما تظهر ولا تُستعمل إلا عند
+// صاحبها وعند الإدارة. محطوطة بنقطتَي القراءة الوحيدتين (allMaterials للمحرك
+// وapi.materials.list للشاشات) حتى ما تنسى شاشة.
+async function withPrivateInventory(rows) {
+  try {
+    const me = await currentUsername();
+    if (isAdminName(me)) return rows;
+    const owners = await api.materials.owners();
+    return visibleMaterials(me, rows, owners, { isAdmin: isAdminName, isPrivateOwner: hasPrivateInventory });
+  } catch {
+    // تعذّرت قراءة المُلّاك — ما نخفي شي. الاختيار الثاني (إخفاء الكل) يفرّغ
+    // المخزون لكل الفريق بأول تعثّر شبكة، وهذا ضرر أكبر بكثير.
+    return rows;
+  }
 }
 
 /** يمنع الكتابة على مادة ما يملكها الحساب — الحارس بطبقة البيانات مو بالواجهة */
@@ -378,7 +395,7 @@ export const api = {
       if (category) q = q.eq('category', category);
       const { data, error } = await q;
       throwIf(error);
-      return withActive(await withIpRating(await withIntegratedKw(data || [])));
+      return withActive(await withIpRating(await withIntegratedKw(await withPrivateInventory(data || []))));
     },
     // صورة المنتج لكل مادة — تُستعمل بمنشور الباقات. تنخزن بـapp_config
     // (نفس منفذ التوسعة اللي يمشي بلا تعديل بنية القاعدة).

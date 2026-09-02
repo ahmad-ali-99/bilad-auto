@@ -67,7 +67,7 @@ describe('السجل يجي من القاعدة — يتقرا بحذر', () => 
   it('والمفاتيح الغريبة تنشال', () => {
     const r = parseRoles({ 'س': { hackTheThing: true } });
     expect(Object.keys(r[normName('س')]).sort())
-      .toEqual([...CAPABILITY_KEYS, 'hiddenMarkupPercent', 'label'].sort());
+      .toEqual([...CAPABILITY_KEYS, 'hiddenMarkupPercent', 'privateInventory', 'label'].sort());
   });
 
   it('ومدخلات فاسدة ما تكسر شي', () => {

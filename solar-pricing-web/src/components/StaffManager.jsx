@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { CAPABILITIES, CAPABILITY_KEYS, emptyRole, adminRole } from '../lib/staffRoles.js';
-import { effectiveRole } from '../lib/permissions.js';
+import { effectiveRole, isForcedPrivateInventory } from '../lib/permissions.js';
 
 // أسماء تظهر بالسجل حتى لو ما انحفظ إلها صف بعد — حتى المشرف يشوف الفريق
 // كله بنظرة بدل ما يتذكر الأسماء ويكتبها بيده. الصلاحيات الفعلية لهذي
@@ -8,7 +8,7 @@ import { effectiveRole } from '../lib/permissions.js';
 const KNOWN = [
   'أحمد', 'حيدر', 'حوراء', 'بكر', 'علي سبتي', 'ليث كرادة',
   'براء مكتب النواعير', 'ابو يزن الطاقة الخضراء', 'مصطفى شركة سيل',
-  'حسين انوار المدينه', 'محمد يعقوب كربلاء 42',
+  'حسين انوار المدينه', 'محمد يعقوب كربلاء 42', 'حسين الصائغ',
 ];
 
 // **يبدأ من الصلاحيات الفعّالة لا من الصفر**: الحساب اللي ماكو له صف بالسجل
@@ -144,6 +144,15 @@ export default function StaffManager({ canManageCodes }) {
                   {CAPABILITIES[k]}
                 </label>
               ))}
+              <label className={r.privateInventory ? 'cap on' : 'cap'}
+                title={isForcedPrivateInventory(r.username) ? 'عزل مثبّت بالكود — ما ينطفي من هنا' : ''}>
+                <input
+                  type="checkbox" checked={r.privateInventory === true}
+                  disabled={isForcedPrivateInventory(r.username)}
+                  onChange={() => toggle(i, 'privateInventory')}
+                />
+                مخزونه المضاف خاص بيه
+              </label>
               <label className="cap cap-markup">
                 زيادة مخفية %
                 <input

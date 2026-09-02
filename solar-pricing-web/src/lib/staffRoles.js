@@ -57,6 +57,10 @@ export function parseRoles(raw) {
     const role = emptyRole();
     for (const k of CAPABILITY_KEYS) role[k] = caps[k] === true;
     role.hiddenMarkupPercent = Number(caps.hiddenMarkupPercent) > 0 ? Number(caps.hiddenMarkupPercent) : 0;
+    // **مو ضمن CAPABILITY_KEYS عمداً**: adminRole() يشعّل كل مفتاح بالقائمة،
+    // فلو كانت وحدة منها صار زر «مشرف» يقلب مخزون أحمد وحوراء وحيدر خاصاً
+    // بلا ما أحد يقصد. خانة مستقلة مثل الزيادة المخفية.
+    role.privateInventory = caps.privateInventory === true;
     role.label = typeof caps.label === 'string' ? caps.label : String(name);
     out[normName(name)] = role;
   }
@@ -71,6 +75,7 @@ export function serializeRoles(rows) {
     const caps = {};
     for (const k of CAPABILITY_KEYS) caps[k] = r[k] === true;
     caps.hiddenMarkupPercent = Number(r.hiddenMarkupPercent) > 0 ? Number(r.hiddenMarkupPercent) : 0;
+    caps.privateInventory = r.privateInventory === true;
     caps.label = r.username;
     out[r.username] = caps;
   }

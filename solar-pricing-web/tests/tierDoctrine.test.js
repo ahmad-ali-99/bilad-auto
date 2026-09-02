@@ -205,7 +205,7 @@ describe('الـIP موصول بكل المسارات', () => {
   it('ينخزن بـapp_config وينلحق بكل المواد', () => {
     expect(dataApi).toContain('async function saveIpRating');
     expect(dataApi).toContain('async function withIpRating');
-    expect(dataApi).toContain('withActive(await withIpRating(await withIntegratedKw(data || [])))');
+    expect(dataApi).toContain('withActive(await withIpRating(await withIntegratedKw(await withPrivateInventory(data || []))))');
   });
   it('ما ينرسل عمود ip_rating للقاعدة — ماكو عمود إله', () => {
     // حمولة القاعدة تعدّد الأعمدة صراحةً، والاستيراد يفصله قبل الإدخال

@@ -112,6 +112,33 @@ export function hiddenMarkupPercentFor(username) {
 
 export { HIDDEN_MARKUP_PERCENT };
 
+// ═══ عزل المخزون المضاف ════════════════════════════════════════════════════
+// حسابات مخزونها اللي تضيفه **خاص بيها**: يظهر لها هي وللإدارة فقط، وما يدخل
+// عروض بقية الحسابات. المخزون المشترك يبقى مفتوحاً لها مثل ما هو.
+//
+// **اللائحة تسبق السجل هنا** — عكس بقية الصلاحيات. سبب واضح: العزل قرار
+// حماية، ولو اشتغل مثل الباقي كان مجرد حفظ صف صلاحيات لهذا الحساب من الشاشة
+// (والصف ينحفظ بلا الخانة إذا انفتحت الشاشة بنسخة قديمة) يفكّ العزل بصمت
+// ويطلع مخزونه لكل الفريق. الشاشة تقدر **تزيد** حسابات، ما تقدر تشيل هذي.
+// **المطابقة باحتواء اللقب مو بالاسم الكامل**: باقي اللوائح تطابق الاسم حرفياً
+// لأنها تفتح صلاحيات — والمطابقة الفاشلة هناك تفتح الحساب فينتبه صاحبه. هنا
+// العكس: المطابقة الفاشلة تسرّب مخزوناً كان لازم ينعزل، وما ينتبه لها أحد.
+// فالحساب ينلگه بلقبه مهما انكتب اسمه («حسين الصائغ» · «حسين الصايغ» ·
+// «حسين الصائغ كربلاء»)، والهمزة تنكتب بالشكلين فالاثنان مسجّلان.
+const PRIVATE_INVENTORY_MARKS = ['الصائغ', 'الصايغ'];
+
+/** حساب عزله مثبّت باللائحة — الشاشة تعرضه مقفلاً بدل ما توهم إنه ينطفي */
+export function isForcedPrivateInventory(username) {
+  const u = norm(username);
+  return !!u && PRIVATE_INVENTORY_MARKS.some((n) => u.includes(norm(n)));
+}
+
+/** هل مخزون هذا الحساب المضاف خاص بيه؟ */
+export function hasPrivateInventory(username) {
+  if (isForcedPrivateInventory(username)) return true;
+  return roleOf(username)?.privateInventory === true;
+}
+
 export function isRestrictedUser(username) {
   const u = norm(username);
   return RESTRICTED_USERS.some((r) => norm(r) === u);
@@ -228,6 +255,7 @@ export function effectiveRole(username) {
     attributeQuotes: isAdminName(username),
     viewHistory: isOwnerAccount(username),
     hiddenMarkupPercent: hiddenMarkupPercentFor(username),
+    privateInventory: hasPrivateInventory(username),
   };
 }
 
