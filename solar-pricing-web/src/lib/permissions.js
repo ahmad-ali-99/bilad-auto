@@ -123,8 +123,8 @@ export { HIDDEN_MARKUP_PERCENT };
 // **المطابقة باحتواء اللقب مو بالاسم الكامل**: باقي اللوائح تطابق الاسم حرفياً
 // لأنها تفتح صلاحيات — والمطابقة الفاشلة هناك تفتح الحساب فينتبه صاحبه. هنا
 // العكس: المطابقة الفاشلة تسرّب مخزوناً كان لازم ينعزل، وما ينتبه لها أحد.
-// فالحساب ينلگه بلقبه مهما انكتب اسمه («حسين الصائغ» · «حسين الصايغ» ·
-// «حسين الصائغ كربلاء»)، والهمزة تنكتب بالشكلين فالاثنان مسجّلان.
+// فالحساب ينلگه بلقبه مهما انكتب اسمه («حسنين الصائغ» · «حسنين الصايغ» ·
+// «حسين الصائغ»)، والهمزة تنكتب بالشكلين فالاثنان مسجّلان.
 const PRIVATE_INVENTORY_MARKS = ['الصائغ', 'الصايغ'];
 
 /** حساب عزله مثبّت باللائحة — الشاشة تعرضه مقفلاً بدل ما توهم إنه ينطفي */
@@ -141,6 +141,10 @@ export function hasPrivateInventory(username) {
 
 export function isRestrictedUser(username) {
   const u = norm(username);
+  // حساب الصائغ: مخزونه خاص بيه — يضيف مواده ويعدّلها، والمخزون المشترك
+  // والأجور والإعدادات ما تنمس. بلا هذا السطر كان الحساب يفشل مفتوحاً
+  // (اسم مو بأي لائحة = صلاحيات كاملة) فيعدّل مخزون الفريق كله.
+  if (isForcedPrivateInventory(username)) return true;
   return RESTRICTED_USERS.some((r) => norm(r) === u);
 }
 
@@ -152,7 +156,10 @@ export function canEditInventory(username) {
 // حساب يضيف مواد جديدة ويملك اللي يضيفه
 export function isInventoryContributor(username) {
   const u = norm(username);
-  return cap(username, 'addMaterial', INVENTORY_CONTRIBUTORS.some((r) => norm(r) === u));
+  // حساب الصائغ يضيف ويملك اللي يضيفه — نفس حسابات المكاتب
+  const before = isForcedPrivateInventory(username)
+    || INVENTORY_CONTRIBUTORS.some((r) => norm(r) === u);
+  return cap(username, 'addMaterial', before);
 }
 
 // هل يقدر يضيف مادة جديدة للمخزون؟

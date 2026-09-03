@@ -3,10 +3,12 @@ import { visibleMaterials } from '../src/lib/inventoryVisibility.js';
 import {
   hasPrivateInventory, isForcedPrivateInventory, isAdminName,
   applyStaffRoles, effectiveRole,
+  canAddMaterial, isInventoryContributor, canEditMaterial, canEditInventory,
+  canEditLabor, canEditSettings, canImportInventory, canImportUpdates,
 } from '../src/lib/permissions.js';
 import { parseRoles, serializeRoles } from '../src/lib/staffRoles.js';
 
-const HUSSEIN = 'حسين الصائغ';
+const HUSSEIN = 'حسنين الصائغ';
 
 // مخزون بسيط: مادتان مشتركتان، ومادتان أضافهما حسين، وواحدة أضافها بكر
 const ROWS = [
@@ -22,7 +24,7 @@ const filter = (me) =>
   visibleMaterials(me, ROWS, OWNERS, { isAdmin: isAdminName, isPrivateOwner: hasPrivateInventory })
     .map((m) => m.id);
 
-describe('عزل مخزون حسين الصائغ', () => {
+describe('عزل مخزون حسنين الصائغ', () => {
   beforeEach(() => applyStaffRoles({}));
 
   it('حسين يشوف مخزونه المضاف مع المخزون المشترك', () => {
@@ -51,14 +53,45 @@ describe('عزل مخزون حسين الصائغ', () => {
 
   it('اختلاف كتابة الاسم ما يفك العزل', () => {
     for (const n of [
-      'حسين الصائغ', 'حسين الصايغ', 'حسين  الصائغ', 'حسين الصائغ ',
-      'حسين الصائغ كربلاء', 'الصائغ',
+      'حسنين الصائغ', 'حسنين الصايغ', 'حسنين  الصائغ', 'حسنين الصائغ ',
+      'حسين الصائغ', 'حسنين الصائغ كربلاء', 'الصائغ',
     ]) expect(hasPrivateInventory(n), n).toBe(true);
   });
 
   it('وحسابات ثانية ما تنعزل بالغلط', () => {
-    for (const n of ['حسين', 'حسين انوار المدينة', 'أحمد', 'بكر', '', null])
+    for (const n of ['حسنين', 'حسين', 'حسين انوار المدينة', 'أحمد', 'بكر', '', null])
       expect(hasPrivateInventory(n), String(n)).toBe(false);
+  });
+});
+
+describe('صلاحيات حساب الصائغ — يضيف ويعدّل مخزونه هو بس', () => {
+  beforeEach(() => applyStaffRoles({}));
+
+  it('يضيف مواد ويملك اللي يضيفه', () => {
+    expect(canAddMaterial(HUSSEIN)).toBe(true);
+    expect(isInventoryContributor(HUSSEIN)).toBe(true);
+    expect(canEditMaterial(HUSSEIN, HUSSEIN)).toBe(true);
+  });
+
+  it('وما يمس المخزون المشترك ولا مواد غيره', () => {
+    expect(canEditInventory(HUSSEIN)).toBe(false);
+    expect(canEditMaterial(HUSSEIN, null)).toBe(false);
+    expect(canEditMaterial(HUSSEIN, 'أحمد')).toBe(false);
+  });
+
+  it('ولا الأجور ولا الإعدادات', () => {
+    expect(canEditLabor(HUSSEIN)).toBe(false);
+    expect(canEditSettings(HUSSEIN)).toBe(false);
+  });
+
+  it('الاستيراد يضيف الجديد بس — مو باباً خلفياً للمخزون المشترك', () => {
+    expect(canImportInventory(HUSSEIN)).toBe(true);
+    expect(canImportUpdates(HUSSEIN)).toBe(false);
+  });
+
+  it('والإدارة تبقى تعدّل مواده', () => {
+    for (const admin of ['أحمد', 'حوراء', 'حيدر'])
+      expect(canEditMaterial(admin, HUSSEIN), admin).toBe(true);
   });
 });
 
