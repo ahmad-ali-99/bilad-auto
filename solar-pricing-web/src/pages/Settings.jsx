@@ -48,6 +48,10 @@ export default function Settings() {
   const [ahliRate, setAhliRate] = useState('1.26');
   const [ahliMonths, setAhliMonths] = useState('84');
   const [ahliMsg, setAhliMsg] = useState('');
+  // مصرف الإقليم التجاري — مصرف ثالث يدعم مبادرة البنك المركزي، بنسبته وأشهره
+  const [iqRate, setIqRate] = useState('1.26');
+  const [iqMonths, setIqMonths] = useState('84');
+  const [iqMsg, setIqMsg] = useState('');
   function reload() {
     window.api.settings.get().then(setSettings);
     window.api.company.get().then(setCompany);
@@ -59,6 +63,10 @@ export default function Settings() {
     window.api.config.get('installment_ahli').then((cfg) => {
       if (cfg?.rate > 0) setAhliRate(String(cfg.rate));
       if (cfg?.months > 0) setAhliMonths(String(cfg.months));
+    }).catch(() => {});
+    window.api.config.get('installment_iqleem').then((cfg) => {
+      if (cfg?.rate > 0) setIqRate(String(cfg.rate));
+      if (cfg?.months > 0) setIqMonths(String(cfg.months));
     }).catch(() => {});
   }
 
@@ -84,6 +92,18 @@ export default function Settings() {
     }
     await window.api.config.set('installment_ahli', { rate, months });
     setAhliMsg(`تم الحفظ ✔ عروض المصرف الأهلي العراقي: المجموع × ${rate} ÷ ${months} شهراً`);
+  }
+
+  async function saveIqleem(e) {
+    e.preventDefault();
+    const rate = Number(iqRate);
+    const months = Math.round(Number(iqMonths));
+    if (!(rate > 0) || !(months > 0)) {
+      setIqMsg('أدخل نسبة وأشهر صحيحة — النسبة معامل ضرب مثل 1.26');
+      return;
+    }
+    await window.api.config.set('installment_iqleem', { rate, months });
+    setIqMsg(`تم الحفظ ✔ عروض مصرف الإقليم التجاري: المجموع × ${rate} ÷ ${months} شهراً`);
   }
 
   useEffect(reload, []);
@@ -262,6 +282,28 @@ export default function Settings() {
           حفظ إعدادات الأهلي
         </button>
         {ahliMsg && <div className="alert alert-info" style={{ marginTop: 10, marginBottom: 0 }}>{ahliMsg}</div>}
+      </form>
+
+      <form className="card" onSubmit={saveIqleem}>
+        <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>🏦 مصرف الإقليم التجاري</h3>
+        <p className="muted" style={{ marginTop: 0 }}>
+          مصرف يدعم مبادرة البنك المركزي، ونسبته وأشهره <b>مستقلة</b> عن النهرين والأهلي.
+          القيم أدناه افتراض أولي — <b>ثبّت نسبة المصرف الحقيقية من هنا قبل أول عرض</b>.
+        </p>
+        <div className="grid-2">
+          <div className="field">
+            <label>نسبة فائدة المصرف (معامل الضرب)</label>
+            <input type="number" step="any" min="0" value={iqRate} onChange={(e) => setIqRate(e.target.value)} placeholder="مثال: 1.26" />
+          </div>
+          <div className="field">
+            <label>عدد أشهر التقسيط</label>
+            <input type="number" min="1" value={iqMonths} onChange={(e) => setIqMonths(e.target.value)} placeholder="84" />
+          </div>
+        </div>
+        <button className="btn btn-primary" type="submit">
+          حفظ إعدادات الإقليم التجاري
+        </button>
+        {iqMsg && <div className="alert alert-info" style={{ marginTop: 10, marginBottom: 0 }}>{iqMsg}</div>}
       </form>
 
       

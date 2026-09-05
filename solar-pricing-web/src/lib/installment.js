@@ -3,6 +3,7 @@
 export const INSTALLMENT_PLANS = {
   company: 'مصرف النهرين',
   ahli: 'المصرف الأهلي العراقي',
+  iqleem: 'مصرف الإقليم التجاري',
 };
 
 // **خطة «مبادرة البنك المركزي» انشالت** (قرار المستخدم): المبادرة كانت تُدار
@@ -30,6 +31,9 @@ export function installmentPlanLabel(plan) {
 const ADDRESS_BANKS = {
   company: 'مصرف النهرين',
   ahli: 'المصرف الأهلي العراقي',
+  // الاسم الرسمي الكامل بالعنونة، والمختصر باسم الخطة — الكتاب الرسمي
+  // ينعنون للمصرف بأسمه المسجّل
+  iqleem: 'مصرف الإقليم التجاري للاستثمار والتمويل',
 };
 
 export function addressBankLabel(plan) {

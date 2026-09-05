@@ -388,6 +388,16 @@ async function attributedCreator(input) {
   return input.createdBy;
 }
 
+// **لكل مصرف مفتاحه ونسبته وأشهره**. كان الأهلي يستعير إعداد النهرين، فيطلع
+// عرضه بـ35% بدل نسبته هو — عرض 464 طلع 14,034,600 بدل ≈13,098,960، والبياع
+// ما عنده وين يغيّرها. الجدول هنا حتى إضافة مصرف جديد تكون سطراً واحداً.
+// القيم أدناه افتراضات أولية بس — المحفوظ بالإعدادات يسبقها دائماً.
+const PLAN_TERMS = {
+  company: { key: 'installment', rate: 1.35, months: 60 },          // مصرف النهرين
+  ahli: { key: 'installment_ahli', rate: 1.26, months: 84 },        // المصرف الأهلي العراقي
+  iqleem: { key: 'installment_iqleem', rate: 1.26, months: 84 },    // مصرف الإقليم التجاري
+};
+
 export const api = {
   materials: {
     async list(category) {
@@ -707,10 +717,7 @@ export const api = {
       // **لكل مصرف نسبته وأشهره**. كان الأهلي يستعير إعداد النهرين، فيطلع عرضه
       // بـ35% بدل نسبته هو — عرض 464 طلع 14,034,600 بدل ≈13,098,960، والبياع
       // ما عنده وين يغيّرها لأن الإعدادات ما بيها قسم للأهلي أصلاً.
-      const key = plan === 'ahli' ? 'installment_ahli' : 'installment';
-      const fallback = plan === 'ahli'
-        ? { rate: 1.26, months: 84 }    // المصرف الأهلي العراقي: 26% لسبع سنوات
-        : { rate: 1.35, months: 60 };   // مصرف النهرين
+      const { key, ...fallback } = PLAN_TERMS[plan] || PLAN_TERMS.company;
       const cfg = await api.config.get(key);
       // نسبة وأشهر خاصة بهذا العرض تتقدّم على الإعدادات العامة — حتى يقسّط على
       // أي مصرف بنسبته بلا ما يغيّر الإعدادات المشتركة لكل الفريق

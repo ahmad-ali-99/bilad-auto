@@ -198,17 +198,24 @@ describe('إخفاء المجموع الكلي انشال', () => {
 // يعني 1.35، وهي **نسبة النهرين** مو نسبة الأهلي. السبب: الأهلي كان يقرا
 // مفتاح إعدادات النهرين نفسه، وما بالإعدادات قسم للأهلي حتى يغيّرها البياع.
 describe('لكل مصرف مفتاح إعداداته ونسبته', () => {
-  it('الأهلي يقرا installment_ahli — لا مفتاح النهرين', () => {
-    expect(dataApi).toMatch(/plan === 'ahli' \? 'installment_ahli' : 'installment'/);
+  it('كل مصرف بمفتاحه — جدول واحد بدل شرط ثنائي', () => {
+    expect(dataApi).toMatch(/company:\s*\{\s*key:\s*'installment'/);
+    expect(dataApi).toMatch(/ahli:\s*\{\s*key:\s*'installment_ahli'/);
+    expect(dataApi).toMatch(/iqleem:\s*\{\s*key:\s*'installment_iqleem'/);
+    // ماكو مصرفان يتشاركان مفتاحاً — الاستعارة هي أصل عطل عرض 464
+    const keys = dataApi.match(/key:\s*'(installment[a-z_]*)'/g) || [];
+    expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it('والافتراضان منفصلان: الأهلي 1.26×84 والنهرين 1.35×60', () => {
-    expect(dataApi).toMatch(/\{\s*rate:\s*1\.26,\s*months:\s*84\s*\}/);
-    expect(dataApi).toMatch(/\{\s*rate:\s*1\.35,\s*months:\s*60\s*\}/);
+  it('والافتراضات منفصلة: النهرين 1.35×60 والباقي 1.26×84', () => {
+    expect(dataApi).toMatch(/key:\s*'installment',\s*rate:\s*1\.35,\s*months:\s*60/);
+    expect(dataApi).toMatch(/key:\s*'installment_ahli',\s*rate:\s*1\.26,\s*months:\s*84/);
+    expect(dataApi).toMatch(/key:\s*'installment_iqleem',\s*rate:\s*1\.26,\s*months:\s*84/);
   });
 
   it('**ما يبقى أثر للاستعارة**: ماكو سطر يخلي الأهلي على مفتاح النهرين', () => {
-    expect(dataApi).not.toMatch(/plan === 'cbi' \? 'installment_cbi' : 'installment'/);
+    expect(dataApi).not.toMatch(/installment_cbi/);
+    expect(dataApi).not.toMatch(/plan === 'ahli' \? 'installment_ahli' : 'installment'/);
   });
 
   it('والإعدادات بيها قسم للأهلي يحفظ installment_ahli', () => {
@@ -264,8 +271,10 @@ describe('فتح عرض محفوظ ما يبدّل مصرفه', () => {
 
 // ═══ عنونة النسخة الرسمية ═══
 describe('مبادرة البنك المركزي انشالت خياراً', () => {
-  it('ما بقت بقائمة الخطط — خطتان بس', () => {
-    expect(Object.keys(INSTALLMENT_PLANS).sort()).toEqual(['ahli', 'company']);
+  it('ما بقت بقائمة الخطط، والخطط هي المصارف نفسها', () => {
+    expect(Object.keys(INSTALLMENT_PLANS).sort()).toEqual(['ahli', 'company', 'iqleem']);
+    // **الشرط الحقيقي**: ولا خطة اسمها مبادرة — كل خطة مصرف يستلم فعلاً
+    expect(Object.values(INSTALLMENT_PLANS)).not.toContain('مبادرة البنك المركزي');
   });
 
   it('**والعروض المحفوظة عليها ما تنكسر**: تُقرأ على الأهلي مموّلها', () => {
@@ -293,8 +302,11 @@ describe('مبادرة البنك المركزي انشالت خياراً', () 
   it('وماكو أثر للمبادرة بالواجهة ولا بالإعدادات', () => {
     const settings = fs.readFileSync(path.join(HERE, '../src/pages/Settings.jsx'), 'utf8');
     expect(settings).not.toContain('installment_cbi');
-    expect(settings).not.toContain('مبادرة البنك المركزي');
-    expect(builder).not.toContain('مبادرة البنك المركزي');
+    // ذكر المبادرة كوصف لمصرف يدعمها مسموح — الممنوع رجوعها **خياراً**:
+    // مفتاح خطة أو زر بالشاشة أو تسمية تطلع بورقة العرض
+    expect(settings).not.toMatch(/key:\s*'cbi'/);
+    expect(builder).not.toMatch(/key:\s*'cbi'/);
+    expect(builder).not.toContain("label: 'مبادرة البنك المركزي'");
   });
 
   it('وشاشة العرض تقرا العنونة من نفس المصدر بدل ما تكتبها بالإيد', () => {

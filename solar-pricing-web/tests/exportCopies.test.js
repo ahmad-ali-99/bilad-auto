@@ -64,6 +64,7 @@ describe('النسخة الرسمية للمصرف', () => {
       company: 'مصرف النهرين',
       ahli: 'المصرف الأهلي العراقي',
       cbi: 'المصرف الأهلي العراقي',
+      iqleem: 'مصرف الإقليم التجاري للاستثمار والتمويل',
     };
     for (const plan of Object.keys(INSTALLMENT_PLANS)) {
       const h = html('bank', { ...INST, plan, label: INSTALLMENT_PLANS[plan], addressee: addressBankLabel(plan) });
