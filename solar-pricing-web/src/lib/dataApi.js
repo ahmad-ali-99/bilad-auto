@@ -7,7 +7,7 @@ import * as excelImport from './excelImport.js';
 import { exportInvoicePdf, quoteFileName } from './pdfExport.js';
 import { logActivity } from './activityLog.js';
 import { UNDO, DRAFT } from './activityUndo.js';
-import { isRestrictedUser, canEditSettings, canAddMaterial, canEditMaterial, canEditInventory, canImportInventory, canImportUpdates, canEditLabor, hiddenMarkupPercentFor, applyStaffRoles, hasPrivateInventory, isAdminName } from './permissions.js';
+import { isRestrictedUser, canEditSettings, canAddMaterial, canEditMaterial, canEditInventory, canImportInventory, canImportUpdates, canEditLabor, hiddenMarkupPercentFor, applyStaffRoles, hasPrivateInventory, isAdminName, canManageAccounts } from './permissions.js';
 import { visibleMaterials } from './inventoryVisibility.js';
 import { parseRoles, serializeRoles, normName as normStaffName } from './staffRoles.js';
 import { applyExportMethod, setExportMethod, getExportMethod } from './exportMethod.js';
@@ -171,6 +171,11 @@ async function withIntegratedKw(rows) {
 // ولهذا العروض المحفوظة اللي فيها مادة انخفت لاحقاً تبقى مثل ما هي (بنودها لقطات).
 const MATERIALS_DISABLED_KEY = 'materials_disabled';
 const STAFF_ROLES_KEY = 'staff_roles';
+// أسماء الحسابات المُنشأة من الشاشة. **ضرورية**: الحساب الجديد ما إله صف
+// صلاحيات (يمشي بالافتراضات)، وقائمة الشاشة كانت تتبنى من الأسماء المعروفة
+// بالكود + أصحاب الصفوف — فالحساب ينخلق فعلاً ويختفي بأول تحديث للصفحة،
+// فيبدو إنه «ما انضاف».
+const STAFF_ACCOUNTS_KEY = 'staff_accounts';
 // تفضيل محرك التصدير لكل حساب — مفتاح باسمه المُوحّد
 const exportPrefKey = (name) => `export_method_${normStaffName(name)}`;
 
@@ -234,6 +239,12 @@ async function assertCanWriteConfig(key) {
   // لأن app_config مفتوح للكتابة لأي حساب مسجّل
   if (k === STAFF_ROLES_KEY && !canEditSettings(await currentUsername())) {
     throw new Error('تعديل صلاحيات الحسابات محصور بحسابات الإدارة');
+  }
+
+  // قائمة الحسابات المُنشأة: يكتبها من يقدر ينشئ حساباً — وإلا صار أي حساب
+  // مسجّل يضيف أسماء وهمية لشاشة الصلاحيات
+  if (k === STAFF_ACCOUNTS_KEY && !canManageAccounts(await currentUsername())) {
+    throw new Error('إنشاء الحسابات محصور بحسابات الإدارة');
   }
 
   // تفضيل محرك التصدير: **كل حساب يكتب مفتاحه هو بس**. app_config مفتوح
@@ -1536,6 +1547,12 @@ export const api = {
       return parseRoles(await api.config.get(STAFF_ROLES_KEY));
     },
 
+    /** أسماء الحسابات المُنشأة من الشاشة — تكمّل قائمة الصلاحيات */
+    async accounts() {
+      const saved = await api.config.get(STAFF_ACCOUNTS_KEY);
+      return Array.isArray(saved) ? saved.filter((n) => typeof n === 'string' && n.trim()) : [];
+    },
+
     /** يحفظ صفوف الشاشة كسجل — الحارس بـassertCanWriteConfig */
     async save(rows) {
       const before = await api.config.get(STAFF_ROLES_KEY);
@@ -1588,6 +1605,17 @@ export const api = {
       }
       // الجلسة المؤقتة تنقفل فوراً — ما نخليها حيّة بذاكرة المتصفح
       try { await tmp.auth.signOut({ scope: 'local' }); } catch { /* مؤقتة أصلاً */ }
+
+      // **يُسجَّل الاسم بقائمة الحسابات**: بدونها الحساب ينخلق بالقاعدة ويختفي
+      // من الشاشة بأول تحديث، لأن القائمة كانت تتبنى من أسماء مكتوبة بالكود
+      // ومن أصحاب صفوف الصلاحيات — والحساب الجديد ماكو بالاثنين.
+      try {
+        const saved = await api.config.get(STAFF_ACCOUNTS_KEY);
+        const list = Array.isArray(saved) ? saved : [];
+        if (!list.some((n) => normStaffName(n) === normStaffName(name))) {
+          await setConfigRaw(STAFF_ACCOUNTS_KEY, [...list, name]);
+        }
+      } catch { /* تسجيل الاسم بالقائمة ما يمنع الحساب اللي انخلق فعلاً */ }
 
       logActivity('إنشاء حساب موظف', 'الإعدادات', {
         'الحساب': name,

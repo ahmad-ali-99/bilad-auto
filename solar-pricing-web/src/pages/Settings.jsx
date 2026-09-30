@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { getAgentKey, setAgentKey, SHARE_KEY_SQL } from '../lib/agent.js';
 import { getCurrentUsername } from '../lib/agent.js';
-import { canEditSettings } from '../lib/permissions.js';
+import { canEditSettings, canManageAccounts } from '../lib/permissions.js';
 import StaffManager from '../components/StaffManager.jsx';
 import { EXPORT_METHODS, getExportMethod } from '../lib/exportMethod.js';
 
@@ -29,8 +29,7 @@ export default function Settings() {
     getCurrentUsername()
       .then((n) => {
         setCanEdit(canEditSettings(n));
-        const norm = String(n || '').trim().replace(/\s+/g, ' ').replace(/[أإآ]/g, 'ا');
-        setMayManageCodes(norm === 'احمد' || norm === 'حيدر');
+        setMayManageCodes(canManageAccounts(n));
       })
       .catch(() => {});
   }, []);

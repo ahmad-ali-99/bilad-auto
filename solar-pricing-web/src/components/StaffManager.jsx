@@ -31,14 +31,19 @@ export default function StaffManager({ canManageCodes }) {
 
   const load = useCallback(async () => {
     try {
-      const roles = await window.api.staff.list();
-      // الأسماء المعروفة + أي اسم بالسجل — بلا تكرار
+      const [roles, created] = await Promise.all([
+        window.api.staff.list(),
+        window.api.staff.accounts().catch(() => []),
+      ]);
+      // الأسماء المعروفة + الحسابات المُنشأة من الشاشة + أصحاب صفوف السجل —
+      // بلا تكرار. **الحسابات المُنشأة لازم تجي هنا**: الحساب الجديد ما إله
+      // صف صلاحيات، وبدونها يختفي من القائمة بأول تحديث فيبدو إنه ما انضاف.
       const seen = new Set();
       const list = [];
-      for (const n of KNOWN) { seen.add(n); list.push(rowFrom(n, roles[n] || Object.values(roles).find((r) => r.label === n))); }
-      for (const r of Object.values(roles)) {
-        if (r.label && !seen.has(r.label)) { seen.add(r.label); list.push(rowFrom(r.label, r)); }
-      }
+      const push = (n, role) => { if (seen.has(n)) return; seen.add(n); list.push(rowFrom(n, role)); };
+      for (const n of KNOWN) push(n, roles[n] || Object.values(roles).find((r) => r.label === n));
+      for (const n of created) push(n, roles[n] || Object.values(roles).find((r) => r.label === n));
+      for (const r of Object.values(roles)) { if (r.label) push(r.label, r); }
       setRows(list);
     } catch (err) {
       setMsg('تعذر قراءة السجل: ' + err.message);
