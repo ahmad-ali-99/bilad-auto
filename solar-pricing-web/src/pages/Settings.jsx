@@ -51,6 +51,10 @@ export default function Settings() {
   const [iqRate, setIqRate] = useState('1.26');
   const [iqMonths, setIqMonths] = useState('84');
   const [iqMsg, setIqMsg] = useState('');
+  // مصرف التنمية — مصرف رابع ضمن مبادرة البنك المركزي، بنسبته وأشهره
+  const [tnRate, setTnRate] = useState('1.26');
+  const [tnMonths, setTnMonths] = useState('84');
+  const [tnMsg, setTnMsg] = useState('');
   function reload() {
     window.api.settings.get().then(setSettings);
     window.api.company.get().then(setCompany);
@@ -66,6 +70,10 @@ export default function Settings() {
     window.api.config.get('installment_iqleem').then((cfg) => {
       if (cfg?.rate > 0) setIqRate(String(cfg.rate));
       if (cfg?.months > 0) setIqMonths(String(cfg.months));
+    }).catch(() => {});
+    window.api.config.get('installment_tanmia').then((cfg) => {
+      if (cfg?.rate > 0) setTnRate(String(cfg.rate));
+      if (cfg?.months > 0) setTnMonths(String(cfg.months));
     }).catch(() => {});
   }
 
@@ -103,6 +111,18 @@ export default function Settings() {
     }
     await window.api.config.set('installment_iqleem', { rate, months });
     setIqMsg(`تم الحفظ ✔ عروض مصرف الإقليم التجاري: المجموع × ${rate} ÷ ${months} شهراً`);
+  }
+
+  async function saveTanmia(e) {
+    e.preventDefault();
+    const rate = Number(tnRate);
+    const months = Math.round(Number(tnMonths));
+    if (!(rate > 0) || !(months > 0)) {
+      setTnMsg('أدخل نسبة وأشهر صحيحة — النسبة معامل ضرب مثل 1.26');
+      return;
+    }
+    await window.api.config.set('installment_tanmia', { rate, months });
+    setTnMsg(`تم الحفظ ✔ عروض مصرف التنمية: المجموع × ${rate} ÷ ${months} شهراً`);
   }
 
   useEffect(reload, []);
@@ -303,6 +323,28 @@ export default function Settings() {
           حفظ إعدادات الإقليم التجاري
         </button>
         {iqMsg && <div className="alert alert-info" style={{ marginTop: 10, marginBottom: 0 }}>{iqMsg}</div>}
+      </form>
+
+      <form className="card" onSubmit={saveTanmia}>
+        <h3 style={{ color: 'var(--navy)', marginTop: 0 }}>🏦 مصرف التنمية</h3>
+        <p className="muted" style={{ marginTop: 0 }}>
+          مصرف ضمن مبادرة البنك المركزي، ونسبته وأشهره <b>مستقلة</b> عن بقية المصارف.
+          القيم أدناه نفس شروط المبادرة لدى الأهلي — بدّلها إذا شروط المصرف مختلفة.
+        </p>
+        <div className="grid-2">
+          <div className="field">
+            <label>نسبة فائدة المصرف (معامل الضرب)</label>
+            <input type="number" step="any" min="0" value={tnRate} onChange={(e) => setTnRate(e.target.value)} placeholder="مثال: 1.26" />
+          </div>
+          <div className="field">
+            <label>عدد أشهر التقسيط</label>
+            <input type="number" min="1" value={tnMonths} onChange={(e) => setTnMonths(e.target.value)} placeholder="84" />
+          </div>
+        </div>
+        <button className="btn btn-primary" type="submit">
+          حفظ إعدادات التنمية
+        </button>
+        {tnMsg && <div className="alert alert-info" style={{ marginTop: 10, marginBottom: 0 }}>{tnMsg}</div>}
       </form>
 
       

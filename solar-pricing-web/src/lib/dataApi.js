@@ -407,6 +407,7 @@ const PLAN_TERMS = {
   company: { key: 'installment', rate: 1.35, months: 60 },          // مصرف النهرين
   ahli: { key: 'installment_ahli', rate: 1.26, months: 84 },        // المصرف الأهلي العراقي
   iqleem: { key: 'installment_iqleem', rate: 1.26, months: 84 },    // مصرف الإقليم التجاري
+  tanmia: { key: 'installment_tanmia', rate: 1.26, months: 84 },    // مصرف التنمية
 };
 
 export const api = {

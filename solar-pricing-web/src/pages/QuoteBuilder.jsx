@@ -1254,6 +1254,7 @@ export default function QuoteBuilder({ prefill, onDraftChange, onPrefillUsed, on
                 { key: 'company', label: 'مصرف النهرين', hint: 'نسبة وأشهر التقسيط من الإعدادات' },
                 { key: 'ahli', label: 'المصرف الأهلي العراقي', hint: 'نسبته وأشهره المستقلة من الإعدادات' },
                 { key: 'iqleem', label: 'مصرف الإقليم التجاري', hint: 'يدعم مبادرة البنك المركزي — بنسبته وأشهره' },
+                { key: 'tanmia', label: 'مصرف التنمية', hint: 'يدعم مبادرة البنك المركزي — بنسبته وأشهره' },
               ].map((pl) => (
                 <button
                   key={pl.key}

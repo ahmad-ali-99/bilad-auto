@@ -202,6 +202,7 @@ describe('لكل مصرف مفتاح إعداداته ونسبته', () => {
     expect(dataApi).toMatch(/company:\s*\{\s*key:\s*'installment'/);
     expect(dataApi).toMatch(/ahli:\s*\{\s*key:\s*'installment_ahli'/);
     expect(dataApi).toMatch(/iqleem:\s*\{\s*key:\s*'installment_iqleem'/);
+    expect(dataApi).toMatch(/tanmia:\s*\{\s*key:\s*'installment_tanmia'/);
     // ماكو مصرفان يتشاركان مفتاحاً — الاستعارة هي أصل عطل عرض 464
     const keys = dataApi.match(/key:\s*'(installment[a-z_]*)'/g) || [];
     expect(new Set(keys).size).toBe(keys.length);
@@ -211,6 +212,7 @@ describe('لكل مصرف مفتاح إعداداته ونسبته', () => {
     expect(dataApi).toMatch(/key:\s*'installment',\s*rate:\s*1\.35,\s*months:\s*60/);
     expect(dataApi).toMatch(/key:\s*'installment_ahli',\s*rate:\s*1\.26,\s*months:\s*84/);
     expect(dataApi).toMatch(/key:\s*'installment_iqleem',\s*rate:\s*1\.26,\s*months:\s*84/);
+    expect(dataApi).toMatch(/key:\s*'installment_tanmia',\s*rate:\s*1\.26,\s*months:\s*84/);
   });
 
   it('**ما يبقى أثر للاستعارة**: ماكو سطر يخلي الأهلي على مفتاح النهرين', () => {
@@ -272,7 +274,7 @@ describe('فتح عرض محفوظ ما يبدّل مصرفه', () => {
 // ═══ عنونة النسخة الرسمية ═══
 describe('مبادرة البنك المركزي انشالت خياراً', () => {
   it('ما بقت بقائمة الخطط، والخطط هي المصارف نفسها', () => {
-    expect(Object.keys(INSTALLMENT_PLANS).sort()).toEqual(['ahli', 'company', 'iqleem']);
+    expect(Object.keys(INSTALLMENT_PLANS).sort()).toEqual(['ahli', 'company', 'iqleem', 'tanmia']);
     // **الشرط الحقيقي**: ولا خطة اسمها مبادرة — كل خطة مصرف يستلم فعلاً
     expect(Object.values(INSTALLMENT_PLANS)).not.toContain('مبادرة البنك المركزي');
   });
